@@ -48,6 +48,33 @@ async function fetchProfile() {
   return (await res.json()).profile; // null, если профиля ещё нет
 }
 
+// Отклонить гипотезу («это не про меня»). Бэкенд метит раздел dismissed: он выпадает
+// из профиля и больше не предлагается моделью. Возвращает обновлённый профиль.
+async function dismissSection(key) {
+  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+
+  const res = await fetch(base.replace(/\/$/, "") + "/api/profile/dismiss", {
+    method: "POST",
+    headers: { Authorization: "tma " + initData, "Content-Type": "application/json" },
+    body: JSON.stringify({ key }),
+  });
+  if (!res.ok) throw new Error("http-" + res.status);
+  return (await res.json()).profile;
+}
+
+// Подтверждение действия: нативное у Telegram, иначе обычный confirm.
+function confirmAction(message) {
+  return new Promise((resolve) => {
+    if (tg && typeof tg.showConfirm === "function") {
+      tg.showConfirm(message, (ok) => resolve(!!ok));
+    } else {
+      resolve(window.confirm(message));
+    }
+  });
+}
+
 // --- кусочки UI -------------------------------------------------------------
 
 function ring(percent) {
@@ -110,7 +137,34 @@ function insightCard(item) {
   if (item.user_confirmed) meta.appendChild(el("span", "pill pill--ok", "✓ ты подтвердил"));
   if (item.evidence_count) meta.appendChild(el("span", "tag-evidence", item.evidence_count + " наблюд."));
   card.appendChild(meta);
+
+  // «Это не про меня» — только для insight-разделов (у них есть key); архетипы без key.
+  // Профиль обязан уметь ошибаться: человек вправе снять гипотезу, и она не вернётся.
+  if (item.key) card.appendChild(dismissRow(item.key, item.label));
   return card;
+}
+
+function dismissRow(key, label) {
+  const row = el("div", "card-actions");
+  const btn = el("button", "card-dismiss", "Это не про меня");
+  btn.type = "button";
+  btn.addEventListener("click", async () => {
+    const ok = await confirmAction(
+      "Убрать «" + (label || "эту грань") + "» из профиля? Я больше не буду к ней возвращаться.",
+    );
+    if (!ok) return;
+    btn.disabled = true;
+    btn.textContent = "Убираю…";
+    try {
+      const updated = await dismissSection(key);
+      setView(updated ? renderProfile(updated) : renderEmpty());
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "Не вышло — ещё раз";
+    }
+  });
+  row.appendChild(btn);
+  return row;
 }
 
 function groupBlock(title, items) {

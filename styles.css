@@ -340,6 +340,34 @@ body {
   gap: 12px;
 }
 
+/* --- «это не про меня»: намеренно тихая кнопка, чтобы не звать на случайный тап --- */
+.card-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.card-dismiss {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.card-dismiss:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.04);
+}
+.card-dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* --- индикатор уверенности: три точки --- */
 .conf {
   display: inline-flex;
