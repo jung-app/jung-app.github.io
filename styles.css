@@ -1,150 +1,205 @@
-/* Мини-апп «Мой юнгианский профиль» — светлый дашборд.
-   Палитра подобрана под контекст самопознания: тёплое «бумажное» полотно, глубокий
-   фиолетовый акцент (индивидуация / психея) с тёплым переходом в бирюзу, спокойные
-   пастельные плитки метрик. Тема фиксированная (не зависит от Telegram light/dark) —
-   единый выверенный вид. */
+/* Мини-апп «Глубинный профиль» — эстетика глубинной психологии.
+   Концепция: ночной фон (бессознательное) + тёплое алхимическое золото
+   (индивидуация, Самость). Серив Lora для заголовков задаёт контемплятивный,
+   «литературный» тон; Inter — для тела. Тема фиксированная, не зависит от
+   Telegram light/dark, — единый выверенный вид. */
 
 :root {
-  --bg: #f1ece3;
-  --card: #ffffff;
-  --ink: #1c1726;
-  --muted: #8b8497;
-  --line: #ece6dc;
-  --accent: #5a4fcf; /* индиго */
-  --accent-2: #2fa39b; /* бирюза (конец градиента кольца) */
-  --ok: #1f9d6b;
-  --peach: #f7e4d8;
-  --mint: #dcefe4;
-  --peri: #e4e6fb;
-  --shadow: 0 1px 2px rgba(28, 23, 38, 0.04), 0 8px 24px rgba(28, 23, 38, 0.06);
+  --bg-0: #0e1320; /* верх фона — глубокая ночь */
+  --bg-1: #131a2b; /* низ фона */
+  --panel: rgba(255, 255, 255, 0.045); /* стеклянные панели поверх ночи */
+  --panel-solid: #1a2236;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --text: #ece7df; /* тёплый «пергаментный» белый */
+  --muted: #8a8676;
+  --muted-soft: #6f6c62;
+
+  --gold: #e8c074; /* алхимическое золото — главный акцент */
+  --gold-deep: #c79a48;
+  --gold-soft: rgba(232, 192, 116, 0.14);
+
+  --ok: #7fc8a0; /* подтверждено пользователем */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px rgba(0, 0, 0, 0.35);
+  --radius: 20px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+  min-height: 100%;
+}
+
+body {
+  background: linear-gradient(168deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 18px 16px calc(32px + env(safe-area-inset-bottom));
+/* Тёплое золотое свечение вверху — «свет из глубины». */
+.aura {
+  position: fixed;
+  top: -180px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 520px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(232, 192, 116, 0.16) 0%, transparent 62%);
+  pointer-events: none;
+  z-index: 0;
 }
 
-/* --- состояния --- */
+.app {
+  position: relative;
+  z-index: 1;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 22px 18px calc(40px + env(safe-area-inset-bottom));
+}
+
+.serif {
+  font-family: "Lora", Georgia, "Times New Roman", serif;
+}
+
+/* --- состояния (загрузка / ошибка / пусто) --- */
 .state {
-  min-height: 80vh;
+  min-height: 82vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 10px;
-  padding: 0 28px;
-}
-.state-mark {
-  font-size: 30px;
-  color: var(--accent);
-  opacity: 0.7;
+  gap: 16px;
+  padding: 0 26px;
 }
 .state-title {
-  font-size: 21px;
-  font-weight: 700;
+  font-family: "Lora", Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
   margin: 0;
+  letter-spacing: 0.01em;
+}
+.state-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 34ch;
+}
+.orb {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--gold) 0%, var(--gold-deep) 55%, #6b4f1f 100%);
+  box-shadow: 0 0 38px rgba(232, 192, 116, 0.4);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.glyph {
+  font-size: 30px;
+  color: var(--gold);
+  opacity: 0.85;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 /* --- верхняя строка --- */
 .topbar {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 .brand-kicker {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--muted);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
 }
 .brand-name {
-  font-size: 17px;
-  font-weight: 700;
+  font-family: "Lora", Georgia, serif;
+  font-size: 19px;
+  font-weight: 600;
+  margin-top: 2px;
 }
 .datepill {
+  flex: 0 0 auto;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--muted);
-  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 5px 11px;
 }
 
-/* --- герой --- */
+/* --- герой: кольцо глубины + интро --- */
 .hero {
-  background: var(--card);
-  border-radius: 24px;
-  box-shadow: var(--shadow);
-  padding: 22px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
+  gap: 20px;
+  padding: 22px 4px 26px;
+  margin-bottom: 8px;
 }
 .hero-text {
   flex: 1;
   min-width: 0;
 }
 .hero-title {
-  font-size: 26px;
-  line-height: 1.15;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-family: "Lora", Georgia, serif;
+  font-size: 27px;
+  line-height: 1.18;
+  font-weight: 600;
   margin: 0 0 8px;
+  letter-spacing: 0.005em;
 }
 .hero-sub {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
-}
-.hero-missing {
-  margin: 8px 0 0;
-  font-size: 13px;
-  color: var(--accent);
-  font-weight: 600;
+  font-size: 14.5px;
 }
 
-/* --- кольцо заполненности --- */
+/* --- кольцо глубины --- */
 .ring {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 108px;
+  height: 108px;
   flex: 0 0 auto;
 }
 .ring-svg {
-  width: 96px;
-  height: 96px;
+  width: 108px;
+  height: 108px;
   transform: rotate(-90deg);
 }
 .ring-track {
   fill: none;
-  stroke: var(--line);
-  stroke-width: 8;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 7;
 }
 .ring-prog {
   fill: none;
   stroke: url(#rg);
-  stroke-width: 8;
+  stroke-width: 7;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s ease;
+  filter: drop-shadow(0 0 6px rgba(232, 192, 116, 0.45));
+  transition: stroke-dashoffset 1s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .ring-label {
   position: absolute;
@@ -155,149 +210,258 @@ body {
   justify-content: center;
 }
 .ring-num {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-family: "Lora", Georgia, serif;
+  font-size: 27px;
+  font-weight: 600;
+  color: var(--gold);
 }
 .ring-cap {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
+  margin-top: 2px;
 }
 
-/* --- плитки метрик --- */
+/* --- нить разговоров (conversation_summary) --- */
+.thread {
+  position: relative;
+  background: var(--gold-soft);
+  border: 1px solid rgba(232, 192, 116, 0.22);
+  border-radius: var(--radius);
+  padding: 18px 20px 18px 22px;
+  margin: 14px 0 22px;
+}
+.thread::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(var(--gold), var(--gold-deep));
+}
+.thread-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  margin-bottom: 7px;
+}
+.thread-text {
+  margin: 0;
+  font-family: "Lora", Georgia, serif;
+  font-style: italic;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* --- полоса метрик --- */
 .stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-bottom: 24px;
+  margin-bottom: 26px;
 }
-.chip {
-  border-radius: 18px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow);
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 12px;
+  text-align: center;
 }
-.chip-val {
+.stat-val {
+  font-family: "Lora", Georgia, serif;
   font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-.chip-label {
-  margin-top: 6px;
-  font-size: 12.5px;
   font-weight: 600;
-  opacity: 0.72;
+  line-height: 1;
+  color: var(--gold);
 }
-.chip--ink {
-  background: #211d2b;
-  color: #f3eafc;
-}
-.chip--mint {
-  background: var(--mint);
-  color: #14543a;
-}
-.chip--peach {
-  background: var(--peach);
-  color: #8a3d1f;
-}
-.chip--peri {
-  background: var(--peri);
-  color: #2e2a8a;
+.stat-label {
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 1.3;
 }
 
 /* --- группы и карточки --- */
 .group {
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 .group-title {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   color: var(--muted);
-  margin: 0 0 10px 4px;
+  margin: 0 0 12px 2px;
 }
 .card {
-  background: var(--card);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  padding: 16px;
-  margin-bottom: 10px;
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 17px 18px;
+  margin-bottom: 11px;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 .card--confirmed {
-  box-shadow:
-    inset 3px 0 0 var(--ok),
-    var(--shadow);
+  border-color: rgba(127, 200, 160, 0.3);
 }
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 .card-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-family: "Lora", Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
   margin: 0;
 }
 .card-summary {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   font-size: 15px;
+  color: #ded9cf;
 }
 .card-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
-/* --- пилюли --- */
+/* --- индикатор уверенности: три точки --- */
+.conf {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.conf-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.conf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+.conf-dot.on {
+  background: var(--gold);
+  box-shadow: 0 0 5px rgba(232, 192, 116, 0.5);
+}
+.conf-cap {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* --- пилюли статуса --- */
 .pill {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
   border-radius: 999px;
   white-space: nowrap;
+  border: 1px solid transparent;
 }
 .pill--status {
-  background: #efecf8;
-  color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border-color: var(--line);
 }
 .pill--status[data-status="confirmed_by_user"] {
-  background: #dcf0e6;
+  background: rgba(127, 200, 160, 0.14);
   color: var(--ok);
+  border-color: rgba(127, 200, 160, 0.28);
 }
-.pill--status[data-status="emerging"] {
-  background: var(--line);
-  color: var(--muted);
-}
-.pill--conf {
-  background: #f4f1ea;
-  color: var(--muted);
-  border: 1px solid var(--line);
-}
-.pill--conf[data-level="high"] {
-  color: var(--ok);
-  border-color: #cfead9;
+.pill--status[data-status="working"] {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border-color: rgba(232, 192, 116, 0.26);
 }
 .pill--ok {
-  background: #dcf0e6;
+  background: rgba(127, 200, 160, 0.14);
   color: var(--ok);
 }
+.tag-evidence {
+  font-size: 11.5px;
+  color: var(--muted-soft);
+}
 
-/* --- утилиты --- */
+/* --- блок «что ещё исследовать» --- */
+.explore {
+  background: var(--panel);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+.explore-title {
+  font-family: "Lora", Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.explore-sub {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid rgba(232, 192, 116, 0.22);
+  border-radius: 999px;
+  padding: 6px 13px;
+}
+
+/* --- пустой раздел «Основа» --- */
+.empty-note {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+
+/* --- футер --- */
+.footer {
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.footer p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted-soft);
+  text-align: center;
+}
+
 .muted {
   color: var(--muted);
 }
 .small {
   font-size: 13px;
-}
-.footer {
-  margin-top: 6px;
-  padding: 4px 4px 0;
 }

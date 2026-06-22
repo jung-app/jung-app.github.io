@@ -1,8 +1,8 @@
 "use strict";
 
-// Мини-апп «Мой юнгианский профиль». Тянет профиль с бэкенда бота по подписанному
-// Telegram initData и рисует его дашбордом. Секретов на фронте нет: initData —
-// подписанный токен, бэкенд проверяет подпись и сам ходит в Supabase.
+// Мини-апп «Глубинный профиль». Тянет профиль с бэкенда бота по подписанному
+// Telegram initData и рисует его. Секретов на фронте нет: initData — подписанный
+// токен, бэкенд проверяет подпись и сам ходит в Supabase.
 
 const tg = window.Telegram ? window.Telegram.WebApp : null;
 
@@ -11,7 +11,8 @@ const STATUS_LABELS = {
   working: "гипотеза",
   confirmed_by_user: "подтверждено",
 };
-const CONFIDENCE_LABELS = { low: "низкая", medium: "средняя", high: "высокая" };
+const CONFIDENCE_RANK = { low: 1, medium: 2, high: 3 };
+const CONFIDENCE_LABELS = { low: "низкая уверенность", medium: "средняя уверенность", high: "высокая уверенность" };
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -24,11 +25,11 @@ function setView(node) {
   document.getElementById("app").replaceChildren(node);
 }
 
-function stateView(title, sub) {
+function stateView(title, sub, glyph) {
   const wrap = el("section", "state");
-  wrap.appendChild(el("div", "state-mark", "✦"));
-  wrap.appendChild(el("p", "state-title", title));
-  if (sub) wrap.appendChild(el("p", "muted", sub));
+  wrap.appendChild(el("div", "glyph", glyph || "✦"));
+  wrap.appendChild(el("p", "state-title serif", title));
+  if (sub) wrap.appendChild(el("p", "state-sub", sub));
   return wrap;
 }
 
@@ -51,35 +52,44 @@ async function fetchProfile() {
 
 function ring(percent) {
   const p = Math.max(0, Math.min(100, percent));
+  const r = 48;
+  const circ = 2 * Math.PI * r;
   const wrap = el("div", "ring");
   wrap.innerHTML = `
-    <svg viewBox="0 0 80 80" class="ring-svg" aria-hidden="true">
+    <svg viewBox="0 0 108 108" class="ring-svg" aria-hidden="true">
       <defs>
         <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="var(--accent)" />
-          <stop offset="100%" stop-color="var(--accent-2)" />
+          <stop offset="0%" stop-color="#e8c074" />
+          <stop offset="100%" stop-color="#c79a48" />
         </linearGradient>
       </defs>
-      <circle class="ring-track" cx="40" cy="40" r="34" />
-      <circle class="ring-prog" cx="40" cy="40" r="34"
-        stroke-dasharray="${(2 * Math.PI * 34).toFixed(1)}"
-        stroke-dashoffset="${(2 * Math.PI * 34 * (1 - p / 100)).toFixed(1)}" />
+      <circle class="ring-track" cx="54" cy="54" r="${r}" />
+      <circle class="ring-prog" cx="54" cy="54" r="${r}"
+        stroke-dasharray="${circ.toFixed(1)}"
+        stroke-dashoffset="${(circ * (1 - p / 100)).toFixed(1)}" />
     </svg>
-    <div class="ring-label"><span class="ring-num">${p}%</span><span class="ring-cap">профиль</span></div>`;
+    <div class="ring-label"><span class="ring-num">${p}%</span><span class="ring-cap">глубина</span></div>`;
   return wrap;
 }
 
-function statChip(value, label, tint) {
-  const chip = el("div", "chip chip--" + tint);
-  chip.appendChild(el("div", "chip-val", String(value)));
-  chip.appendChild(el("div", "chip-label", label));
-  return chip;
+function stat(value, label) {
+  const s = el("div", "stat");
+  s.appendChild(el("div", "stat-val", String(value)));
+  s.appendChild(el("div", "stat-label", label));
+  return s;
 }
 
-function confidencePill(confidence) {
-  const pill = el("span", "pill pill--conf", "уверенность: " + (CONFIDENCE_LABELS[confidence] || "—"));
-  pill.dataset.level = confidence || "";
-  return pill;
+function confidence(level) {
+  const rank = CONFIDENCE_RANK[level] || 0;
+  const wrap = el("span", "conf");
+  const dots = el("span", "conf-dots");
+  for (let i = 1; i <= 3; i++) {
+    const d = el("span", "conf-dot" + (i <= rank ? " on" : ""));
+    dots.appendChild(d);
+  }
+  wrap.appendChild(dots);
+  wrap.appendChild(el("span", "conf-cap", CONFIDENCE_LABELS[level] || "уверенность —"));
+  return wrap;
 }
 
 function insightCard(item) {
@@ -96,9 +106,9 @@ function insightCard(item) {
   card.appendChild(el("p", "card-summary", item.summary));
 
   const meta = el("div", "card-meta");
-  meta.appendChild(confidencePill(item.confidence));
+  meta.appendChild(confidence(item.confidence));
   if (item.user_confirmed) meta.appendChild(el("span", "pill pill--ok", "✓ ты подтвердил"));
-  if (item.evidence_count) meta.appendChild(el("span", "muted small", item.evidence_count + " набл."));
+  if (item.evidence_count) meta.appendChild(el("span", "tag-evidence", item.evidence_count + " наблюд."));
   card.appendChild(meta);
   return card;
 }
@@ -114,67 +124,83 @@ function groupBlock(title, items) {
 
 function renderProfile(p) {
   const root = el("div", "profile");
+  const c = p.completeness;
 
-  // верхняя строка: бренд + дата обновления
+  // верхняя строка: бренд + дата
   const top = el("header", "topbar");
   const brand = el("div", "brand");
-  brand.appendChild(el("div", "brand-kicker", "ЮНГИАНСКИЙ ПРОФИЛЬ"));
+  brand.appendChild(el("div", "brand-kicker", "Глубинный профиль"));
   brand.appendChild(el("div", "brand-name", p.pseudonym || "Аноним"));
   top.appendChild(brand);
   const upd = fmtDate(p.updated_at);
-  if (upd) top.appendChild(el("div", "datepill", upd));
+  if (upd) top.appendChild(el("div", "datepill", "обновлён " + upd));
   root.appendChild(top);
 
-  // герой: интро + кольцо заполненности
+  // герой: интро + кольцо глубины
   const hero = el("section", "hero");
   const left = el("div", "hero-text");
   left.appendChild(el("h1", "hero-title", "Что я о тебе понял"));
-  const c = p.completeness;
   left.appendChild(
     el(
       "p",
       "hero-sub",
       c.is_sufficient
-        ? "Профиль сформирован — дальше он только углубляется в разговорах."
-        : "Профиль ещё формируется. Чем больше говорим — тем точнее картина.",
+        ? "Образ сложился — дальше он только углубляется в наших разговорах."
+        : "Образ ещё проявляется. Чем больше говорим — тем отчётливее картина.",
     ),
   );
-  if (!c.is_sufficient && c.missing && c.missing.length) {
-    left.appendChild(el("p", "hero-missing", "Не хватает: " + c.missing.join(", ")));
-  }
   hero.appendChild(left);
   hero.appendChild(ring(c.percent));
   root.appendChild(hero);
 
-  // чипы-метрики
+  // нить разговоров (новое: meta.chat.summary)
+  if (p.conversation_summary) {
+    const thread = el("section", "thread");
+    thread.appendChild(el("div", "thread-label", "Нить наших разговоров"));
+    thread.appendChild(el("p", "thread-text", p.conversation_summary));
+    root.appendChild(thread);
+  }
+
+  // метрики
   const confirmed = p.sections.filter((s) => s.user_confirmed).length;
-  const evidence = p.sections.reduce((n, s) => n + (s.evidence_count || 0), 0);
   const stats = el("section", "stats");
-  stats.appendChild(statChip(p.sections.length, "раскрыто разделов", "ink"));
-  stats.appendChild(statChip(p.archetypes ? p.archetypes.length : 0, "активных архетипов", "mint"));
-  stats.appendChild(statChip(confirmed, "подтверждено тобой", "peach"));
-  stats.appendChild(statChip(evidence, "наблюдений в основе", "peri"));
+  stats.appendChild(stat(p.sections.length, "раскрыто граней"));
+  stats.appendChild(stat(p.archetypes ? p.archetypes.length : 0, "активных архетипов"));
+  stats.appendChild(stat(confirmed, "подтверждено тобой"));
   root.appendChild(stats);
 
   // разделы
   const core = p.sections.filter((s) => s.group === "core");
   const enrichment = p.sections.filter((s) => s.group === "enrichment");
-  if (core.length) root.appendChild(groupBlock("Основа", core));
-  else
-    root.appendChild(
-      (() => {
-        const s = el("section", "group");
-        s.appendChild(el("h2", "group-title", "Основа"));
-        s.appendChild(el("p", "muted small", "Базовые разделы пока пусты — расскажи о себе побольше."));
-        return s;
-      })(),
-    );
+
+  if (core.length) {
+    root.appendChild(groupBlock("Основа личности", core));
+  } else {
+    const s = el("section", "group");
+    s.appendChild(el("h2", "group-title", "Основа личности"));
+    const note = el("div", "empty-note");
+    note.textContent = "Базовые грани пока не проявились — расскажи мне о себе побольше в чате.";
+    s.appendChild(note);
+    root.appendChild(s);
+  }
+
   if (enrichment.length) root.appendChild(groupBlock("Глубинные слои", enrichment));
   if (p.archetypes && p.archetypes.length) root.appendChild(groupBlock("Активные архетипы", p.archetypes));
 
+  // что ещё стоит исследовать (если профиль не дозрел)
+  if (!c.is_sufficient && c.missing && c.missing.length) {
+    const ex = el("section", "explore");
+    ex.appendChild(el("h2", "explore-title serif", "Что стоит исследовать"));
+    ex.appendChild(el("p", "explore-sub", "Эти грани пока в тени. Заговори о них в чате — и образ станет полнее."));
+    const chips = el("div", "chips");
+    c.missing.forEach((m) => chips.appendChild(el("span", "chip", m)));
+    ex.appendChild(chips);
+    root.appendChild(ex);
+  }
+
   const foot = el("footer", "footer");
   foot.appendChild(
-    el("p", "muted small", "Это рабочие гипотезы, а не диагноз. Что-то не так — поправь меня в разговоре."),
+    el("p", null, "Всё здесь — рабочие гипотезы, а не диагноз. Что-то не так — поправь меня в разговоре."),
   );
   root.appendChild(foot);
   return root;
@@ -190,8 +216,9 @@ function fmtDate(iso) {
 
 function renderEmpty() {
   return stateView(
-    "Профиль ещё пуст",
-    "Мы пока толком не разговаривали. Напиши боту что-нибудь о себе — и я начну понимать.",
+    "Образ ещё не проявлен",
+    "Мы пока толком не разговаривали. Напиши боту что-нибудь о себе — и я начну тебя понимать.",
+    "○",
   );
 }
 
@@ -208,11 +235,11 @@ async function main() {
   } catch (e) {
     const msg =
       e.message === "unauthorized"
-        ? "Не удалось подтвердить, что это ты. Открой мини-апп из чата с ботом."
+        ? "Не удалось подтвердить, что это ты. Открой мини-апп кнопкой из чата с ботом."
         : e.message === "no-init-data"
           ? "Эту страницу нужно открывать из Telegram — кнопкой «Мой профиль»."
-          : "Не получилось загрузить профиль. Попробуй позже.";
-    setView(stateView("Упс", msg));
+          : "Не получилось дотянуться до профиля. Попробуй чуть позже.";
+    setView(stateView("Не сейчас", msg, "✦"));
   }
 }
 
