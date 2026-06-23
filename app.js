@@ -167,6 +167,45 @@ function dismissRow(key, label) {
   return row;
 }
 
+// Блок «что изменилось с прошлого визита». d приходит в payload.dynamics с бэкенда:
+// первый визит → тёплое приветствие; есть изменения → дельта глубины + новые грани;
+// без изменений → мягкое приглашение продолжить в чате. Содержания тут нет — только
+// числа и ярлыки граней (152-ФЗ: бэкенд не отдаёт сюда summary/evidence).
+function dynamicsBlock(d) {
+  if (!d) return null;
+  const sec = el("section", "dynamics");
+  sec.appendChild(el("div", "dynamics-label", "С прошлого визита"));
+
+  if (d.is_first_view) {
+    sec.appendChild(
+      el("p", "dynamics-text", "Это первый снимок твоего образа. В следующий раз покажу, что в нём изменилось."),
+    );
+    return sec;
+  }
+  if (!d.has_changes) {
+    sec.appendChild(
+      el("p", "dynamics-text", "С нашего прошлого разговора образ не менялся. Продолжим — и он станет глубже."),
+    );
+    return sec;
+  }
+
+  const row = el("div", "dynamics-row");
+  if (d.delta_percent) {
+    const up = d.delta_percent > 0;
+    const pill = el("span", "delta" + (up ? " delta--up" : " delta--down"));
+    pill.textContent = (up ? "+" : "−") + Math.abs(d.delta_percent) + "% глубины";
+    row.appendChild(pill);
+  }
+  (d.new_sections || []).forEach((label) =>
+    row.appendChild(el("span", "delta delta--new", "новое: " + label)),
+  );
+  (d.new_archetypes || []).forEach((name) =>
+    row.appendChild(el("span", "delta delta--arch", "архетип: " + name)),
+  );
+  sec.appendChild(row);
+  return sec;
+}
+
 function groupBlock(title, items) {
   const sec = el("section", "group");
   sec.appendChild(el("h2", "group-title", title));
@@ -189,6 +228,10 @@ function renderProfile(p) {
   const upd = fmtDate(p.updated_at);
   if (upd) top.appendChild(el("div", "datepill", "обновлён " + upd));
   root.appendChild(top);
+
+  // что изменилось с прошлого визита (динамика между сессиями)
+  const dyn = dynamicsBlock(p.dynamics);
+  if (dyn) root.appendChild(dyn);
 
   // герой: интро + кольцо глубины
   const hero = el("section", "hero");
