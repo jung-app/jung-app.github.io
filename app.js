@@ -206,6 +206,27 @@ function dynamicsBlock(d) {
   return sec;
 }
 
+// Кнопка «позвать близкого»: открывает нативный share-лист Telegram с реф-ссылкой юзера
+// (приходит в payload.invite_url с бэкенда). ВАЖНО (152-ФЗ): текст карточки обезличен —
+// никаких граней/гипотез/архетипов, только приглашение. Делятся ссылкой, не профилем.
+function shareRow(inviteUrl) {
+  const sec = el("section", "share");
+  const btn = el("button", "share-btn", "Позвать близкого в путь");
+  btn.type = "button";
+  btn.addEventListener("click", () => {
+    const text =
+      "Я иду путём самопознания с этим проводником — юнгианская работа над собой прямо в Telegram. Попробуй и ты 🌑";
+    const link = "https://t.me/share/url?url=" + encodeURIComponent(inviteUrl) + "&text=" + encodeURIComponent(text);
+    if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(link);
+    else window.open(link, "_blank");
+  });
+  sec.appendChild(btn);
+  sec.appendChild(
+    el("p", "share-hint", "Другу — бесплатное знакомство, тебе — бонусные дни, когда он останется."),
+  );
+  return sec;
+}
+
 function groupBlock(title, items) {
   const sec = el("section", "group");
   sec.appendChild(el("h2", "group-title", title));
@@ -294,6 +315,8 @@ function renderProfile(p) {
     ex.appendChild(chips);
     root.appendChild(ex);
   }
+
+  if (p.invite_url) root.appendChild(shareRow(p.invite_url));
 
   const foot = el("footer", "footer");
   foot.appendChild(

@@ -315,6 +315,39 @@ body {
   background: var(--gold-soft);
 }
 
+/* --- позвать близкого (виральный share) --- */
+.share {
+  margin: 22px 0 6px;
+  text-align: center;
+}
+.share-btn {
+  display: inline-block;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bg-0);
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-deep) 100%);
+  border: none;
+  border-radius: 999px;
+  padding: 12px 26px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(232, 192, 116, 0.22);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.share-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(232, 192, 116, 0.3);
+}
+.share-btn:active {
+  transform: translateY(0);
+}
+.share-hint {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* --- полоса метрик --- */
 .stats {
   display: grid;
