@@ -171,6 +171,51 @@ function dismissRow(key, label) {
 // первый визит → тёплое приветствие; есть изменения → дельта глубины + новые грани;
 // без изменений → мягкое приглашение продолжить в чате. Содержания тут нет — только
 // числа и ярлыки граней (152-ФЗ: бэкенд не отдаёт сюда summary/evidence).
+// Спарклайн глубины во времени. history — ряд точек {at, score} с бэкенда (только числа
+// и даты, без психо-контента — 152-ФЗ). Рисуем мягкую линию роста: осязаемый прогресс
+// = причина возвращаться. Нужно ≥2 точек, иначе линию не построить.
+function sparkline(history) {
+  const pts = (history || []).filter((p) => p && typeof p.score === "number");
+  if (pts.length < 2) return null;
+
+  const W = 240;
+  const H = 48;
+  const pad = 4;
+  const scores = pts.map((p) => p.score);
+  const max = Math.max(...scores, 1);
+  const min = Math.min(...scores, 0);
+  const span = Math.max(1, max - min);
+  const stepX = (W - pad * 2) / (pts.length - 1);
+  const xy = pts.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = H - pad - ((p.score - min) / span) * (H - pad * 2);
+    return [x, y];
+  });
+  const line = xy.map(([x, y], i) => (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1)).join(" ");
+  const area = line + ` L${(W - pad).toFixed(1)} ${H - pad} L${pad} ${H - pad} Z`;
+  const [lx, ly] = xy[xy.length - 1];
+
+  const wrap = el("div", "spark");
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" class="spark-svg" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="sparkfill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#e8c074" stop-opacity="0.28" />
+          <stop offset="100%" stop-color="#e8c074" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <path d="${area}" fill="url(#sparkfill)" />
+      <path d="${line}" fill="none" stroke="#e8c074" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" />
+      <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="#e8c074" />
+    </svg>`;
+  const cap = el("div", "spark-cap");
+  cap.appendChild(el("span", null, "глубина во времени"));
+  cap.appendChild(el("span", "spark-now", scores[scores.length - 1] + "%"));
+  wrap.appendChild(cap);
+  return wrap;
+}
+
 function dynamicsBlock(d) {
   if (!d) return null;
   const sec = el("section", "dynamics");
@@ -180,29 +225,31 @@ function dynamicsBlock(d) {
     sec.appendChild(
       el("p", "dynamics-text", "Это первый снимок твоего образа. В следующий раз покажу, что в нём изменилось."),
     );
-    return sec;
-  }
-  if (!d.has_changes) {
+  } else if (!d.has_changes) {
     sec.appendChild(
       el("p", "dynamics-text", "С нашего прошлого разговора образ не менялся. Продолжим — и он станет глубже."),
     );
-    return sec;
+  } else {
+    const row = el("div", "dynamics-row");
+    if (d.delta_percent) {
+      const up = d.delta_percent > 0;
+      const pill = el("span", "delta" + (up ? " delta--up" : " delta--down"));
+      pill.textContent = (up ? "+" : "−") + Math.abs(d.delta_percent) + "% глубины";
+      row.appendChild(pill);
+    }
+    (d.new_sections || []).forEach((label) =>
+      row.appendChild(el("span", "delta delta--new", "новое: " + label)),
+    );
+    (d.new_archetypes || []).forEach((name) =>
+      row.appendChild(el("span", "delta delta--arch", "архетип: " + name)),
+    );
+    sec.appendChild(row);
   }
 
-  const row = el("div", "dynamics-row");
-  if (d.delta_percent) {
-    const up = d.delta_percent > 0;
-    const pill = el("span", "delta" + (up ? " delta--up" : " delta--down"));
-    pill.textContent = (up ? "+" : "−") + Math.abs(d.delta_percent) + "% глубины";
-    row.appendChild(pill);
-  }
-  (d.new_sections || []).forEach((label) =>
-    row.appendChild(el("span", "delta delta--new", "новое: " + label)),
-  );
-  (d.new_archetypes || []).forEach((name) =>
-    row.appendChild(el("span", "delta delta--arch", "архетип: " + name)),
-  );
-  sec.appendChild(row);
+  // Траектория глубины — показываем всегда, когда накопилось ≥2 точек (даже без свежих
+  // изменений): возвращающийся видит свой путь, а не только дельту последнего визита.
+  const spark = sparkline(d.history);
+  if (spark) sec.appendChild(spark);
   return sec;
 }
 

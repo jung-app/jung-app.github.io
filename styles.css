@@ -315,6 +315,29 @@ body {
   background: var(--gold-soft);
 }
 
+/* --- спарклайн глубины во времени --- */
+.spark {
+  margin-top: 12px;
+}
+.spark-svg {
+  display: block;
+  width: 100%;
+  height: 48px;
+}
+.spark-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.spark-now {
+  font-weight: 700;
+  color: var(--gold);
+}
+
 /* --- позвать близкого (виральный share) --- */
 .share {
   margin: 22px 0 6px;
