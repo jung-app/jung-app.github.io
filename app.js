@@ -274,6 +274,100 @@ function shareRow(inviteUrl) {
   return sec;
 }
 
+// Запросить у бэкенда ссылку на месячную подписку (recurring Stars). Та же ссылка, что
+// в чате, — авто-списание и активация подписки работают без изменений.
+async function requestInvoice() {
+  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetch(base.replace(/\/$/, "") + "/api/invoice", {
+    method: "POST",
+    headers: { Authorization: "tma " + initData },
+  });
+  if (!res.ok) throw new Error("http-" + res.status);
+  return (await res.json()).url;
+}
+
+// Оплата прямо из мини-аппа: человек увидел свой образ → платит в один тап, не возвращаясь
+// в чат. Замыкает петлю «ценность → оплата» в точке пика. Цену показывает нативный инвойс.
+function startUpgrade(btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Открываю оплату…";
+  const restore = () => {
+    btn.disabled = false;
+    btn.textContent = original;
+  };
+  requestInvoice()
+    .then((url) => {
+      const onResult = (status) => {
+        if (status === "paid") {
+          if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === "function")
+            tg.HapticFeedback.notificationOccurred("success");
+          setView(
+            stateView(
+              "Подписка активна",
+              "Спасибо 🌑 Теперь я помню твой путь между сессиями. Возвращайся в чат — продолжим оттуда, где остановились.",
+              "✦",
+            ),
+          );
+          setTimeout(main, 1500); // профиль перечитается уже как платный (is_paid=true)
+        } else {
+          restore(); // cancelled / failed / pending
+        }
+      };
+      if (tg && typeof tg.openInvoice === "function") {
+        tg.openInvoice(url, onResult);
+      } else if (tg && typeof tg.openTelegramLink === "function") {
+        tg.openTelegramLink(url); // старый клиент без openInvoice — открываем инвойс ссылкой
+        restore();
+      } else {
+        window.open(url, "_blank");
+        restore();
+      }
+    })
+    .catch(() => {
+      restore();
+      if (tg && typeof tg.showAlert === "function")
+        tg.showAlert("Не получилось открыть оплату. Попробуй ещё раз или набери /upgrade в чате.");
+    });
+}
+
+// Панель подписки (только для free): после показа реального образа продаём ПАМЯТЬ —
+// продолжение пути, а не «безлимит». Существующие грани не прячем (это данные юзера,
+// 152-ФЗ «ты хозяин данных») — показываем, что открывает подписка, и кнопку оплаты.
+function upgradeSection() {
+  const sec = el("section", "upgrade");
+  sec.appendChild(el("div", "upgrade-label", "Дальше — вместе"));
+  sec.appendChild(el("h2", "upgrade-title serif", "Я не забуду тебя завтра"));
+  sec.appendChild(
+    el(
+      "p",
+      "upgrade-text",
+      "Сейчас этот образ живёт, пока мы говорим. С подпиской я помню твой путь между " +
+        "сессиями: возвращаюсь к тому, что важно, и веду глубже — а не с чистого листа.",
+    ),
+  );
+  const perks = el("ul", "upgrade-perks");
+  [
+    "Память между сессиями — продолжаем, где остановились",
+    "Безлимитные разговоры с проводником",
+    "Глубже работаем над тем, что уже проявилось",
+  ].forEach((t) => {
+    const li = el("li", "upgrade-perk");
+    li.appendChild(el("span", "perk-mark", "🔓"));
+    li.appendChild(el("span", "perk-text", t));
+    perks.appendChild(li);
+  });
+  sec.appendChild(perks);
+  const btn = el("button", "upgrade-btn", "Продолжить с памятью");
+  btn.type = "button";
+  btn.addEventListener("click", () => startUpgrade(btn));
+  sec.appendChild(btn);
+  sec.appendChild(el("p", "upgrade-hint", "Оплата звёздами Telegram. Отменить можно в любой момент."));
+  return sec;
+}
+
 function groupBlock(title, items) {
   const sec = el("section", "group");
   sec.appendChild(el("h2", "group-title", title));
@@ -362,6 +456,9 @@ function renderProfile(p) {
     ex.appendChild(chips);
     root.appendChild(ex);
   }
+
+  // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
+  if (!p.is_paid) root.appendChild(upgradeSection());
 
   if (p.invite_url) root.appendChild(shareRow(p.invite_url));
 

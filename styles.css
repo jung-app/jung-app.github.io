@@ -371,6 +371,93 @@ body {
   color: var(--muted);
 }
 
+/* --- панель подписки (CTA-оплата, только для free) --- */
+.upgrade {
+  margin: 26px 0 6px;
+  padding: 22px 20px;
+  background: linear-gradient(168deg, var(--gold-soft) 0%, var(--panel) 70%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.upgrade-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.upgrade-title {
+  margin: 8px 0 0;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+}
+.upgrade-text {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.upgrade-perks {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.upgrade-perk {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.upgrade-perk + .upgrade-perk {
+  border-top: 1px solid var(--line);
+}
+.perk-mark {
+  flex: none;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.upgrade-btn {
+  display: block;
+  width: 100%;
+  margin: 18px 0 0;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bg-0);
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-deep) 100%);
+  border: none;
+  border-radius: 999px;
+  padding: 14px 20px;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(232, 192, 116, 0.28);
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.upgrade-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(232, 192, 116, 0.36);
+}
+.upgrade-btn:active {
+  transform: translateY(0);
+}
+.upgrade-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+.upgrade-hint {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-soft);
+}
+
 /* --- полоса метрик --- */
 .stats {
   display: grid;
