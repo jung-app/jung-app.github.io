@@ -8,5 +8,5 @@ window.JUNG_CONFIG = {
   // Cloudflare quick-туннель на aiohttp-бэкенд бота (localhost:8791).
   // ВНИМАНИЕ: quick-туннель ЭФЕМЕРНЫЙ — меняется при перезапуске cloudflared.
   // Для 24/7 заменить на постоянный named-tunnel (cloudflared login + домен).
-  API_BASE: "https://api.trycloudflare.com",
+  API_BASE: "https://symbol-nextel-underwear-gzip.trycloudflare.com",
 };
