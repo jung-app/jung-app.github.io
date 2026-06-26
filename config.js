@@ -1,12 +1,9 @@
 // Конфигурация фронтенда мини-аппа. Правится при деплое — не трогает app.js.
 //
-// API_BASE — публичный HTTPS-адрес aiohttp-бэкенда бота (эндпоинт /api/profile).
-// Бот деплоится через launchd на ноуте и НЕ имеет публичного домена сам по себе —
-// нужен HTTPS-туннель (Cloudflare Tunnel / ngrok) или reverse-proxy. Впиши его URL сюда.
-// Пример: "https://jung-api.example.com"
+// API_BASE — базовый адрес aiohttp-бэкенда бота (эндпоинты /api/*).
+// PROD (VPS Beget, mindcoachbot.ru): мини-апп и бэкенд same-origin за Caddy, поэтому
+// API_BASE пустой → app.js шлёт относительные запросы, без CORS и без туннеля.
+// (Историч.: на ноуте через launchd нужен был cloudflared-туннель — больше не используется.)
 window.JUNG_CONFIG = {
-  // Cloudflare quick-туннель на aiohttp-бэкенд бота (localhost:8791).
-  // ВНИМАНИЕ: quick-туннель ЭФЕМЕРНЫЙ — меняется при перезапуске cloudflared.
-  // Для 24/7 заменить на постоянный named-tunnel (cloudflared login + домен).
-  API_BASE: "https://symbol-nextel-underwear-gzip.trycloudflare.com",
+  API_BASE: "https://responsibility-envelope-completing-ruling.trycloudflare.com",
 };
