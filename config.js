@@ -5,5 +5,5 @@
 // API_BASE пустой → app.js шлёт относительные запросы, без CORS и без туннеля.
 // (Историч.: на ноуте через launchd нужен был cloudflared-туннель — больше не используется.)
 window.JUNG_CONFIG = {
-  API_BASE: "https://captain-proudly-catalogue-organizations.trycloudflare.com",
+  API_BASE: "https://seeker-legs-legacy-gamma.trycloudflare.com",
 };
