@@ -11,8 +11,104 @@ const STATUS_LABELS = {
   working: "гипотеза",
   confirmed_by_user: "подтверждено",
 };
-const CONFIDENCE_RANK = { low: 1, medium: 2, high: 3 };
-const CONFIDENCE_LABELS = { low: "низкая уверенность", medium: "средняя уверенность", high: "высокая уверенность" };
+
+// Уверенность как фаза луны: гипотеза «проявляется из тени на свет» — буквальный
+// язык индивидуации (и 🌑-бренда). Сдвиг тени в svg-луне + человеческая подпись.
+const CONFIDENCE_MOON = {
+  low: { shift: 3.5, cap: "едва проявлено" },
+  medium: { shift: 9, cap: "проявляется" },
+  high: { shift: 15, cap: "ясно видно" },
+};
+
+// «Что это» — короткая человеческая расшифровка каждой грани по Юнгу. Обучающий
+// слой мини-аппа: человек понимает СВОИ грани, а не просто читает ярлыки.
+// Эпистемическая рамка: понятия — ориентиры, не диагнозы. Глиф — из алхимико-
+// астрономического словаря самого Юнга (◎ — его символ Самости).
+const FACET_GUIDE = {
+  life_context: {
+    glyph: "✦",
+    guide:
+      "Где ты сейчас: обстоятельства, роли, переходы. Фон, на котором читается всё остальное.",
+  },
+  patterns: {
+    glyph: "∞",
+    guide:
+      "Повторяющиеся сценарии в реакциях и выборах. Увидеть узор — уже половина свободы от него.",
+  },
+  fears: {
+    glyph: "▲",
+    guide:
+      "Страхи — не слабость, а указатели: за ними спрятано то, что для тебя по-настоящему важно.",
+  },
+  childhood_wounds: {
+    glyph: "✶",
+    guide:
+      "Ранний опыт, который до сих пор задаёт тон. Не чтобы винить прошлое — чтобы вернуть себе выбор.",
+  },
+  persona: {
+    glyph: "◐",
+    guide:
+      "Лицо, которое ты показываешь миру: роли, манеры, «как надо». Полезна — пока не путаешь её с собой.",
+  },
+  shadow: {
+    glyph: "●",
+    guide:
+      "Стороны тебя, которые ты предпочитаешь не замечать. По Юнгу встреча с Тенью — первый шаг к целостности: в ней заперта и сила.",
+  },
+  anima_animus: {
+    glyph: "☽",
+    guide:
+      "Внутренний образ другого пола — как в тебе живёт женское и мужское. Незаметно влияет на то, кого и как ты любишь.",
+  },
+  self: {
+    glyph: "◎",
+    guide:
+      "Центр и целое психики, к которому ведёт индивидуация. Не «идеальный я» — весь я, включая тень.",
+  },
+  mother_complex: {
+    glyph: "⊕",
+    guide:
+      "След отношений с матерью и материнским: как он окрашивает близость, заботу, зависимость.",
+  },
+  father_complex: {
+    glyph: "⊙",
+    guide:
+      "След отношений с отцом и отцовским: авторитет, правила, признание — и твой спор с ними.",
+  },
+};
+
+// Расшифровки архетипов по имени (extraction пишет свободные имена — матчим мягко).
+const ARCHETYPE_GUIDE = [
+  [/трикстер/i, "Нарушитель правил и хитрец. Ломает застывший порядок, чтобы освободить место живому."],
+  [/геро/i, "Тот, кто выходит навстречу испытанию. Сила — в преодолении; риск — не уметь останавливаться."],
+  [/мудрец|сенекс|стар(ец|ик)/i, "Ищущий смысл и видящий целое. Опора в хаосе; риск — спрятаться в голове от жизни."],
+  [/puer|вечн(ый|ая)/i, "Вечный юноша: полёт, возможности, нелюбовь к ограничениям. Дар лёгкости — и трудность укоренения."],
+  [/велик(ая|ой) мат|мать/i, "Питающее и оберегающее начало. В светлой стороне — забота; в тёмной — удержание и поглощение."],
+  [/странник|путник|искатель/i, "Идущий своим путём. Дом — дорога; риск — вечно уходить вместо того, чтобы приходить."],
+  [/тень/i, "Отвергнутое и вытесненное, ставшее фигурой. Пугает — и хранит запертую энергию."],
+  [/анимус/i, "Внутреннее мужское: решимость, слово, структура — как оно звучит в тебе."],
+  [/анима/i, "Внутреннее женское: чувство, образ, связь с глубиной — как оно звучит в тебе."],
+  [/сирот/i, "Знающий покинутость. Ищет принадлежность; дар — эмпатия к чужой боли."],
+  [/творец|художник/i, "Претворяющий внутреннее в форму. Живёт, когда создаёт; страдает, когда копирует."],
+  [/правитель|король|королев/i, "Держащий порядок и ответственность. Светлая сторона — опора; тёмная — контроль."],
+];
+const ARCHETYPE_FALLBACK =
+  "Архетип — древний общечеловеческий образ, который сейчас отчётливо звучит в твоей жизни.";
+
+function archetypeGuide(name) {
+  for (const [re, text] of ARCHETYPE_GUIDE) {
+    if (re.test(name || "")) return text;
+  }
+  return ARCHETYPE_FALLBACK;
+}
+
+function pluralRu(n, one, few, many) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -107,35 +203,80 @@ function stat(value, label) {
 }
 
 function confidence(level) {
-  const rank = CONFIDENCE_RANK[level] || 0;
+  // Луна-уверенность: золотой диск, из-за которого уходит тень. Чем увереннее
+  // гипотеза, тем больше диска «вышло из тени». Подпись — человеческим языком.
+  const m = CONFIDENCE_MOON[level];
   const wrap = el("span", "conf");
-  const dots = el("span", "conf-dots");
-  for (let i = 1; i <= 3; i++) {
-    const d = el("span", "conf-dot" + (i <= rank ? " on" : ""));
-    dots.appendChild(d);
-  }
-  wrap.appendChild(dots);
-  wrap.appendChild(el("span", "conf-cap", CONFIDENCE_LABELS[level] || "уверенность —"));
+  wrap.title = "насколько гипотеза проявилась в наших разговорах";
+  const moon = el("span", "moon");
+  const shift = m ? m.shift : 0;
+  const clipId = "mc" + Math.random().toString(36).slice(2, 8);
+  moon.innerHTML = `
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <defs><clipPath id="${clipId}"><circle cx="10" cy="10" r="8.5" /></clipPath></defs>
+      <circle cx="10" cy="10" r="8.5" fill="#e8c074" />
+      <circle cx="${(10 - shift).toFixed(1)}" cy="10" r="8.5" fill="#161e30" clip-path="url(#${clipId})" />
+      <circle cx="10" cy="10" r="8.5" fill="none" stroke="rgba(232,192,116,0.4)" stroke-width="1" />
+    </svg>`;
+  wrap.appendChild(moon);
+  wrap.appendChild(el("span", "conf-cap", m ? m.cap : "уверенность —"));
   return wrap;
+}
+
+function guideBlock(title, text) {
+  // Обучающий слой «что это» — нативный <details>: компактно, доступно, без JS.
+  const d = el("details", "card-guide");
+  const s = el("summary", "card-guide-q", title);
+  d.appendChild(s);
+  d.appendChild(el("p", "card-guide-a", text));
+  return d;
 }
 
 function insightCard(item) {
   const card = el("article", "card");
   if (item.user_confirmed) card.classList.add("card--confirmed");
 
+  const isArchetype = !item.key;
+  const facet = item.key ? FACET_GUIDE[item.key] : null;
+  const title = item.label || item.name;
+
   const head = el("div", "card-head");
-  head.appendChild(el("h3", "card-title", item.label || item.name));
+  const heading = el("div", "card-heading");
+  const glyph = el("span", "facet-glyph", isArchetype ? "✧" : facet ? facet.glyph : "✦");
+  heading.appendChild(glyph);
+  heading.appendChild(el("h3", "card-title", title));
+  head.appendChild(heading);
   const st = el("span", "pill pill--status", STATUS_LABELS[item.status] || item.status);
   st.dataset.status = item.status;
   head.appendChild(st);
   card.appendChild(head);
 
+  // (б) что это такое по Юнгу — раскрывается по касанию, не съедая экран
+  const guideText = isArchetype ? archetypeGuide(item.name) : facet ? facet.guide : null;
+  if (guideText) {
+    card.appendChild(guideBlock(isArchetype ? "Что это за архетип?" : "Что это — " + title + "?", guideText));
+  }
+
+  // (в) персональная гипотеза — с явной эпистемической рамкой в самом ярлыке
+  card.appendChild(
+    el("div", "hyp-label", item.user_confirmed ? "гипотеза, подтверждённая тобой" : "гипотеза о тебе"),
+  );
   card.appendChild(el("p", "card-summary", item.summary));
 
+  // (г) уверенность + опора на наши разговоры
   const meta = el("div", "card-meta");
   meta.appendChild(confidence(item.confidence));
+  if (item.evidence_count) {
+    const n = item.evidence_count;
+    meta.appendChild(
+      el(
+        "span",
+        "tag-evidence",
+        "опора: " + n + " " + pluralRu(n, "наблюдение", "наблюдения", "наблюдений") + " из разговоров",
+      ),
+    );
+  }
   if (item.user_confirmed) meta.appendChild(el("span", "pill pill--ok", "✓ ты подтвердил"));
-  if (item.evidence_count) meta.appendChild(el("span", "tag-evidence", item.evidence_count + " наблюд."));
   card.appendChild(meta);
 
   // «Это не про меня» — только для insight-разделов (у них есть key); архетипы без key.
@@ -274,8 +415,8 @@ function shareRow(inviteUrl) {
   return sec;
 }
 
-// Запросить у бэкенда ссылку на месячную подписку (recurring Stars). Та же ссылка, что
-// в чате, — авто-списание и активация подписки работают без изменений.
+// Запросить у бэкенда ссылку на оплату подписки картой (lava.top). Та же страница оплаты,
+// что и по кнопке «Оплатить картой» в чате; зачисление приходит вебхуком lava.
 async function requestInvoice() {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
   const initData = tg && tg.initData ? tg.initData : "";
@@ -288,8 +429,10 @@ async function requestInvoice() {
   return (await res.json()).url;
 }
 
-// Оплата прямо из мини-аппа: человек увидел свой образ → платит в один тап, не возвращаясь
-// в чат. Замыкает петлю «ценность → оплата» в точке пика. Цену показывает нативный инвойс.
+// Оплата прямо из мини-аппа: человек увидел свой образ → платит картой, не возвращаясь
+// в чат. Замыкает петлю «ценность → оплата» в точке пика. lava.top — внешняя защищённая
+// страница, поэтому открываем её tg.openLink (НЕ openInvoice — тот только для нативных
+// Telegram-инвойсов в звёздах). Доступ начисляет вебхук; профиль перечитается как платный.
 function startUpgrade(btn) {
   const original = btn.textContent;
   btn.disabled = true;
@@ -300,8 +443,37 @@ function startUpgrade(btn) {
   };
   requestInvoice()
     .then((url) => {
-      const onResult = (status) => {
-        if (status === "paid") {
+      if (tg && typeof tg.openLink === "function") {
+        tg.openLink(url); // встроенный браузер Telegram → защищённая страница оплаты
+      } else {
+        window.open(url, "_blank");
+      }
+      restore();
+      pollForActivation(); // когда вебхук зачислит подписку — покажем подтверждение сами
+    })
+    .catch(() => {
+      restore();
+      if (tg && typeof tg.showAlert === "function")
+        tg.showAlert("Не получилось открыть оплату. Попробуй ещё раз или набери /upgrade в чате.");
+    });
+}
+
+// После открытия страницы оплаты картой — лёгкий поллинг профиля: как только вебхук lava
+// начислит подписку (is_paid=true), показываем подтверждение, не требуя ручного обновления.
+// Внешняя оплата не даёт колбэка статуса (в отличие от openInvoice), поэтому опрашиваем сами.
+function pollForActivation() {
+  let attempts = 0;
+  const tick = async () => {
+    attempts += 1;
+    try {
+      const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+      const initData = tg && tg.initData ? tg.initData : "";
+      const res = await fetch(base.replace(/\/$/, "") + "/api/profile", {
+        headers: { Authorization: "tma " + initData },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.profile && data.profile.is_paid) {
           if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === "function")
             tg.HapticFeedback.notificationOccurred("success");
           setView(
@@ -311,26 +483,15 @@ function startUpgrade(btn) {
               "✦",
             ),
           );
-          setTimeout(main, 1500); // профиль перечитается уже как платный (is_paid=true)
-        } else {
-          restore(); // cancelled / failed / pending
+          return; // готово — поллинг прекращаем
         }
-      };
-      if (tg && typeof tg.openInvoice === "function") {
-        tg.openInvoice(url, onResult);
-      } else if (tg && typeof tg.openTelegramLink === "function") {
-        tg.openTelegramLink(url); // старый клиент без openInvoice — открываем инвойс ссылкой
-        restore();
-      } else {
-        window.open(url, "_blank");
-        restore();
       }
-    })
-    .catch(() => {
-      restore();
-      if (tg && typeof tg.showAlert === "function")
-        tg.showAlert("Не получилось открыть оплату. Попробуй ещё раз или набери /upgrade в чате.");
-    });
+    } catch (e) {
+      /* сеть моргнула — попробуем на следующем тике */
+    }
+    if (attempts < 18) setTimeout(tick, 10000); // ~3 минуты ждём завершения оплаты
+  };
+  setTimeout(tick, 8000); // первая проверка — после возможной быстрой оплаты
 }
 
 // Панель подписки (только для free): после показа реального образа продаём ПАМЯТЬ —
@@ -349,10 +510,14 @@ function upgradeSection() {
     ),
   );
   const perks = el("ul", "upgrade-perks");
+  // Канон ценности — зеркало subscription_comparison() в app/handlers/payments.py.
+  // Держи в синхроне с ботом и лендингом (активное воображение скрыто до раскатки).
   [
     "Память между сессиями — продолжаем, где остановились",
     "Безлимитные разговоры с проводником",
-    "Глубже работаем над тем, что уже проявилось",
+    "Растущий портрет тебя и вехи внутреннего роста",
+    "Дневник снов 🌙 — бережная работа с образами снов",
+    "Я сам бережно пишу первым между сессиями",
   ].forEach((t) => {
     const li = el("li", "upgrade-perk");
     li.appendChild(el("span", "perk-mark", "🔓"));
@@ -364,13 +529,14 @@ function upgradeSection() {
   btn.type = "button";
   btn.addEventListener("click", () => startUpgrade(btn));
   sec.appendChild(btn);
-  sec.appendChild(el("p", "upgrade-hint", "Оплата звёздами Telegram. Отменить можно в любой момент."));
+  sec.appendChild(el("p", "upgrade-hint", "Оплата банковской картой. Доступ открывается сразу после оплаты."));
   return sec;
 }
 
-function groupBlock(title, items) {
+function groupBlock(title, items, sub) {
   const sec = el("section", "group");
   sec.appendChild(el("h2", "group-title", title));
+  if (sub) sec.appendChild(el("p", "group-sub", sub));
   items.forEach((it) => sec.appendChild(insightCard(it)));
   return sec;
 }
@@ -384,7 +550,7 @@ function renderProfile(p) {
   // верхняя строка: бренд + дата
   const top = el("header", "topbar");
   const brand = el("div", "brand");
-  brand.appendChild(el("div", "brand-kicker", "Глубинный профиль"));
+  brand.appendChild(el("div", "brand-kicker", "Мой образ"));
   brand.appendChild(el("div", "brand-name", p.pseudonym || "Аноним"));
   top.appendChild(brand);
   const upd = fmtDate(p.updated_at);
@@ -444,7 +610,24 @@ function renderProfile(p) {
   }
 
   if (enrichment.length) root.appendChild(groupBlock("Глубинные слои", enrichment));
-  if (p.archetypes && p.archetypes.length) root.appendChild(groupBlock("Активные архетипы", p.archetypes));
+  if (p.archetypes && p.archetypes.length) {
+    root.appendChild(
+      groupBlock(
+        "Активные архетипы",
+        p.archetypes,
+        "Общечеловеческие образы, которые сейчас звучат в тебе — по Юнгу они живут в каждом.",
+      ),
+    );
+  } else if (c.is_sufficient) {
+    // Зрелый профиль без архетипов: тихо приглашаем в разговор, который их проявит.
+    const s = el("section", "group");
+    s.appendChild(el("h2", "group-title", "Активные архетипы"));
+    const note = el("div", "empty-note");
+    note.textContent =
+      "Архетипы проявляются в живых историях. Расскажи в чате про сон или ситуацию, где ты вдруг узнал себя, — и здесь появятся первые образы.";
+    s.appendChild(note);
+    root.appendChild(s);
+  }
 
   // что ещё стоит исследовать (если профиль не дозрел)
   if (!c.is_sufficient && c.missing && c.missing.length) {

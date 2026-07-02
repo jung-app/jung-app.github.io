@@ -7,6 +7,19 @@
     <title>Глубинный профиль</title>
     <!-- Telegram Mini App SDK: даёт initData, expand() и т.п. -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Заходы НЕ из Telegram (нет подписанного initData) — обычные посетители и модерация
+         платёжного сервиса: показываем публичный лендинг вместо загрузочного экрана мини-аппа.
+         Из Telegram initData присутствует → остаёмся в мини-аппе. -->
+    <script>
+      (function () {
+        try {
+          var wa = window.Telegram && window.Telegram.WebApp;
+          if (!wa || !wa.initData) window.location.replace("./landing.html");
+        } catch (e) {
+          window.location.replace("./landing.html");
+        }
+      })();
+    </script>
     <!-- Шрифты: Lora (контемплятивный серив для заголовков) + Inter (тело). Оба с кириллицей. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

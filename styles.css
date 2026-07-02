@@ -499,6 +499,12 @@ body {
   color: var(--muted);
   margin: 0 0 12px 2px;
 }
+.group-sub {
+  margin: -6px 2px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted-soft);
+}
 .card {
   position: relative;
   background: var(--panel);
@@ -520,11 +526,46 @@ body {
   gap: 12px;
   margin-bottom: 8px;
 }
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+/* Медальон грани: алхимико-астрономический глиф в тонком золотом кольце.
+   Словарь самого Юнга (◎ — его знак Самости), а не декоративная иконка. */
+.facet-glyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(232, 192, 116, 0.38);
+  background: radial-gradient(circle at 34% 30%, rgba(232, 192, 116, 0.16), rgba(232, 192, 116, 0.04));
+  color: var(--gold);
+  font-size: 14px;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(232, 192, 116, 0.45);
+}
 .card-title {
   font-family: "Lora", Georgia, serif;
   font-size: 17px;
   font-weight: 600;
   margin: 0;
+}
+/* Ярлык эпистемической рамки: «гипотеза о тебе», не вердикт. */
+.hyp-label {
+  margin: 10px 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+}
+.card--confirmed .hyp-label {
+  color: var(--ok);
 }
 .card-summary {
   margin: 0 0 14px;
@@ -536,6 +577,44 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+/* --- «что это» — обучающий слой по касанию --- */
+.card-guide {
+  margin: 2px 0 0;
+  border-left: 2px solid rgba(232, 192, 116, 0.28);
+  padding-left: 11px;
+}
+.card-guide-q {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-guide-q::-webkit-details-marker {
+  display: none;
+}
+.card-guide-q::after {
+  content: " +";
+  color: var(--gold-deep);
+}
+.card-guide[open] .card-guide-q {
+  color: var(--gold);
+}
+.card-guide[open] .card-guide-q::after {
+  content: " −";
+}
+.card-guide-q:hover {
+  color: var(--text);
+}
+.card-guide-a {
+  margin: 7px 0 2px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted);
 }
 
 /* --- «это не про меня»: намеренно тихая кнопка, чтобы не звать на случайный тап --- */
@@ -566,25 +645,23 @@ body {
   cursor: default;
 }
 
-/* --- индикатор уверенности: три точки --- */
+/* --- индикатор уверенности: фаза луны ---
+   Чем увереннее гипотеза, тем больше золотого диска вышло из тени —
+   визуальный язык индивидуации (и 🌑-бренда), вместо безликих точек. */
 .conf {
   display: inline-flex;
   align-items: center;
   gap: 7px;
 }
-.conf-dots {
+.moon {
   display: inline-flex;
-  gap: 4px;
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 0 4px rgba(232, 192, 116, 0.35));
 }
-.conf-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-}
-.conf-dot.on {
-  background: var(--gold);
-  box-shadow: 0 0 5px rgba(232, 192, 116, 0.5);
+.moon svg {
+  width: 100%;
+  height: 100%;
 }
 .conf-cap {
   font-size: 11.5px;
@@ -690,4 +767,43 @@ body {
 }
 .small {
   font-size: 13px;
+}
+
+/* --- появление страницы: мягкий подъём из глубины --- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.profile > * {
+  animation: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.profile > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.profile > *:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.profile > *:nth-child(4) {
+  animation-delay: 0.18s;
+}
+.profile > *:nth-child(n + 5) {
+  animation-delay: 0.24s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile > * {
+    animation: none;
+  }
+  .orb {
+    animation: none;
+  }
+  .ring-prog {
+    transition: none;
+  }
 }
