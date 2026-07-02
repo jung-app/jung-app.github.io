@@ -309,7 +309,8 @@ body {
   color: var(--muted);
 }
 .delta--new,
-.delta--arch {
+.delta--arch,
+.delta--habit {
   color: var(--gold);
   border-color: rgba(232, 192, 116, 0.3);
   background: var(--gold-soft);
@@ -615,6 +616,37 @@ body {
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--muted);
+}
+
+/* --- работа с привычкой: «чему служит» и «ритуал замещения» --- */
+.habit-field {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.habit-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.habit-field-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #ded9cf;
+}
+/* Ритуал — золотой акцент: это «куда идти», сердце карточки. */
+.habit-field--ritual {
+  border-color: rgba(232, 192, 116, 0.3);
+  background: var(--gold-soft);
+}
+.habit-field--ritual .habit-field-label {
+  color: var(--gold-deep);
 }
 
 /* --- «это не про меня»: намеренно тихая кнопка, чтобы не звать на случайный тап --- */

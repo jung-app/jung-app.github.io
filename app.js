@@ -95,6 +95,13 @@ const ARCHETYPE_GUIDE = [
 const ARCHETYPE_FALLBACK =
   "Архетип — древний общечеловеческий образ, который сейчас отчётливо звучит в твоей жизни.";
 
+// Рамка работы с привычкой (/habit): привычка — не враг, а служение потребности.
+// Никаких стриков и стыда — срыв здесь материал, а не провал.
+const HABIT_GUIDE =
+  "Привычка здесь — не враг и не слабость: она служит какой-то настоящей потребности. " +
+  "В этой работе мы вслушиваемся, чему именно, — и ищем ритуал замещения, который кормит " +
+  "ту же потребность честнее. Срыв — не провал, а материал для следующего шага.";
+
 function archetypeGuide(name) {
   for (const [re, text] of ARCHETYPE_GUIDE) {
     if (re.test(name || "")) return text;
@@ -285,6 +292,57 @@ function insightCard(item) {
   return card;
 }
 
+// Поле карточки привычки: подписанный блок «чему служит» / «ритуал замещения».
+function habitField(label, text, extraClass) {
+  const box = el("div", "habit-field" + (extraClass ? " " + extraClass : ""));
+  box.appendChild(el("div", "habit-field-label", label));
+  box.appendChild(el("p", "habit-field-text", text));
+  return box;
+}
+
+// Карточка привычки: {привычка, чему служит, ритуал замещения, прогресс}.
+// Прогресс — луна-уверенность + опора наблюдений, НЕ стрики (бот — спутник, не надзиратель).
+function habitCard(item) {
+  const card = el("article", "card");
+  if (item.user_confirmed) card.classList.add("card--confirmed");
+
+  const head = el("div", "card-head");
+  const heading = el("div", "card-heading");
+  heading.appendChild(el("span", "facet-glyph", "⟳"));
+  heading.appendChild(el("h3", "card-title", item.name));
+  head.appendChild(heading);
+  const st = el("span", "pill pill--status", STATUS_LABELS[item.status] || item.status);
+  st.dataset.status = item.status;
+  head.appendChild(st);
+  card.appendChild(head);
+
+  card.appendChild(guideBlock("Что это — работа с привычкой?", HABIT_GUIDE));
+
+  card.appendChild(
+    el("div", "hyp-label", item.user_confirmed ? "гипотеза, подтверждённая тобой" : "гипотеза о тебе"),
+  );
+  card.appendChild(el("p", "card-summary", item.summary));
+
+  if (item.serves) card.appendChild(habitField("чему служит", item.serves));
+  if (item.ritual) card.appendChild(habitField("ритуал замещения", item.ritual, "habit-field--ritual"));
+
+  const meta = el("div", "card-meta");
+  meta.appendChild(confidence(item.confidence));
+  if (item.evidence_count) {
+    const n = item.evidence_count;
+    meta.appendChild(
+      el(
+        "span",
+        "tag-evidence",
+        "опора: " + n + " " + pluralRu(n, "наблюдение", "наблюдения", "наблюдений") + " из разговоров",
+      ),
+    );
+  }
+  if (item.user_confirmed) meta.appendChild(el("span", "pill pill--ok", "✓ ты подтвердил"));
+  card.appendChild(meta);
+  return card;
+}
+
 function dismissRow(key, label) {
   const row = el("div", "card-actions");
   const btn = el("button", "card-dismiss", "Это не про меня");
@@ -383,6 +441,9 @@ function dynamicsBlock(d) {
     );
     (d.new_archetypes || []).forEach((name) =>
       row.appendChild(el("span", "delta delta--arch", "архетип: " + name)),
+    );
+    (d.new_habits || []).forEach((name) =>
+      row.appendChild(el("span", "delta delta--habit", "практика: " + name)),
     );
     sec.appendChild(row);
   }
@@ -619,7 +680,9 @@ function renderProfile(p) {
         "Общечеловеческие образы, которые сейчас звучат в тебе — по Юнгу они живут в каждом.",
       ),
     );
-  } else if (c.is_sufficient) {
+  }
+
+  if (c.is_sufficient && !(p.archetypes && p.archetypes.length)) {
     // Зрелый профиль без архетипов: тихо приглашаем в разговор, который их проявит.
     const s = el("section", "group");
     s.appendChild(el("h2", "group-title", "Активные архетипы"));
@@ -628,6 +691,22 @@ function renderProfile(p) {
       "Архетипы проявляются в живых историях. Расскажи в чате про сон или ситуацию, где ты вдруг узнал себя, — и здесь появятся первые образы.";
     s.appendChild(note);
     root.appendChild(s);
+  }
+
+  // Работа с привычкой (/habit): показываем только когда есть что показать — free без
+  // сессий не получает пустую секцию-укор, а платный видит живой прогресс практики.
+  if (p.habits && p.habits.length) {
+    const sec = el("section", "group");
+    sec.appendChild(el("h2", "group-title", "Работа с привычкой"));
+    sec.appendChild(
+      el(
+        "p",
+        "group-sub",
+        "Из сессий /habit: чему служит привычка и какой ритуал может кормить ту же потребность честнее.",
+      ),
+    );
+    p.habits.forEach((h) => sec.appendChild(habitCard(h)));
+    root.appendChild(sec);
   }
 
   // что ещё стоит исследовать (если профиль не дозрел)
