@@ -800,6 +800,30 @@ function renderProfile(p) {
       sec.appendChild(card);
     });
     root.appendChild(sec);
+  } else if (p.threads_locked) {
+    // Free после демо: сервер отдал только ЧИСЛО нитей (содержимое не пришло в payload).
+    // Тизер честный — нити реально найдены; открываются с подпиской (CTA скроллит к оплате).
+    const sec = el("section", "group weave");
+    sec.appendChild(el("h2", "group-title serif", "Нити образа"));
+    const card = el("div", "weave-thread");
+    card.appendChild(el("div", "weave-eyebrow", "найдено, но скрыто"));
+    card.appendChild(
+      el(
+        "p",
+        "weave-need",
+        "Я вижу " + p.threads_locked + " " +
+          pluralRu(p.threads_locked, "нить", "нити", "нитей") + ": похоже, разные грани, привычки и образы " +
+          "растут из одной глубинной потребности. С подпиской покажу, как они переплетаются.",
+      ),
+    );
+    const btn = el("button", "upgrade-btn weave-locked-btn", "Открыть нити 🔓");
+    btn.addEventListener("click", () => {
+      const up = document.querySelector(".upgrade");
+      if (up) up.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    card.appendChild(btn);
+    sec.appendChild(card);
+    root.appendChild(sec);
   }
 
   // что ещё стоит исследовать (если профиль не дозрел)
