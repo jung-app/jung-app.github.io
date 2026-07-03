@@ -809,6 +809,59 @@ body {
   color: var(--text, inherit);
 }
 
+/* --- «Нити образа»: синтез граней/привычек/образов из одной потребности --- */
+.weave-thread {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--gold-deep);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-top: 12px;
+}
+.weave-eyebrow {
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  opacity: 0.85;
+  margin-bottom: 10px;
+}
+.weave-chips {
+  align-items: center;
+}
+/* Чипы-члены нити: соединяем «плюсиком» между ними — визуальная связь. */
+.weave-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text);
+  background: var(--gold-soft);
+  border-color: rgba(232, 192, 116, 0.22);
+}
+.weave-chip + .weave-chip {
+  position: relative;
+}
+.weave-chip + .weave-chip::before {
+  content: "+";
+  position: absolute;
+  left: -10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.weave-kind {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  opacity: 0.9;
+  margin-right: 5px;
+}
+.weave-need {
+  margin: 12px 0 0;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
 /* --- футер --- */
 .footer {
   margin-top: 10px;

@@ -737,6 +737,48 @@ function renderProfile(p) {
     root.appendChild(sec);
   }
 
+  // «Нити»: синтез — грани/привычки/образы, выросшие из ОДНОЙ потребности (payload.threads,
+  // группировка по мотиву-тегу theme). Момент «меня реально поняли». Держим гипотезой:
+  // eyebrow «возможно, одна нить», без диагноза; сырого evidence тут нет (152-ФЗ).
+  if (p.threads && p.threads.length) {
+    const sec = el("section", "group weave");
+    sec.appendChild(el("h2", "group-title serif", "Нити образа"));
+    sec.appendChild(
+      el(
+        "p",
+        "group-sub",
+        "Похоже, разные грани растут из одной глубинной потребности — вот как они переплетаются.",
+      ),
+    );
+    p.threads.forEach((t) => {
+      const card = el("div", "weave-thread");
+      card.appendChild(el("div", "weave-eyebrow", "возможно, одна нить"));
+      const chips = el("div", "chips weave-chips");
+      t.members.forEach((m) => {
+        const kindWord =
+          m.kind === "facet" ? "грань" : m.kind === "archetype" ? "образ" : "привычка";
+        const chip = el("span", "chip weave-chip");
+        chip.appendChild(el("span", "weave-kind", kindWord));
+        chip.appendChild(document.createTextNode(m.kind === "facet" ? m.label : m.name || ""));
+        chips.appendChild(chip);
+      });
+      card.appendChild(chips);
+      // serves нередко уже начинается с «гипотеза:» — срезаем, чтобы не задваивать рамку.
+      const need = (t.need || "").replace(/^\s*гипотеза\s*[:—-]\s*/i, "").trim();
+      card.appendChild(
+        el(
+          "p",
+          "weave-need",
+          need
+            ? "Их питает одна потребность — " + need + "."
+            : "Похоже, их питает одна глубинная потребность.",
+        ),
+      );
+      sec.appendChild(card);
+    });
+    root.appendChild(sec);
+  }
+
   // что ещё стоит исследовать (если профиль не дозрел)
   if (!c.is_sufficient && c.missing && c.missing.length) {
     const ex = el("section", "explore");
