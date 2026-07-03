@@ -780,6 +780,35 @@ body {
   color: var(--muted);
 }
 
+/* --- приглашение при пустых архетипах: не укор, а зов --- */
+.arch-invite-lead {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+.arch-invite-hint {
+  margin: 14px 0 8px;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--faint, var(--muted));
+  opacity: 0.75;
+}
+/* Чипы-примеры = образы вообще, НЕ гипотезы о юзере: приглушены, чтобы не читались
+   как утверждение «ты — Странник». */
+.chip-ghost {
+  color: var(--muted);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--line);
+  opacity: 0.85;
+}
+.arch-invite-cta {
+  margin: 14px 0 0;
+  font-size: 14.5px;
+  color: var(--text, inherit);
+}
+
 /* --- футер --- */
 .footer {
   margin-top: 10px;

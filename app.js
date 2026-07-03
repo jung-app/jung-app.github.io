@@ -683,13 +683,41 @@ function renderProfile(p) {
   }
 
   if (c.is_sufficient && !(p.archetypes && p.archetypes.length)) {
-    // Зрелый профиль без архетипов: тихо приглашаем в разговор, который их проявит.
+    // Зрелый профиль без архетипов — НЕ пустой укор, а тёплое приглашение. Архетип —
+    // сильное утверждение, поэтому его НЕ выдумывают в extraction (см. память), а зовут
+    // человека в разговор, который образ проявит. Чипы — примеры образов ВООБЩЕ, не
+    // гипотезы о юзере (эпистемическая скромность): подписаны «например, такие».
     const s = el("section", "group");
     s.appendChild(el("h2", "group-title", "Активные архетипы"));
-    const note = el("div", "empty-note");
-    note.textContent =
-      "Архетипы проявляются в живых историях. Расскажи в чате про сон или ситуацию, где ты вдруг узнал себя, — и здесь появятся первые образы.";
-    s.appendChild(note);
+    s.appendChild(
+      el(
+        "p",
+        "group-sub",
+        "Архетип — древний общечеловеческий образ, который вдруг отчётливо звучит в конкретной истории. По Юнгу они живут в каждом.",
+      ),
+    );
+    const invite = el("div", "empty-note arch-invite");
+    invite.appendChild(
+      el(
+        "p",
+        "arch-invite-lead",
+        "Здесь пока тихо — и это нормально: образы проявляются не из анкеты, а из живого сюжета.",
+      ),
+    );
+    invite.appendChild(el("p", "arch-invite-hint", "Например, такие:"));
+    const examples = el("div", "chips arch-invite-chips");
+    ["Странник", "Тень", "Творец", "Мудрец", "Сирота"].forEach((name) =>
+      examples.appendChild(el("span", "chip chip-ghost", name)),
+    );
+    invite.appendChild(examples);
+    invite.appendChild(
+      el(
+        "p",
+        "arch-invite-cta",
+        "Расскажи мне в чате про повторяющийся сон, любимого героя или ситуацию, где ты вдруг узнал себя, — и первый образ проявится здесь.",
+      ),
+    );
+    s.appendChild(invite);
     root.appendChild(s);
   }
 
