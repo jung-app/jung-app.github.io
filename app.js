@@ -751,7 +751,25 @@ function renderEmpty() {
 
 // --- запуск -----------------------------------------------------------------
 
+// Грузим config.js динамически с cache-buster. Telegram-webview агрессивно кэширует
+// статичные ресурсы (~10 мин): при ротации туннеля телефон держал старый API_BASE и
+// стучался в мёртвый origin. ?v=timestamp = свежий URL на каждое открытие → свежий config.
+// Гейт: если JUNG_CONFIG уже задан инлайн (demo-стенд), ничего не грузим — стенд цел.
+function loadConfig() {
+  if (window.JUNG_CONFIG) return Promise.resolve();
+  return new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "./config.js?v=" + Date.now();
+    s.onload = resolve;
+    // Сбой загрузки config — не валим мини-апп: fetchProfile упадёт в понятное
+    // «не дотянулся до профиля» и предложит переоткрыть.
+    s.onerror = resolve;
+    document.head.appendChild(s);
+  });
+}
+
 async function main() {
+  await loadConfig();
   if (tg) {
     tg.ready();
     tg.expand();
