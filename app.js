@@ -456,12 +456,38 @@ function dynamicsBlock(d) {
   return sec;
 }
 
-// Кнопка «позвать близкого»: открывает нативный share-лист Telegram с реф-ссылкой юзера
-// (приходит в payload.invite_url с бэкенда). ВАЖНО (152-ФЗ): текст карточки обезличен —
-// никаких граней/гипотез/архетипов, только приглашение. Делятся ссылкой, не профилем.
-function shareRow(inviteUrl) {
-  const sec = el("section", "share");
-  const btn = el("button", "share-btn", "Позвать близкого в путь");
+// Карточка «позвать близкого»: оффер цифрами + прогресс + нативный share-лист Telegram
+// с реф-ссылкой юзера (payload.invite_url). ВАЖНО (152-ФЗ): текст обезличен — ни граней,
+// ни ID приглашённых; статистика — СОБСТВЕННЫЕ агрегаты юзера (сколько привёл/заработал).
+function shareRow(referral, inviteUrl) {
+  const r = referral || {};
+  const days = r.reward_days || 14;
+  const daysWord = pluralRu(days, "день", "дня", "дней");
+  const sec = el("section", "referral");
+  sec.appendChild(el("div", "referral-label", "Расти вместе"));
+  // Оффер в заголовке — ценность цифрами перед глазами, а не абстрактно «бонусные дни».
+  sec.appendChild(el("h2", "referral-title serif", "Позови близкого — тебе +" + days + " " + daysWord));
+
+  // Прогресс показываем, только когда уже кто-то приглашён: ценность уже осязаема.
+  if (r.invited) {
+    const stats = el("div", "referral-stats");
+    stats.appendChild(stat(r.invited, "приглашено"));
+    stats.appendChild(stat(r.rewarded || 0, "остались с подпиской"));
+    stats.appendChild(stat("+" + (r.earned_days || 0), "дней тебе"));
+    sec.appendChild(stats);
+  }
+
+  sec.appendChild(
+    el(
+      "p",
+      "referral-text",
+      r.rewarded
+        ? "Спасибо, что делишься путём. Когда останется ещё один близкий — тебе снова +" + days + " " + daysWord + "."
+        : "Когда близкий останется с подпиской — тебе +" + days + " " + daysWord + " доступа. Ему — расширенное знакомство с проводником.",
+    ),
+  );
+
+  const btn = el("button", "share-btn", "Позвать близкого");
   btn.type = "button";
   btn.addEventListener("click", () => {
     const text =
@@ -471,9 +497,6 @@ function shareRow(inviteUrl) {
     else window.open(link, "_blank");
   });
   sec.appendChild(btn);
-  sec.appendChild(
-    el("p", "share-hint", "Другу — бесплатное знакомство, тебе — бонусные дни, когда он останется."),
-  );
   return sec;
 }
 
@@ -840,7 +863,7 @@ function renderProfile(p) {
   // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
   if (!p.is_paid) root.appendChild(upgradeSection(p.billing));
 
-  if (p.invite_url) root.appendChild(shareRow(p.invite_url));
+  if (p.invite_url) root.appendChild(shareRow(p.referral, p.invite_url));
 
   const foot = el("footer", "footer");
   foot.appendChild(
