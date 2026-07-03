@@ -439,6 +439,17 @@ body {
   box-shadow: 0 8px 22px rgba(232, 192, 116, 0.28);
   transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
 }
+/* Годовой якорь: та же форма, но «призрачная» — месяц остаётся главным действием. */
+.upgrade-btn-annual {
+  margin-top: 10px;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid rgba(232, 192, 116, 0.45);
+  box-shadow: none;
+}
+.upgrade-btn-annual:hover {
+  box-shadow: 0 6px 18px rgba(232, 192, 116, 0.16);
+}
 .upgrade-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 26px rgba(232, 192, 116, 0.36);

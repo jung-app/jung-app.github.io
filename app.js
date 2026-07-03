@@ -478,13 +478,14 @@ function shareRow(inviteUrl) {
 
 // Запросить у бэкенда ссылку на оплату подписки картой (lava.top). Та же страница оплаты,
 // что и по кнопке «Оплатить картой» в чате; зачисление приходит вебхуком lava.
-async function requestInvoice() {
+async function requestInvoice(period) {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
   const res = await fetch(base.replace(/\/$/, "") + "/api/invoice", {
     method: "POST",
-    headers: { Authorization: "tma " + initData },
+    headers: { Authorization: "tma " + initData, "Content-Type": "application/json" },
+    body: JSON.stringify({ period: period || "monthly" }),
   });
   if (!res.ok) throw new Error("http-" + res.status);
   return (await res.json()).url;
@@ -494,7 +495,7 @@ async function requestInvoice() {
 // в чат. Замыкает петлю «ценность → оплата» в точке пика. lava.top — внешняя защищённая
 // страница, поэтому открываем её tg.openLink (НЕ openInvoice — тот только для нативных
 // Telegram-инвойсов в звёздах). Доступ начисляет вебхук; профиль перечитается как платный.
-function startUpgrade(btn) {
+function startUpgrade(btn, period) {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Открываю оплату…";
@@ -502,7 +503,7 @@ function startUpgrade(btn) {
     btn.disabled = false;
     btn.textContent = original;
   };
-  requestInvoice()
+  requestInvoice(period)
     .then((url) => {
       if (tg && typeof tg.openLink === "function") {
         tg.openLink(url); // встроенный браузер Telegram → защищённая страница оплаты
@@ -558,7 +559,7 @@ function pollForActivation() {
 // Панель подписки (только для free): после показа реального образа продаём ПАМЯТЬ —
 // продолжение пути, а не «безлимит». Существующие грани не прячем (это данные юзера,
 // 152-ФЗ «ты хозяин данных») — показываем, что открывает подписка, и кнопку оплаты.
-function upgradeSection() {
+function upgradeSection(billing) {
   const sec = el("section", "upgrade");
   sec.appendChild(el("div", "upgrade-label", "Дальше — вместе"));
   sec.appendChild(el("h2", "upgrade-title serif", "Я не забуду тебя завтра"));
@@ -587,10 +588,29 @@ function upgradeSection() {
     perks.appendChild(li);
   });
   sec.appendChild(perks);
-  const btn = el("button", "upgrade-btn", "Продолжить с памятью");
+  // Два тарифа: месяц — дефолт (низкий порог первого «да»), год — якорь со скидкой.
+  // Цены приходят в payload.billing (ярлыки UI; суммы живут на офферах lava).
+  const b = billing || {};
+  const monthly = b.monthly_rub || 0;
+  const btn = el(
+    "button",
+    "upgrade-btn",
+    monthly ? "Месяц — " + monthly + " ₽" : "Продолжить с памятью",
+  );
   btn.type = "button";
-  btn.addEventListener("click", () => startUpgrade(btn));
+  btn.addEventListener("click", () => startUpgrade(btn, "monthly"));
   sec.appendChild(btn);
+  if (b.annual_available && b.annual_rub) {
+    const saved = monthly ? Math.round((1 - b.annual_rub / (12 * monthly)) * 100) : 0;
+    const ybtn = el(
+      "button",
+      "upgrade-btn upgrade-btn-annual",
+      "Год — " + b.annual_rub + " ₽" + (saved > 0 ? " (выгода " + saved + "%)" : ""),
+    );
+    ybtn.type = "button";
+    ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual"));
+    sec.appendChild(ybtn);
+  }
   sec.appendChild(el("p", "upgrade-hint", "Оплата банковской картой. Доступ открывается сразу после оплаты."));
   return sec;
 }
@@ -791,7 +811,7 @@ function renderProfile(p) {
   }
 
   // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
-  if (!p.is_paid) root.appendChild(upgradeSection());
+  if (!p.is_paid) root.appendChild(upgradeSection(p.billing));
 
   if (p.invite_url) root.appendChild(shareRow(p.invite_url));
 
