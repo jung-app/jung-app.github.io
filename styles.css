@@ -685,6 +685,13 @@ body {
 .habit-field--ritual .habit-field-label {
   color: var(--gold-deep);
 }
+/* Строка живой практики под карточками привычек: копящаяся ценность ритуала. */
+.ritual-practice {
+  margin: 10px 2px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--gold-deep);
+}
 
 /* --- «это не про меня»: намеренно тихая кнопка, чтобы не звать на случайный тап --- */
 .card-actions {

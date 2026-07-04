@@ -780,6 +780,22 @@ function renderProfile(p) {
       ),
     );
     p.habits.forEach((h) => sec.appendChild(habitCard(h)));
+    // Живая практика (payload.ritual): сколько раз ритуал получился (кнопка «✅ Сделал»
+    // под напоминанием в боте) и во сколько приходит напоминание. Ценность копится на
+    // глазах — без стриков и стыда за пропуск, только «сколько раз получилось».
+    const r = p.ritual;
+    if (r && (r.done_count > 0 || r.reminder_hour != null)) {
+      const parts = [];
+      if (r.done_count > 0) {
+        parts.push(
+          "✅ ритуал получился " + r.done_count + " " + pluralRu(r.done_count, "раз", "раза", "раз"),
+        );
+      }
+      if (r.reminder_hour != null) {
+        parts.push("⏰ напоминание в " + String(r.reminder_hour).padStart(2, "0") + ":00");
+      }
+      sec.appendChild(el("p", "ritual-practice", parts.join(" · ")));
+    }
     root.appendChild(sec);
   }
 
