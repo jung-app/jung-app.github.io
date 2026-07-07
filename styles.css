@@ -336,10 +336,11 @@ body {
 .star-hit {
   -webkit-tap-highlight-color: transparent;
 }
-/* подвижное кольцо вокруг выбранной звезды + подсветка её нити */
+/* кольцо вокруг выбранной звезды + подсветка её нити. Только opacity в переходе —
+   анимация геометрии SVG (cx/cy/r) ненадёжна в Safari/Telegram-iOS, позицию ставим сразу. */
 .star-focus {
   pointer-events: none;
-  transition: cx 0.28s ease, cy 0.28s ease, r 0.28s ease, opacity 0.28s ease;
+  transition: opacity 0.2s ease;
 }
 .thread-line.on {
   opacity: 1;
@@ -349,43 +350,21 @@ body {
   opacity: 0.22;
   stroke-width: 7;
 }
-/* кнопка «открыть разбор» в строке-раскрытии — навигация к карточке грани */
-.sky-readout-go {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--gold);
-  background: transparent;
-  border: 1px solid rgba(232, 192, 116, 0.35);
-  border-radius: 999px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.sky-readout-go:active {
-  background: var(--gold-soft);
-}
-/* вспышка карточки, к которой пришли с карты */
-.card--flash {
-  animation: cardFlash 1.6s ease-out;
-}
-@keyframes cardFlash {
-  0% { box-shadow: 0 0 0 0 rgba(232, 192, 116, 0); border-color: rgba(232, 192, 116, 0.7); }
-  18% { box-shadow: 0 0 0 3px rgba(232, 192, 116, 0.28); border-color: rgba(232, 192, 116, 0.7); }
-  100% { box-shadow: 0 0 0 0 rgba(232, 192, 116, 0); }
-}
 /* строка-раскрытие под картой: тап по звезде показывает её грань */
 .sky-readout {
   margin-top: 8px;
-  min-height: 40px;
-  padding: 10px 14px;
+  min-height: 96px;
+  padding: 12px 14px;
   background: var(--gold-soft);
   border: 1px solid rgba(232, 192, 116, 0.18);
   border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .sky-readout-hint {
   font-size: 12.5px;
+  line-height: 1.45;
   color: var(--muted);
 }
 .sky-readout-name {

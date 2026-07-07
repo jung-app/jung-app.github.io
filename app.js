@@ -221,9 +221,6 @@ function guideBlock(title, text) {
 function insightCard(item) {
   const card = el("article", "card");
   if (item.user_confirmed) card.classList.add("card--confirmed");
-  // якорь для навигации с карты психики: тап по звезде подскроллит сюда (см. psycheMap).
-  card.id = "facet-" + hashStr(item.label || item.name || "");
-  if (item.theme) card.dataset.theme = item.theme;
 
   const isArchetype = !item.key;
   const facet = item.key ? FACET_GUIDE[item.key] : null;
@@ -871,36 +868,36 @@ function psycheMap(sections, archetypes) {
 
   const focus = wrap.querySelector("#starFocus");
   const glows = wrap.querySelectorAll(".thread-line, .thread-glow");
+  let active = -1;
   wrap.querySelectorAll(".star-hit").forEach((hit) => {
     hit.style.cursor = "pointer";
     hit.addEventListener("click", () => {
-      const st = stars[+hit.getAttribute("data-i")];
-      // кольцо-фокус на выбранной звезде
+      const i = +hit.getAttribute("data-i");
+      const st = stars[i];
+      // повторный тап по той же звезде — снять выделение (карта остаётся спокойной)
+      if (i === active) {
+        active = -1;
+        if (focus) focus.setAttribute("opacity", "0");
+        glows.forEach((l) => l.classList.remove("on"));
+        readout.innerHTML = "";
+        readout.appendChild(el("span", "sky-readout-hint", "Нажми на звезду — покажу грань и подсвечу её нить"));
+        return;
+      }
+      active = i;
+      // кольцо-фокус на выбранной звезде (позиция ставится сразу — надёжно во всех браузерах)
       if (focus) {
         focus.setAttribute("cx", st.x.toFixed(1));
         focus.setAttribute("cy", st.y.toFixed(1));
         focus.setAttribute("r", (st.r + 6).toFixed(1));
         focus.setAttribute("opacity", "0.9");
       }
-      // подсветка нити мотива этой звезды (гасим остальные до базовой яркости)
+      // подсветка нити мотива этой звезды
       glows.forEach((l) => l.classList.toggle("on", !!st.theme && l.getAttribute("data-th") === st.theme));
-      // раскрытие грани в строке под картой
+      // раскрытие грани прямо в строке под картой — единственная поверхность деталей,
+      // без дубля и без ухода со страницы. Карточки ниже — для полного разбора при обычном скролле.
       readout.innerHTML = "";
       readout.appendChild(el("span", "sky-readout-name", st.label));
       if (st.summary) readout.appendChild(el("span", "sky-readout-text", st.summary));
-      // навигация: карта → карточка грани ниже. Тап подсвечивает и подводит к разбору.
-      const card = document.getElementById("facet-" + hashStr(st.label));
-      if (card) {
-        const go = el("button", "sky-readout-go", "Открыть разбор ниже ↓");
-        go.type = "button";
-        go.addEventListener("click", () => {
-          card.classList.remove("card--flash");
-          void card.offsetWidth; // перезапуск анимации
-          card.classList.add("card--flash");
-          card.scrollIntoView({ behavior: "smooth", block: "center" });
-        });
-        readout.appendChild(go);
-      }
     });
   });
   return sec;
