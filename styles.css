@@ -176,54 +176,6 @@ body {
   font-size: 14.5px;
 }
 
-/* --- кольцо глубины --- */
-.ring {
-  position: relative;
-  width: 108px;
-  height: 108px;
-  flex: 0 0 auto;
-}
-.ring-svg {
-  width: 108px;
-  height: 108px;
-  transform: rotate(-90deg);
-}
-.ring-track {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 7;
-}
-.ring-prog {
-  fill: none;
-  stroke: url(#rg);
-  stroke-width: 7;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 6px rgba(232, 192, 116, 0.45));
-  transition: stroke-dashoffset 1s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.ring-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-.ring-num {
-  font-family: "Lora", Georgia, serif;
-  font-size: 27px;
-  font-weight: 600;
-  color: var(--gold);
-}
-.ring-cap {
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
 /* --- нить разговоров (conversation_summary) --- */
 .thread {
   position: relative;
@@ -305,14 +257,16 @@ body {
 }
 
 /* --- путь индивидуации (Персона → Тень → Анима/Анимус → Самость) --- */
-.path {
-  margin: 18px 0 22px;
-  padding: 16px 18px;
-  background: var(--panel);
+/* --- созвездие себя (фигуры индивидуации как звёздное небо) --- */
+.sky {
+  margin: 4px 0 22px;
+  padding: 18px 18px 12px;
+  background: radial-gradient(120% 90% at 50% 8%, rgba(232, 192, 116, 0.07) 0%, transparent 60%),
+    var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
-.path-label {
+.sky-label {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -320,71 +274,51 @@ body {
   color: var(--gold-deep);
   margin-bottom: 8px;
 }
-.path-sub {
-  margin: 0 0 16px;
+.sky-sub {
+  margin: 0 0 6px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
 }
-.path-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  position: relative;
+.sky-canvas {
+  width: 100%;
+  overflow-x: auto;
 }
-.path-step {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 7px 0;
+.sky-svg {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  margin: 0 auto;
 }
-/* соединительная линия между узлами */
-.path-step:not(:last-child)::before {
-  content: "";
-  position: absolute;
-  left: 17px;
-  top: 32px;
-  bottom: -7px;
-  width: 2px;
-  background: var(--line-strong);
+.star-glyph {
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-size: 11px;
 }
-.path-node {
-  z-index: 1;
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 16px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel-solid);
-  color: var(--muted);
+.star-glyph--on {
+  fill: #1a1206;
+  font-weight: 700;
 }
-.path-name {
+.star-glyph--mid {
+  fill: var(--gold);
+}
+.star-glyph--off {
+  fill: var(--muted-soft);
+}
+.star-name {
+  text-anchor: middle;
   font-family: "Lora", Georgia, serif;
-  font-size: 15px;
-  color: var(--text);
+  font-size: 12.5px;
 }
-.path-state {
-  margin-top: 1px;
-  font-size: 12px;
-  color: var(--muted);
+.star-name--clear {
+  fill: var(--text);
 }
-/* активные стадии — золото; призрачные (ещё не проявились) — приглушены */
-.path-step--clear .path-node {
-  color: #1a1206;
-  background: radial-gradient(circle at 35% 30%, var(--gold) 0%, var(--gold-deep) 70%);
-  border-color: var(--gold-deep);
+.star-name--emerging {
+  fill: var(--muted);
 }
-.path-step--emerging .path-node {
-  color: var(--gold);
-  background: var(--gold-soft);
-  border-color: rgba(232, 192, 116, 0.5);
-}
-.path-step--ghost {
-  opacity: 0.5;
+.star-name--ghost {
+  fill: var(--muted-soft);
 }
 
 /* --- динамика «с прошлого визита» --- */
@@ -444,28 +378,6 @@ body {
 }
 
 /* --- спарклайн глубины во времени --- */
-.spark {
-  margin-top: 12px;
-}
-.spark-svg {
-  display: block;
-  width: 100%;
-  height: 48px;
-}
-.spark-cap {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-top: 4px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-.spark-now {
-  font-weight: 700;
-  color: var(--gold);
-}
-
 /* --- позвать близкого (виральный share) --- */
 /* --- реферальная карточка ценности --- */
 .referral {
@@ -1087,8 +999,5 @@ body {
   }
   .orb {
     animation: none;
-  }
-  .ring-prog {
-    transition: none;
   }
 }

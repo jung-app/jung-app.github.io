@@ -180,27 +180,6 @@ function confirmAction(message) {
 
 // --- кусочки UI -------------------------------------------------------------
 
-function ring(percent) {
-  const p = Math.max(0, Math.min(100, percent));
-  const r = 48;
-  const circ = 2 * Math.PI * r;
-  const wrap = el("div", "ring");
-  wrap.innerHTML = `
-    <svg viewBox="0 0 108 108" class="ring-svg" aria-hidden="true">
-      <defs>
-        <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#e8c074" />
-          <stop offset="100%" stop-color="#c79a48" />
-        </linearGradient>
-      </defs>
-      <circle class="ring-track" cx="54" cy="54" r="${r}" />
-      <circle class="ring-prog" cx="54" cy="54" r="${r}"
-        stroke-dasharray="${circ.toFixed(1)}"
-        stroke-dashoffset="${(circ * (1 - p / 100)).toFixed(1)}" />
-    </svg>
-    <div class="ring-label"><span class="ring-num">${p}%</span><span class="ring-cap">глубина</span></div>`;
-  return wrap;
-}
 
 function stat(value, label) {
   const s = el("div", "stat");
@@ -373,48 +352,6 @@ function dismissRow(key, label) {
 // Спарклайн глубины во времени. history — ряд точек {at, score} с бэкенда (только числа
 // и даты, без психо-контента — 152-ФЗ). Рисуем мягкую линию роста: осязаемый прогресс
 // = причина возвращаться. Нужно ≥2 точек, иначе линию не построить.
-function sparkline(history) {
-  const pts = (history || []).filter((p) => p && typeof p.score === "number");
-  if (pts.length < 2) return null;
-
-  const W = 240;
-  const H = 48;
-  const pad = 4;
-  const scores = pts.map((p) => p.score);
-  const max = Math.max(...scores, 1);
-  const min = Math.min(...scores, 0);
-  const span = Math.max(1, max - min);
-  const stepX = (W - pad * 2) / (pts.length - 1);
-  const xy = pts.map((p, i) => {
-    const x = pad + i * stepX;
-    const y = H - pad - ((p.score - min) / span) * (H - pad * 2);
-    return [x, y];
-  });
-  const line = xy.map(([x, y], i) => (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1)).join(" ");
-  const area = line + ` L${(W - pad).toFixed(1)} ${H - pad} L${pad} ${H - pad} Z`;
-  const [lx, ly] = xy[xy.length - 1];
-
-  const wrap = el("div", "spark");
-  wrap.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" class="spark-svg" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="sparkfill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#e8c074" stop-opacity="0.28" />
-          <stop offset="100%" stop-color="#e8c074" stop-opacity="0" />
-        </linearGradient>
-      </defs>
-      <path d="${area}" fill="url(#sparkfill)" />
-      <path d="${line}" fill="none" stroke="#e8c074" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="#e8c074" />
-    </svg>`;
-  const cap = el("div", "spark-cap");
-  cap.appendChild(el("span", null, "глубина во времени"));
-  cap.appendChild(el("span", "spark-now", scores[scores.length - 1] + "%"));
-  wrap.appendChild(cap);
-  return wrap;
-}
-
 function dynamicsBlock(d) {
   if (!d) return null;
   const sec = el("section", "dynamics");
@@ -448,11 +385,6 @@ function dynamicsBlock(d) {
     );
     sec.appendChild(row);
   }
-
-  // Траектория глубины — показываем всегда, когда накопилось ≥2 точек (даже без свежих
-  // изменений): возвращающийся видит свой путь, а не только дельту последнего визита.
-  const spark = sparkline(d.history);
-  if (spark) sec.appendChild(spark);
   return sec;
 }
 
@@ -707,39 +639,127 @@ function stageState(section, isSelf) {
   return clear ? { cls: "clear", cap: "ясно видно" } : { cls: "emerging", cap: "проявляется" };
 }
 
-// Карта пути: показываем фигуры как стадии, а не плоский список. Не лестница с финишем и
-// не трекер (это против рамки бота) — фигуры «загораются» по мере того, как проявляются в
-// разговорах. Рисуем, только когда проявилась хотя бы одна: пустой «путь из теней» звучал
-// бы как укор, а не приглашение.
-function individuationPath(sections) {
+// Позиции фигур как созвездие: Самость — путеводная вершина сверху, три остальные образуют
+// основание. Не лестница с финишем (против рамки бота) — небо, которое богатеет.
+const FIGURE_POS = {
+  self: { x: 150, y: 42 },
+  persona: { x: 58, y: 150 },
+  shadow: { x: 150, y: 214 },
+  anima_animus: { x: 242, y: 150 },
+};
+const FIGURE_KEYS = INDIVIDUATION_STAGES.map((s) => s.key);
+
+// Декоративные фоновые звёзды (статичные) — ощущение ночного неба за фигурами.
+const AMBIENT_STARS = [
+  [28, 60, 0.9], [95, 30, 0.6], [210, 48, 0.7], [278, 92, 0.9], [24, 128, 0.6],
+  [120, 96, 0.5], [190, 110, 0.6], [270, 170, 0.7], [40, 200, 0.8], [110, 235, 0.6],
+  [205, 226, 0.7], [255, 210, 0.5], [150, 130, 0.4], [88, 190, 0.5], [222, 96, 0.5],
+];
+
+// Созвездие себя: фигуры-звёзды (яркость по состоянию) + светящиеся нити между теми, что
+// делят один глубинный мотив (payload.threads), + тонкая тяга к Самости-центру. Рост виден
+// как богатеющее небо, а не заполнение шкалы. Рисуем, только когда проявилась хотя бы одна
+// фигура: пустое небо звучало бы как укор, а не приглашение.
+function constellation(sections, threads) {
   const byKey = {};
   sections.forEach((s) => {
     if (s.key) byKey[s.key] = s;
   });
-  if (!INDIVIDUATION_STAGES.some((st) => byKey[st.key])) return null;
+  if (!FIGURE_KEYS.some((k) => byKey[k])) return null;
 
-  const sec = el("section", "path");
-  sec.appendChild(el("div", "path-label", "Путь индивидуации"));
+  const nodes = INDIVIDUATION_STAGES.map((st) => {
+    const state = stageState(byKey[st.key], st.key === "self");
+    return { ...st, ...FIGURE_POS[st.key], cls: state.cls, cap: state.cap, present: !!byKey[st.key] };
+  });
+  const nodeByKey = {};
+  nodes.forEach((n) => (nodeByKey[n.key] = n));
+
+  // Нити между фигурами: пары facet-членов с ключом фигуры внутри одной нити (общий мотив).
+  const pairs = [];
+  const seen = {};
+  (threads || []).forEach((t) => {
+    const figs = (t.members || [])
+      .filter((m) => m.kind === "facet" && FIGURE_KEYS.indexOf(m.key) !== -1)
+      .map((m) => m.key);
+    for (let i = 0; i < figs.length; i++) {
+      for (let j = i + 1; j < figs.length; j++) {
+        const id = [figs[i], figs[j]].sort().join("~");
+        if (!seen[id]) {
+          seen[id] = 1;
+          pairs.push([figs[i], figs[j]]);
+        }
+      }
+    }
+  });
+
+  const svgParts = [];
+  // фоновые звёзды
+  AMBIENT_STARS.forEach(([x, y, o]) => {
+    svgParts.push(`<circle cx="${x}" cy="${y}" r="1" fill="#e8c074" opacity="${o * 0.28}" />`);
+  });
+  // тяга к центру (Самости) от каждой проявленной фигуры — путь к целостности, не финиш
+  const self = nodeByKey.self;
+  nodes.forEach((n) => {
+    if (n.key === "self" || !n.present) return;
+    svgParts.push(
+      `<line x1="${n.x}" y1="${n.y}" x2="${self.x}" y2="${self.y}" stroke="#e8c074" ` +
+        `stroke-width="1" stroke-dasharray="2 5" opacity="0.16" />`,
+    );
+  });
+  // нити общего мотива между фигурами — ярче, со свечением
+  pairs.forEach(([a, b]) => {
+    const na = nodeByKey[a];
+    const nb = nodeByKey[b];
+    if (!na || !nb) return;
+    svgParts.push(
+      `<line x1="${na.x}" y1="${na.y}" x2="${nb.x}" y2="${nb.y}" stroke="#e8c074" ` +
+        `stroke-width="6" opacity="0.10" stroke-linecap="round" />`,
+      `<line x1="${na.x}" y1="${na.y}" x2="${nb.x}" y2="${nb.y}" stroke="#e8c074" ` +
+        `stroke-width="1.4" opacity="0.75" stroke-linecap="round" />`,
+    );
+  });
+  // узлы-звёзды
+  nodes.forEach((n) => {
+    if (n.cls === "clear") {
+      svgParts.push(`<circle cx="${n.x}" cy="${n.y}" r="17" fill="#e8c074" opacity="0.22" />`);
+      svgParts.push(`<circle cx="${n.x}" cy="${n.y}" r="9" fill="#e8c074" />`);
+      svgParts.push(
+        `<text x="${n.x}" y="${n.y}" class="star-glyph star-glyph--on">${n.glyph}</text>`,
+      );
+    } else if (n.cls === "emerging") {
+      svgParts.push(`<circle cx="${n.x}" cy="${n.y}" r="12" fill="#e8c074" opacity="0.12" />`);
+      svgParts.push(
+        `<circle cx="${n.x}" cy="${n.y}" r="8" fill="rgba(232,192,116,0.16)" ` +
+          `stroke="#e8c074" stroke-width="1.2" />`,
+      );
+      svgParts.push(`<text x="${n.x}" y="${n.y}" class="star-glyph star-glyph--mid">${n.glyph}</text>`);
+    } else {
+      svgParts.push(
+        `<circle cx="${n.x}" cy="${n.y}" r="7" fill="none" ` +
+          `stroke="rgba(255,255,255,0.14)" stroke-width="1" stroke-dasharray="2 3" />`,
+      );
+      svgParts.push(`<text x="${n.x}" y="${n.y}" class="star-glyph star-glyph--off">${n.glyph}</text>`);
+    }
+    svgParts.push(
+      `<text x="${n.x}" y="${n.y + 26}" class="star-name star-name--${n.cls}">${n.name}</text>`,
+    );
+  });
+
+  const sec = el("section", "sky");
+  sec.appendChild(el("div", "sky-label", "Созвездие себя"));
   sec.appendChild(
     el(
       "p",
-      "path-sub",
-      "По Юнгу это не лестница с финишем: фигуры проявляются постепенно и всю жизнь. " +
-        "Здесь — те, что уже прозвучали в наших разговорах.",
+      "sky-sub",
+      "Фигуры Юнга загораются по мере того, как проявляются в разговорах. Золотые нити — там, " +
+        "где их питает один глубинный мотив. Это не шкала с финишем: небо просто становится живее.",
     ),
   );
-  const ol = el("ol", "path-steps");
-  INDIVIDUATION_STAGES.forEach((st) => {
-    const state = stageState(byKey[st.key], st.key === "self");
-    const li = el("li", "path-step path-step--" + state.cls);
-    li.appendChild(el("span", "path-node", st.glyph));
-    const body = el("div", "path-body");
-    body.appendChild(el("div", "path-name", st.name));
-    body.appendChild(el("div", "path-state", state.cap));
-    li.appendChild(body);
-    ol.appendChild(li);
-  });
-  sec.appendChild(ol);
+  const wrap = el("div", "sky-canvas");
+  wrap.innerHTML =
+    `<svg viewBox="0 0 300 250" class="sky-svg" role="img" ` +
+    `aria-label="Созвездие фигур индивидуации">${svgParts.join("")}</svg>`;
+  sec.appendChild(wrap);
   return sec;
 }
 
@@ -782,8 +802,12 @@ function renderProfile(p) {
     ),
   );
   hero.appendChild(left);
-  hero.appendChild(ring(c.percent));
   root.appendChild(hero);
+
+  // созвездие себя — живой центр страницы вместо статичной шкалы «глубины»: фигуры
+  // индивидуации как звёзды + нити общего мотива. Рисуется, когда проявилась хотя бы одна.
+  const sky = constellation(p.sections, p.threads);
+  if (sky) root.appendChild(sky);
 
   // нить разговоров (новое: meta.chat.summary)
   if (p.conversation_summary) {
@@ -800,11 +824,6 @@ function renderProfile(p) {
   stats.appendChild(stat(p.archetypes ? p.archetypes.length : 0, "активных архетипов"));
   stats.appendChild(stat(confirmed, "подтверждено тобой"));
   root.appendChild(stats);
-
-  // путь индивидуации: карта фигур (Персона → Тень → Анима/Анимус → Самость) — оптика
-  // над деталями ниже. Рисуется, только когда проявилась хотя бы одна фигура пути.
-  const path = individuationPath(p.sections);
-  if (path) root.appendChild(path);
 
   // разделы
   const core = p.sections.filter((s) => s.group === "core");
