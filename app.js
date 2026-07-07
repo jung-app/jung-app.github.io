@@ -221,6 +221,9 @@ function guideBlock(title, text) {
 function insightCard(item) {
   const card = el("article", "card");
   if (item.user_confirmed) card.classList.add("card--confirmed");
+  // якорь для навигации с карты психики: тап по звезде подскроллит сюда (см. psycheMap).
+  card.id = "facet-" + hashStr(item.label || item.name || "");
+  if (item.theme) card.dataset.theme = item.theme;
 
   const isArchetype = !item.key;
   const facet = item.key ? FACET_GUIDE[item.key] : null;
@@ -758,11 +761,12 @@ function psycheMap(sections, archetypes) {
     const tw = i % 3 === 0 ? ` class="twinkle" style="animation-delay:${(i % 5) * 0.7}s"` : "";
     svg.push(`<circle cx="${x}" cy="${y}" r="1"${tw} fill="#e8c074" opacity="${(o * 0.22).toFixed(2)}" />`);
   });
-  // золотые нити мотива — свечение + яркая линия
+  // золотые нити мотива — свечение + яркая линия (data-th → подсветка при тапе по звезде)
   links.forEach(([a, b]) => {
     const c = `x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"`;
-    svg.push(`<line ${c} stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round" />`);
-    svg.push(`<line ${c} stroke="#e8c074" stroke-width="1.1" opacity="0.65" stroke-linecap="round" />`);
+    const th = a.theme || "";
+    svg.push(`<line ${c} class="thread-glow" data-th="${th}" stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round" />`);
+    svg.push(`<line ${c} class="thread-line" data-th="${th}" stroke="#e8c074" stroke-width="1.1" opacity="0.65" stroke-linecap="round" />`);
   });
   // блик-«лучи» яркой звезды (диффракционный крест) — только для узнанных
   const glint = (x, y, len) =>
@@ -811,6 +815,8 @@ function psycheMap(sections, archetypes) {
     // прозрачный хит-таргет для тапа (data-i → звезда в замыкании)
     svg.push(`<circle class="star-hit" data-i="${i}" cx="${x}" cy="${y}" r="${Math.max(st.r + 7, 13).toFixed(1)}" fill="transparent" />`);
   });
+  // подвижное кольцо-фокус вокруг выбранной звезды (появляется по тапу)
+  svg.push('<circle id="starFocus" class="star-focus" cx="0" cy="0" r="0" fill="none" stroke="#e8c074" stroke-width="1.4" opacity="0" />');
   // подписи только у Самости и великих фигур — чтобы поле звёзд не захламлять. Радиально
   // наружу от центра, с тёмным ореолом (paint-order) для читаемости поверх линий.
   stars.forEach((st) => {
@@ -852,7 +858,7 @@ function psycheMap(sections, archetypes) {
 
   // строка-раскрытие: тап по звезде показывает её грань (навигация + смысл, не просто точки)
   const readout = el("div", "sky-readout");
-  readout.appendChild(el("span", "sky-readout-hint", "Нажми на звезду — вспомню, что за ней"));
+  readout.appendChild(el("span", "sky-readout-hint", "Нажми на звезду — покажу грань и подсвечу её нить"));
   sec.appendChild(readout);
 
   const nFacets = sections.length + (archetypes ? archetypes.length : 0);
@@ -863,13 +869,38 @@ function psycheMap(sections, archetypes) {
     (nLinks ? " · " + nLinks + " " + pluralRu(nLinks, "нить", "нити", "нитей") : "");
   sec.appendChild(meta);
 
+  const focus = wrap.querySelector("#starFocus");
+  const glows = wrap.querySelectorAll(".thread-line, .thread-glow");
   wrap.querySelectorAll(".star-hit").forEach((hit) => {
     hit.style.cursor = "pointer";
     hit.addEventListener("click", () => {
       const st = stars[+hit.getAttribute("data-i")];
+      // кольцо-фокус на выбранной звезде
+      if (focus) {
+        focus.setAttribute("cx", st.x.toFixed(1));
+        focus.setAttribute("cy", st.y.toFixed(1));
+        focus.setAttribute("r", (st.r + 6).toFixed(1));
+        focus.setAttribute("opacity", "0.9");
+      }
+      // подсветка нити мотива этой звезды (гасим остальные до базовой яркости)
+      glows.forEach((l) => l.classList.toggle("on", !!st.theme && l.getAttribute("data-th") === st.theme));
+      // раскрытие грани в строке под картой
       readout.innerHTML = "";
       readout.appendChild(el("span", "sky-readout-name", st.label));
       if (st.summary) readout.appendChild(el("span", "sky-readout-text", st.summary));
+      // навигация: карта → карточка грани ниже. Тап подсвечивает и подводит к разбору.
+      const card = document.getElementById("facet-" + hashStr(st.label));
+      if (card) {
+        const go = el("button", "sky-readout-go", "Открыть разбор ниже ↓");
+        go.type = "button";
+        go.addEventListener("click", () => {
+          card.classList.remove("card--flash");
+          void card.offsetWidth; // перезапуск анимации
+          card.classList.add("card--flash");
+          card.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        readout.appendChild(go);
+      }
     });
   });
   return sec;
