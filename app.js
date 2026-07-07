@@ -648,6 +648,101 @@ function groupBlock(title, items, sub) {
   return sec;
 }
 
+// --- блок «Сегодня» ---------------------------------------------------------
+
+// Тёплые вопросы дня (юнгианская оптика: роли/персона, тень, образы и сны, «на своём
+// месте» = индивидуация). Не анкета и не трекер — одно приглашение заметить. Ротация
+// по календарному дню → стабилен в течение суток, свой у каждого дня.
+const TODAY_QUESTIONS = [
+  "Что сегодня забрало больше всего сил?",
+  "Где сегодня ты был не совсем собой?",
+  "Какой образ, сон или мысль остались с тобой?",
+  "Чему сегодня хотелось сказать «нет», но ты не сказал?",
+  "Что сегодня неожиданно тронуло?",
+  "Какая роль сегодня давалась тебе тяжелее всего?",
+  "О чём ты сегодня старался не думать?",
+  "Что сегодня дало ощущение, что ты на своём месте?",
+  "Какое чувство сегодня возвращалось чаще других?",
+  "Если бы у сегодняшнего дня было имя — какое?",
+];
+
+// Блок «Сегодня»: вопрос дня + возврат в чат. Причина открывать мини-апп каждый день —
+// не только смотреть образ, но и продолжать его в разговоре. Вопрос генерится на клиенте
+// (без бэкенда и без психоконтента в payload), ответ идёт в чат, где работает продукт.
+function todayBlock() {
+  const idx = Math.floor(Date.now() / 86400000) % TODAY_QUESTIONS.length;
+  const sec = el("section", "today");
+  sec.appendChild(el("div", "today-label", "Сегодня"));
+  sec.appendChild(el("p", "today-q", TODAY_QUESTIONS[idx]));
+  const btn = el("button", "today-cta", "Продолжить в чате");
+  btn.type = "button";
+  // Закрываем мини-апп → возврат в чат с ботом, где можно ответить прямо сейчас.
+  btn.addEventListener("click", () => {
+    if (tg && typeof tg.close === "function") tg.close();
+  });
+  sec.appendChild(btn);
+  return sec;
+}
+
+// --- путь индивидуации ------------------------------------------------------
+
+// Канонический путь по Юнгу: фигуры, через которые идёт узнавание себя, к Самости в
+// центре. Ключи совпадают со схемой профиля — карту собираем из уже присланных секций,
+// без бэкенда и без психоконтента сверх того, что и так на странице.
+const INDIVIDUATION_STAGES = [
+  { key: "persona", name: "Персона", glyph: "◐" },
+  { key: "shadow", name: "Тень", glyph: "●" },
+  { key: "anima_animus", name: "Анима/Анимус", glyph: "☽" },
+  { key: "self", name: "Самость", glyph: "◎" },
+];
+
+// Состояние стадии по её секции. Самость — особая: по Юнгу к центру приближаются, а не
+// «достигают», поэтому у неё нет «ясно видно» как финала — только «проявляется как центр».
+function stageState(section, isSelf) {
+  if (!section) {
+    return { cls: "ghost", cap: isSelf ? "центр, к которому ведёт путь" : "пока в тени" };
+  }
+  const clear = section.user_confirmed || section.confidence === "high";
+  if (isSelf) return { cls: clear ? "clear" : "emerging", cap: "проявляется как центр" };
+  return clear ? { cls: "clear", cap: "ясно видно" } : { cls: "emerging", cap: "проявляется" };
+}
+
+// Карта пути: показываем фигуры как стадии, а не плоский список. Не лестница с финишем и
+// не трекер (это против рамки бота) — фигуры «загораются» по мере того, как проявляются в
+// разговорах. Рисуем, только когда проявилась хотя бы одна: пустой «путь из теней» звучал
+// бы как укор, а не приглашение.
+function individuationPath(sections) {
+  const byKey = {};
+  sections.forEach((s) => {
+    if (s.key) byKey[s.key] = s;
+  });
+  if (!INDIVIDUATION_STAGES.some((st) => byKey[st.key])) return null;
+
+  const sec = el("section", "path");
+  sec.appendChild(el("div", "path-label", "Путь индивидуации"));
+  sec.appendChild(
+    el(
+      "p",
+      "path-sub",
+      "По Юнгу это не лестница с финишем: фигуры проявляются постепенно и всю жизнь. " +
+        "Здесь — те, что уже прозвучали в наших разговорах.",
+    ),
+  );
+  const ol = el("ol", "path-steps");
+  INDIVIDUATION_STAGES.forEach((st) => {
+    const state = stageState(byKey[st.key], st.key === "self");
+    const li = el("li", "path-step path-step--" + state.cls);
+    li.appendChild(el("span", "path-node", st.glyph));
+    const body = el("div", "path-body");
+    body.appendChild(el("div", "path-name", st.name));
+    body.appendChild(el("div", "path-state", state.cap));
+    li.appendChild(body);
+    ol.appendChild(li);
+  });
+  sec.appendChild(ol);
+  return sec;
+}
+
 // --- сборка профиля ---------------------------------------------------------
 
 function renderProfile(p) {
@@ -663,6 +758,9 @@ function renderProfile(p) {
   const upd = fmtDate(p.updated_at);
   if (upd) top.appendChild(el("div", "datepill", "обновлён " + upd));
   root.appendChild(top);
+
+  // «Сегодня» — вопрос дня + возврат в чат: причина открывать мини-апп каждый день
+  root.appendChild(todayBlock());
 
   // что изменилось с прошлого визита (динамика между сессиями)
   const dyn = dynamicsBlock(p.dynamics);
@@ -702,6 +800,11 @@ function renderProfile(p) {
   stats.appendChild(stat(p.archetypes ? p.archetypes.length : 0, "активных архетипов"));
   stats.appendChild(stat(confirmed, "подтверждено тобой"));
   root.appendChild(stats);
+
+  // путь индивидуации: карта фигур (Персона → Тень → Анима/Анимус → Самость) — оптика
+  // над деталями ниже. Рисуется, только когда проявилась хотя бы одна фигура пути.
+  const path = individuationPath(p.sections);
+  if (path) root.appendChild(path);
 
   // разделы
   const core = p.sections.filter((s) => s.group === "core");

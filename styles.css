@@ -260,6 +260,133 @@ body {
   color: var(--text);
 }
 
+/* --- блок «Сегодня»: вопрос дня + возврат в чат --- */
+.today {
+  position: relative;
+  background: var(--gold-soft);
+  border: 1px solid rgba(232, 192, 116, 0.22);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin: 14px 0 18px;
+}
+.today-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  margin-bottom: 8px;
+}
+.today-q {
+  margin: 0 0 14px;
+  font-family: "Lora", Georgia, serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.today-cta {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.today-cta:hover {
+  background: var(--gold-soft);
+  border-color: rgba(232, 192, 116, 0.4);
+}
+
+/* --- путь индивидуации (Персона → Тень → Анима/Анимус → Самость) --- */
+.path {
+  margin: 18px 0 22px;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.path-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  margin-bottom: 8px;
+}
+.path-sub {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.path-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+.path-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
+}
+/* соединительная линия между узлами */
+.path-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 32px;
+  bottom: -7px;
+  width: 2px;
+  background: var(--line-strong);
+}
+.path-node {
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-solid);
+  color: var(--muted);
+}
+.path-name {
+  font-family: "Lora", Georgia, serif;
+  font-size: 15px;
+  color: var(--text);
+}
+.path-state {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* активные стадии — золото; призрачные (ещё не проявились) — приглушены */
+.path-step--clear .path-node {
+  color: #1a1206;
+  background: radial-gradient(circle at 35% 30%, var(--gold) 0%, var(--gold-deep) 70%);
+  border-color: var(--gold-deep);
+}
+.path-step--emerging .path-node {
+  color: var(--gold);
+  background: var(--gold-soft);
+  border-color: rgba(232, 192, 116, 0.5);
+}
+.path-step--ghost {
+  opacity: 0.5;
+}
+
 /* --- динамика «с прошлого визита» --- */
 .dynamics {
   margin: 14px 0 18px;
