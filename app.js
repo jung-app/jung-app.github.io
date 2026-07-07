@@ -616,150 +616,211 @@ function todayBlock() {
   return sec;
 }
 
-// --- путь индивидуации ------------------------------------------------------
+// --- карта психики ----------------------------------------------------------
 
-// Канонический путь по Юнгу: фигуры, через которые идёт узнавание себя, к Самости в
-// центре. Ключи совпадают со схемой профиля — карту собираем из уже присланных секций,
-// без бэкенда и без психоконтента сверх того, что и так на странице.
-const INDIVIDUATION_STAGES = [
-  { key: "persona", name: "Персона", glyph: "◐" },
-  { key: "shadow", name: "Тень", glyph: "●" },
-  { key: "anima_animus", name: "Анима/Анимус", glyph: "☽" },
-  { key: "self", name: "Самость", glyph: "◎" },
-];
+// Символы трёх великих фигур + Самости. Ключи совпадают со схемой профиля.
+const FIGURE_GLYPH = { self: "◎", persona: "◐", shadow: "●", anima_animus: "☽" };
+// Короткие подписи фигур на карте (полное имя — в раскрытии по тапу; длинное налезало бы).
+const FIGURE_SHORT = { self: "Самость", persona: "Персона", shadow: "Тень", anima_animus: "Анима" };
+const INNER_KEYS = ["persona", "shadow", "anima_animus"]; // ближнее кольцо к Самости
+const CX = 150;
+const CY = 132; // центр неба (Самость)
+const R_INNER = 58; // радиус кольца великих фигур
+const R_OUTER = 112; // радиус поля прочих граней/архетипов
 
-// Состояние стадии по её секции. Самость — особая: по Юнгу к центру приближаются, а не
-// «достигают», поэтому у неё нет «ясно видно» как финала — только «проявляется как центр».
-function stageState(section, isSelf) {
-  if (!section) {
-    return { cls: "ghost", cap: isSelf ? "центр, к которому ведёт путь" : "пока в тени" };
-  }
-  const clear = section.user_confirmed || section.confidence === "high";
-  if (isSelf) return { cls: clear ? "clear" : "emerging", cap: "проявляется как центр" };
-  return clear ? { cls: "clear", cap: "ясно видно" } : { cls: "emerging", cap: "проявляется" };
-}
-
-// Позиции фигур как созвездие: Самость — путеводная вершина сверху, три остальные образуют
-// основание. Не лестница с финишем (против рамки бота) — небо, которое богатеет.
-const FIGURE_POS = {
-  self: { x: 150, y: 42 },
-  persona: { x: 58, y: 150 },
-  shadow: { x: 150, y: 214 },
-  anima_animus: { x: 242, y: 150 },
-};
-const FIGURE_KEYS = INDIVIDUATION_STAGES.map((s) => s.key);
-
-// Декоративные фоновые звёзды (статичные) — ощущение ночного неба за фигурами.
+// Декоративные фоновые звёзды (статичные) — ночное небо за фигурами.
 const AMBIENT_STARS = [
   [28, 60, 0.9], [95, 30, 0.6], [210, 48, 0.7], [278, 92, 0.9], [24, 128, 0.6],
-  [120, 96, 0.5], [190, 110, 0.6], [270, 170, 0.7], [40, 200, 0.8], [110, 235, 0.6],
-  [205, 226, 0.7], [255, 210, 0.5], [150, 130, 0.4], [88, 190, 0.5], [222, 96, 0.5],
+  [120, 40, 0.5], [190, 26, 0.6], [270, 170, 0.7], [40, 205, 0.8], [110, 240, 0.6],
+  [205, 232, 0.7], [258, 214, 0.5], [16, 96, 0.4], [292, 130, 0.5], [150, 244, 0.5],
 ];
 
-// Созвездие себя: фигуры-звёзды (яркость по состоянию) + светящиеся нити между теми, что
-// делят один глубинный мотив (payload.threads), + тонкая тяга к Самости-центру. Рост виден
-// как богатеющее небо, а не заполнение шкалы. Рисуем, только когда проявилась хотя бы одна
-// фигура: пустое небо звучало бы как укор, а не приглашение.
-function constellation(sections, threads) {
+// Состояние фигуры: «ясно» (подтверждено/high) или «проявляется». Самость особая — центр,
+// к которому идут, а не финиш (по Юнгу): без «ясно» как достижения.
+function stageState(section, isSelf) {
+  if (!section) return { cls: "ghost" };
+  const clear = section.user_confirmed || section.confidence === "high";
+  if (isSelf) return { cls: clear ? "clear" : "emerging" };
+  return { cls: clear ? "clear" : "emerging" };
+}
+function facetCls(item) {
+  return item && (item.user_confirmed || item.confidence === "high") ? "clear" : "emerging";
+}
+// Размер звезды = как глубоко грань узнана (число опор evidence). Крупнее = увереннее.
+function starR(ev) {
+  const n = Math.max(0, Math.min(6, ev || 0));
+  return 3.4 + n * 0.95; // 3.4 .. 9.1
+}
+function polar(cx, cy, r, deg) {
+  const a = (deg * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+
+// Карта психики: Самость в центре, три великие фигуры (Персона/Тень/Анима-Анимус) ближним
+// кольцом, дальше — поле звёзд из всех прочих граней, комплексов и архетипов, что проявились
+// в разговорах. Крупнее звезда — глубже узнана (evidence). Золотые нити связывают то, что
+// растёт из одного мотива (theme). Тап по звезде раскрывает её. Рост виден как богатеющее
+// небо, а не заполнение шкалы. Рисуем, когда есть хоть одна грань.
+function psycheMap(sections, archetypes, threads) {
+  if (!sections.length && !(archetypes && archetypes.length)) return null;
   const byKey = {};
   sections.forEach((s) => {
     if (s.key) byKey[s.key] = s;
   });
-  if (!FIGURE_KEYS.some((k) => byKey[k])) return null;
 
-  const nodes = INDIVIDUATION_STAGES.map((st) => {
-    const state = stageState(byKey[st.key], st.key === "self");
-    return { ...st, ...FIGURE_POS[st.key], cls: state.cls, cap: state.cap, present: !!byKey[st.key] };
+  const stars = [];
+  // центр — Самость (или призрачный центр, если ещё не проявилась)
+  const selfSec = byKey.self;
+  stars.push({
+    glyph: "◎",
+    label: "Самость",
+    mapLabel: "Самость",
+    summary: selfSec
+      ? selfSec.summary
+      : "Центр, к которому ведёт путь. По Юнгу он проявляется последним и всю жизнь.",
+    cls: selfSec ? stageState(selfSec, true).cls : "ghost",
+    r: 9.5, x: CX, y: CY, anchor: true, theme: selfSec ? selfSec.theme : null,
   });
-  const nodeByKey = {};
-  nodes.forEach((n) => (nodeByKey[n.key] = n));
+  // ближнее кольцо — три великие фигуры (те, что проявились)
+  const inner = INNER_KEYS.filter((k) => byKey[k]);
+  inner.forEach((k, i) => {
+    const s = byKey[k];
+    const [x, y] = polar(CX, CY, R_INNER, -90 + (360 / inner.length) * i);
+    stars.push({
+      glyph: FIGURE_GLYPH[k], label: s.label, mapLabel: FIGURE_SHORT[k], summary: s.summary,
+      cls: stageState(s, false).cls, r: 8, x, y, anchor: true, theme: s.theme,
+    });
+  });
+  // внешнее поле — прочие грани + архетипы (точки, размер по глубине узнанного)
+  const outer = [];
+  sections.forEach((s) => {
+    if (!s.key || s.key === "self" || INNER_KEYS.indexOf(s.key) !== -1) return;
+    outer.push({ label: s.label, summary: s.summary, cls: facetCls(s), r: starR(s.evidence_count), theme: s.theme });
+  });
+  (archetypes || []).forEach((a) => {
+    outer.push({ label: a.name, summary: a.summary, cls: facetCls(a), r: starR(a.evidence_count), theme: a.theme, arch: true });
+  });
+  const step = outer.length ? 360 / outer.length : 0;
+  outer.forEach((s, i) => {
+    const [x, y] = polar(CX, CY, R_OUTER, -90 + step / 2 + step * i);
+    stars.push({ ...s, x, y });
+  });
 
-  // Нити между фигурами: пары facet-членов с ключом фигуры внутри одной нити (общий мотив).
-  const pairs = [];
-  const seen = {};
-  (threads || []).forEach((t) => {
-    const figs = (t.members || [])
-      .filter((m) => m.kind === "facet" && FIGURE_KEYS.indexOf(m.key) !== -1)
-      .map((m) => m.key);
-    for (let i = 0; i < figs.length; i++) {
-      for (let j = i + 1; j < figs.length; j++) {
-        const id = [figs[i], figs[j]].sort().join("~");
-        if (!seen[id]) {
-          seen[id] = 1;
-          pairs.push([figs[i], figs[j]]);
-        }
+  // нити: соединяем звёзды, делящие один мотив (theme)
+  const byTheme = {};
+  stars.forEach((st) => {
+    if (st.theme) (byTheme[st.theme] = byTheme[st.theme] || []).push(st);
+  });
+  const links = [];
+  Object.keys(byTheme).forEach((th) => {
+    const g = byTheme[th];
+    for (let i = 0; i < g.length; i++)
+      for (let j = i + 1; j < g.length; j++) links.push([g[i], g[j]]);
+  });
+
+  const svg = [];
+  AMBIENT_STARS.forEach(([x, y, o]) =>
+    svg.push(`<circle cx="${x}" cy="${y}" r="1" fill="#e8c074" opacity="${(o * 0.24).toFixed(2)}" />`),
+  );
+  // тонкая тяга великих фигур к центру (движение к целостности, не финиш)
+  stars.forEach((st) => {
+    if (!st.anchor || st.label === "Самость") return;
+    svg.push(
+      `<line x1="${st.x.toFixed(1)}" y1="${st.y.toFixed(1)}" x2="${CX}" y2="${CY}" ` +
+        `stroke="#e8c074" stroke-width="1" stroke-dasharray="2 5" opacity="0.13" />`,
+    );
+  });
+  // золотые нити мотива — свечение + яркая линия
+  links.forEach(([a, b]) => {
+    const c = `x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"`;
+    svg.push(`<line ${c} stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round" />`);
+    svg.push(`<line ${c} stroke="#e8c074" stroke-width="1.2" opacity="0.7" stroke-linecap="round" />`);
+  });
+  // звёзды
+  stars.forEach((st, i) => {
+    const on = st.cls === "clear";
+    if (st.glyph) {
+      if (on) {
+        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${(st.r + 8).toFixed(0)}" fill="#e8c074" opacity="0.20" />`);
+        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${st.r}" fill="#e8c074" />`);
+        svg.push(`<text x="${st.x}" y="${st.y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
+      } else if (st.cls === "ghost") {
+        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${st.r}" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1" stroke-dasharray="2 3" />`);
+        svg.push(`<text x="${st.x}" y="${st.y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
+      } else {
+        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${(st.r + 4).toFixed(0)}" fill="#e8c074" opacity="0.10" />`);
+        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${st.r}" fill="rgba(232,192,116,0.16)" stroke="#e8c074" stroke-width="1.2" />`);
+        svg.push(`<text x="${st.x}" y="${st.y}" class="star-glyph star-glyph--mid">${st.glyph}</text>`);
       }
-    }
-  });
-
-  const svgParts = [];
-  // фоновые звёзды
-  AMBIENT_STARS.forEach(([x, y, o]) => {
-    svgParts.push(`<circle cx="${x}" cy="${y}" r="1" fill="#e8c074" opacity="${o * 0.28}" />`);
-  });
-  // тяга к центру (Самости) от каждой проявленной фигуры — путь к целостности, не финиш
-  const self = nodeByKey.self;
-  nodes.forEach((n) => {
-    if (n.key === "self" || !n.present) return;
-    svgParts.push(
-      `<line x1="${n.x}" y1="${n.y}" x2="${self.x}" y2="${self.y}" stroke="#e8c074" ` +
-        `stroke-width="1" stroke-dasharray="2 5" opacity="0.16" />`,
-    );
-  });
-  // нити общего мотива между фигурами — ярче, со свечением
-  pairs.forEach(([a, b]) => {
-    const na = nodeByKey[a];
-    const nb = nodeByKey[b];
-    if (!na || !nb) return;
-    svgParts.push(
-      `<line x1="${na.x}" y1="${na.y}" x2="${nb.x}" y2="${nb.y}" stroke="#e8c074" ` +
-        `stroke-width="6" opacity="0.10" stroke-linecap="round" />`,
-      `<line x1="${na.x}" y1="${na.y}" x2="${nb.x}" y2="${nb.y}" stroke="#e8c074" ` +
-        `stroke-width="1.4" opacity="0.75" stroke-linecap="round" />`,
-    );
-  });
-  // узлы-звёзды
-  nodes.forEach((n) => {
-    if (n.cls === "clear") {
-      svgParts.push(`<circle cx="${n.x}" cy="${n.y}" r="17" fill="#e8c074" opacity="0.22" />`);
-      svgParts.push(`<circle cx="${n.x}" cy="${n.y}" r="9" fill="#e8c074" />`);
-      svgParts.push(
-        `<text x="${n.x}" y="${n.y}" class="star-glyph star-glyph--on">${n.glyph}</text>`,
-      );
-    } else if (n.cls === "emerging") {
-      svgParts.push(`<circle cx="${n.x}" cy="${n.y}" r="12" fill="#e8c074" opacity="0.12" />`);
-      svgParts.push(
-        `<circle cx="${n.x}" cy="${n.y}" r="8" fill="rgba(232,192,116,0.16)" ` +
-          `stroke="#e8c074" stroke-width="1.2" />`,
-      );
-      svgParts.push(`<text x="${n.x}" y="${n.y}" class="star-glyph star-glyph--mid">${n.glyph}</text>`);
     } else {
-      svgParts.push(
-        `<circle cx="${n.x}" cy="${n.y}" r="7" fill="none" ` +
-          `stroke="rgba(255,255,255,0.14)" stroke-width="1" stroke-dasharray="2 3" />`,
-      );
-      svgParts.push(`<text x="${n.x}" y="${n.y}" class="star-glyph star-glyph--off">${n.glyph}</text>`);
+      const fill = on ? "#e8c074" : "rgba(232,192,116,0.42)";
+      if (on) svg.push(`<circle cx="${st.x.toFixed(1)}" cy="${st.y.toFixed(1)}" r="${(st.r + 3).toFixed(1)}" fill="#e8c074" opacity="0.15" />`);
+      const stroke = st.arch ? ' stroke="#e8c074" stroke-width="0.8"' : "";
+      svg.push(`<circle cx="${st.x.toFixed(1)}" cy="${st.y.toFixed(1)}" r="${st.r.toFixed(1)}" fill="${fill}"${stroke} />`);
     }
-    svgParts.push(
-      `<text x="${n.x}" y="${n.y + 26}" class="star-name star-name--${n.cls}">${n.name}</text>`,
+    // прозрачный хит-таргет для тапа (data-i → звезда в замыкании)
+    svg.push(`<circle class="star-hit" data-i="${i}" cx="${st.x.toFixed(1)}" cy="${st.y.toFixed(1)}" r="${Math.max(st.r + 7, 13).toFixed(1)}" fill="transparent" />`);
+  });
+  // подписи только у 4 знакомых фигур — чтобы поле звёзд не захламлять. Размещаем РАДИАЛЬНО
+  // наружу от центра (Самость — прямо под центром, там пусто), чтобы не налезали друг на друга.
+  stars.forEach((st) => {
+    if (!st.anchor) return;
+    const cls = st.cls === "ghost" ? "ghost" : st.cls;
+    let lx, ly, anchor;
+    if (st.mapLabel === "Самость") {
+      lx = CX; ly = CY + st.r + 15; anchor = "middle";
+    } else {
+      const dx = st.x - CX;
+      const dy = st.y - CY;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const out = d + 15;
+      lx = CX + (dx / d) * out;
+      ly = CY + (dy / d) * out + 4; // +4 — оптический центр текста по вертикали
+      anchor = dx > 12 ? "start" : dx < -12 ? "end" : "middle";
+    }
+    svg.push(
+      `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" ` +
+        `class="star-name star-name--${cls}">${st.mapLabel || st.label}</text>`,
     );
   });
 
   const sec = el("section", "sky");
-  sec.appendChild(el("div", "sky-label", "Созвездие себя"));
+  sec.appendChild(el("div", "sky-label", "Карта твоей психики"));
   sec.appendChild(
     el(
       "p",
       "sky-sub",
-      "Фигуры Юнга загораются по мере того, как проявляются в разговорах. Золотые нити — там, " +
-        "где их питает один глубинный мотив. Это не шкала с финишем: небо просто становится живее.",
+      "В центре — Самость, вокруг неё великие фигуры Юнга, дальше — грани, комплексы и архетипы, " +
+        "что проявились в разговорах. Крупнее звезда — глубже узнана. Золотые нити связывают то, что растёт из одного корня.",
     ),
   );
   const wrap = el("div", "sky-canvas");
   wrap.innerHTML =
-    `<svg viewBox="0 0 300 250" class="sky-svg" role="img" ` +
-    `aria-label="Созвездие фигур индивидуации">${svgParts.join("")}</svg>`;
+    `<svg viewBox="0 0 300 276" class="sky-svg" role="img" aria-label="Карта психики">${svg.join("")}</svg>`;
   sec.appendChild(wrap);
+
+  // строка-раскрытие: тап по звезде показывает её грань (навигация + смысл, не просто точки)
+  const readout = el("div", "sky-readout");
+  readout.appendChild(el("span", "sky-readout-hint", "Нажми на звезду — вспомню, что за ней"));
+  sec.appendChild(readout);
+
+  const nFacets = sections.length + (archetypes ? archetypes.length : 0);
+  const nLinks = Object.keys(byTheme).filter((th) => byTheme[th].length >= 2).length;
+  const meta = el("div", "sky-meta");
+  meta.textContent =
+    nFacets + " " + pluralRu(nFacets, "грань", "грани", "граней") +
+    (nLinks ? " · " + nLinks + " " + pluralRu(nLinks, "нить", "нити", "нитей") : "");
+  sec.appendChild(meta);
+
+  wrap.querySelectorAll(".star-hit").forEach((hit) => {
+    hit.style.cursor = "pointer";
+    hit.addEventListener("click", () => {
+      const st = stars[+hit.getAttribute("data-i")];
+      readout.innerHTML = "";
+      readout.appendChild(el("span", "sky-readout-name", st.label));
+      if (st.summary) readout.appendChild(el("span", "sky-readout-text", st.summary));
+    });
+  });
   return sec;
 }
 
@@ -804,9 +865,9 @@ function renderProfile(p) {
   hero.appendChild(left);
   root.appendChild(hero);
 
-  // созвездие себя — живой центр страницы вместо статичной шкалы «глубины»: фигуры
-  // индивидуации как звёзды + нити общего мотива. Рисуется, когда проявилась хотя бы одна.
-  const sky = constellation(p.sections, p.threads);
+  // карта психики — живой центр страницы вместо статичной шкалы «глубины»: все грани,
+  // комплексы и архетипы как звёзды вокруг Самости + нити общего мотива, тап раскрывает.
+  const sky = psycheMap(p.sections, p.archetypes, p.threads);
   if (sky) root.appendChild(sky);
 
   // нить разговоров (новое: meta.chat.summary)
@@ -927,37 +988,44 @@ function renderProfile(p) {
   // eyebrow «возможно, одна нить», без диагноза; сырого evidence тут нет (152-ФЗ).
   if (p.threads && p.threads.length) {
     const sec = el("section", "group weave");
-    sec.appendChild(el("h2", "group-title serif", "Нити образа"));
+    sec.appendChild(el("h2", "group-title serif", "Что связано в тебе"));
     sec.appendChild(
       el(
         "p",
         "group-sub",
-        "Похоже, разные грани растут из одной глубинной потребности — вот как они переплетаются.",
+        "Разное поведение часто растёт из одного корня. Увидеть эту связь — и есть работа над " +
+          "собой: меняешь не отдельный симптом, а общую нужду под ним. Вот что, похоже, связано у тебя.",
       ),
     );
     p.threads.forEach((t) => {
       const card = el("div", "weave-thread");
-      card.appendChild(el("div", "weave-eyebrow", "возможно, одна нить"));
+      card.appendChild(el("div", "weave-eyebrow", "одна нить"));
+      // Инсайт вперёд: общая потребность — крупным. serves/need нередко начинается с
+      // «гипотеза:» — срезаем, чтобы не задваивать рамку.
+      const need = (t.need || "").replace(/^\s*гипотеза\s*[:—-]\s*/i, "").trim();
+      card.appendChild(
+        el(
+          "p",
+          "weave-need serif",
+          need
+            ? "Общий корень: " + need + "."
+            : "Похоже, эти части растут из одной глубинной потребности.",
+        ),
+      );
+      // Что именно связано — чипы граней/образов/привычек.
+      card.appendChild(el("div", "weave-connects", "Связывает"));
       const chips = el("div", "chips weave-chips");
       t.members.forEach((m) => {
         const kindWord =
-          m.kind === "facet" ? "грань" : m.kind === "archetype" ? "образ" : "привычка";
+          m.kind === "facet" ? "грань" : m.kind === "archetype" ? "образ" : "привычку";
         const chip = el("span", "chip weave-chip");
         chip.appendChild(el("span", "weave-kind", kindWord));
         chip.appendChild(document.createTextNode(m.kind === "facet" ? m.label : m.name || ""));
         chips.appendChild(chip);
       });
       card.appendChild(chips);
-      // serves нередко уже начинается с «гипотеза:» — срезаем, чтобы не задваивать рамку.
-      const need = (t.need || "").replace(/^\s*гипотеза\s*[:—-]\s*/i, "").trim();
       card.appendChild(
-        el(
-          "p",
-          "weave-need",
-          need
-            ? "Их питает одна потребность — " + need + "."
-            : "Похоже, их питает одна глубинная потребность.",
-        ),
+        el("p", "weave-why", "Потянешь за одну — отзовётся вся нить. На карте выше это золотая связь."),
       );
       sec.appendChild(card);
     });
@@ -966,16 +1034,16 @@ function renderProfile(p) {
     // Free после демо: сервер отдал только ЧИСЛО нитей (содержимое не пришло в payload).
     // Тизер честный — нити реально найдены; открываются с подпиской (CTA скроллит к оплате).
     const sec = el("section", "group weave");
-    sec.appendChild(el("h2", "group-title serif", "Нити образа"));
+    sec.appendChild(el("h2", "group-title serif", "Что связано в тебе"));
     const card = el("div", "weave-thread");
     card.appendChild(el("div", "weave-eyebrow", "найдено, но скрыто"));
     card.appendChild(
       el(
         "p",
-        "weave-need",
+        "weave-need serif",
         "Я вижу " + p.threads_locked + " " +
           pluralRu(p.threads_locked, "нить", "нити", "нитей") + ": похоже, разные грани, привычки и образы " +
-          "растут из одной глубинной потребности. С подпиской покажу, как они переплетаются.",
+          "растут из одного корня. С подпиской покажу, что именно их связывает — и что с этим делать.",
       ),
     );
     const btn = el("button", "upgrade-btn weave-locked-btn", "Открыть нити 🔓");

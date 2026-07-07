@@ -307,7 +307,6 @@ body {
   fill: var(--muted-soft);
 }
 .star-name {
-  text-anchor: middle;
   font-family: "Lora", Georgia, serif;
   font-size: 12.5px;
 }
@@ -319,6 +318,42 @@ body {
 }
 .star-name--ghost {
   fill: var(--muted-soft);
+}
+.star-hit {
+  -webkit-tap-highlight-color: transparent;
+}
+/* строка-раскрытие под картой: тап по звезде показывает её грань */
+.sky-readout {
+  margin-top: 8px;
+  min-height: 40px;
+  padding: 10px 14px;
+  background: var(--gold-soft);
+  border: 1px solid rgba(232, 192, 116, 0.18);
+  border-radius: 14px;
+}
+.sky-readout-hint {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.sky-readout-name {
+  display: block;
+  font-family: "Lora", Georgia, serif;
+  font-size: 14.5px;
+  color: var(--gold);
+  margin-bottom: 3px;
+}
+.sky-readout-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.sky-meta {
+  margin-top: 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-soft);
+  text-align: center;
 }
 
 /* --- динамика «с прошлого визита» --- */
@@ -940,9 +975,23 @@ body {
   margin-right: 5px;
 }
 .weave-need {
-  margin: 12px 0 0;
-  font-size: 14.5px;
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.4;
   color: var(--text);
+}
+.weave-connects {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.weave-why {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* --- футер --- */
