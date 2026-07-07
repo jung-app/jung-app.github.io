@@ -619,91 +619,111 @@ function todayBlock() {
 // --- карта психики ----------------------------------------------------------
 
 // Символы трёх великих фигур + Самости. Ключи совпадают со схемой профиля.
-const FIGURE_GLYPH = { self: "◎", persona: "◐", shadow: "●", anima_animus: "☽" };
+const FIGURE_GLYPH = { self: "✦", persona: "◐", shadow: "●", anima_animus: "☽" };
 // Короткие подписи фигур на карте (полное имя — в раскрытии по тапу; длинное налезало бы).
 const FIGURE_SHORT = { self: "Самость", persona: "Персона", shadow: "Тень", anima_animus: "Анима" };
-const INNER_KEYS = ["persona", "shadow", "anima_animus"]; // ближнее кольцо к Самости
+const GREAT_KEYS = ["persona", "shadow", "anima_animus"]; // великие фигуры (подписываем)
 const CX = 150;
-const CY = 132; // центр неба (Самость)
-const R_INNER = 58; // радиус кольца великих фигур
-const R_OUTER = 112; // радиус поля прочих граней/архетипов
+const CY = 146; // центр мандалы (Самость)
+// Три кольца глубины: ближе к центру — то, что уже узнано и принято; на краю — что едва
+// проявляется. Мандала — центральный символ Самости у Юнга: небо, собранное вокруг центра.
+const R_BAND = [52, 82, 110]; // узнано / в работе / едва проявляется
 
 // Декоративные фоновые звёзды (статичные) — ночное небо за фигурами.
 const AMBIENT_STARS = [
-  [28, 60, 0.9], [95, 30, 0.6], [210, 48, 0.7], [278, 92, 0.9], [24, 128, 0.6],
-  [120, 40, 0.5], [190, 26, 0.6], [270, 170, 0.7], [40, 205, 0.8], [110, 240, 0.6],
-  [205, 232, 0.7], [258, 214, 0.5], [16, 96, 0.4], [292, 130, 0.5], [150, 244, 0.5],
+  [28, 44, 0.9], [95, 26, 0.6], [214, 34, 0.7], [286, 70, 0.9], [22, 116, 0.6],
+  [120, 22, 0.5], [190, 20, 0.6], [284, 168, 0.7], [30, 214, 0.8], [104, 262, 0.6],
+  [214, 258, 0.7], [272, 224, 0.5], [14, 88, 0.4], [294, 130, 0.5], [150, 272, 0.5],
+  [60, 250, 0.5], [244, 46, 0.5], [10, 168, 0.5], [292, 200, 0.6], [176, 274, 0.4],
 ];
 
-// Состояние фигуры: «ясно» (подтверждено/high) или «проявляется». Самость особая — центр,
-// к которому идут, а не финиш (по Юнгу): без «ясно» как достижения.
-function stageState(section, isSelf) {
-  if (!section) return { cls: "ghost" };
-  const clear = section.user_confirmed || section.confidence === "high";
-  if (isSelf) return { cls: clear ? "clear" : "emerging" };
-  return { cls: clear ? "clear" : "emerging" };
+// Глубина грани → кольцо. 0 узнано (подтверждено/high), 1 в работе (medium/working),
+// 2 едва проявляется (всё прочее). Радиус кодирует близость к центру-Самости.
+function depthBand(item) {
+  if (!item) return 2;
+  if (item.user_confirmed || item.confidence === "high") return 0;
+  if (item.confidence === "medium" || item.status === "working") return 1;
+  return 2;
 }
-function facetCls(item) {
-  return item && (item.user_confirmed || item.confidence === "high") ? "clear" : "emerging";
-}
+const BAND_TONE = ["clear", "working", "emerging"];
 // Размер звезды = как глубоко грань узнана (число опор evidence). Крупнее = увереннее.
 function starR(ev) {
   const n = Math.max(0, Math.min(6, ev || 0));
-  return 3.4 + n * 0.95; // 3.4 .. 9.1
+  return 3.2 + n * 0.85; // 3.2 .. 8.3
 }
 function polar(cx, cy, r, deg) {
   const a = (deg * Math.PI) / 180;
   return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
 }
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
-// Карта психики: Самость в центре, три великие фигуры (Персона/Тень/Анима-Анимус) ближним
-// кольцом, дальше — поле звёзд из всех прочих граней, комплексов и архетипов, что проявились
-// в разговорах. Крупнее звезда — глубже узнана (evidence). Золотые нити связывают то, что
-// растёт из одного мотива (theme). Тап по звезде раскрывает её. Рост виден как богатеющее
-// небо, а не заполнение шкалы. Рисуем, когда есть хоть одна грань.
-function psycheMap(sections, archetypes, threads) {
+// Карта психики как мандала: Самость в центре, вокруг — грани, комплексы, архетипы кольцами
+// по глубине узнанного (ближе к центру = увереннее и принятее). Размер звезды = число опор.
+// Золотые нити связывают то, что растёт из одного мотива (theme). Тап раскрывает грань.
+// Рост виден как звёзды, стягивающиеся к центру, а не как заполнение шкалы. Рисуем, когда
+// есть хоть одна грань.
+function psycheMap(sections, archetypes) {
   if (!sections.length && !(archetypes && archetypes.length)) return null;
   const byKey = {};
   sections.forEach((s) => {
     if (s.key) byKey[s.key] = s;
   });
 
-  const stars = [];
-  // центр — Самость (или призрачный центр, если ещё не проявилась)
+  // собираем все грани в единый список звёзд (кроме Самости — она центр)
+  const items = [];
+  sections.forEach((s) => {
+    if (s.key === "self") return;
+    const great = GREAT_KEYS.indexOf(s.key) !== -1;
+    items.push({
+      label: s.label,
+      mapLabel: great ? FIGURE_SHORT[s.key] : null,
+      glyph: great ? FIGURE_GLYPH[s.key] : null,
+      summary: s.summary,
+      band: depthBand(s),
+      r: great ? 7.5 : starR(s.evidence_count),
+      theme: s.theme,
+      anchor: great,
+      key: s.label,
+    });
+  });
+  (archetypes || []).forEach((a) => {
+    items.push({
+      label: a.name, mapLabel: null, glyph: null, summary: a.summary,
+      band: depthBand(a), r: starR(a.evidence_count), theme: a.theme, arch: true, key: a.name,
+    });
+  });
+
+  // Самость — центр (или призрачный центр, если ещё не проявилась)
   const selfSec = byKey.self;
-  stars.push({
-    glyph: "◎",
-    label: "Самость",
-    mapLabel: "Самость",
+  const stars = [{
+    glyph: "✦", label: "Самость", mapLabel: "Самость",
     summary: selfSec
       ? selfSec.summary
       : "Центр, к которому ведёт путь. По Юнгу он проявляется последним и всю жизнь.",
-    cls: selfSec ? stageState(selfSec, true).cls : "ghost",
-    r: 9.5, x: CX, y: CY, anchor: true, theme: selfSec ? selfSec.theme : null,
-  });
-  // ближнее кольцо — три великие фигуры (те, что проявились)
-  const inner = INNER_KEYS.filter((k) => byKey[k]);
-  inner.forEach((k, i) => {
-    const s = byKey[k];
-    const [x, y] = polar(CX, CY, R_INNER, -90 + (360 / inner.length) * i);
-    stars.push({
-      glyph: FIGURE_GLYPH[k], label: s.label, mapLabel: FIGURE_SHORT[k], summary: s.summary,
-      cls: stageState(s, false).cls, r: 8, x, y, anchor: true, theme: s.theme,
+    tone: selfSec ? (depthBand(selfSec) === 0 ? "clear" : "working") : "ghost",
+    r: 10, x: CX, y: CY, anchor: true, self: true, theme: selfSec ? selfSec.theme : null,
+  }];
+
+  // раскладываем по кольцам: в каждом кольце звёзды равномерно по кругу, кольца смещены
+  // друг относительно друга, чтобы не выстраивались в радиусы. Больше опор → чуть ближе
+  // к центру внутри кольца (глубже узнана = ближе к себе).
+  const bands = [[], [], []];
+  items.forEach((it) => bands[it.band].push(it));
+  bands.forEach((grp, b) => {
+    // стабильный порядок, чтобы раскладка не прыгала между визитами
+    grp.sort((a, z) => hashStr(a.key) - hashStr(z.key));
+    const n = grp.length;
+    grp.forEach((it, i) => {
+      const spread = n > 1 ? (360 / n) * i : 0;
+      const deg = -90 + b * 29 + spread + (hashStr(it.key) % 11) - 5;
+      const pull = Math.min(6, (it.r - 3.2) / 0.85) * 1.4; // до -8.4 внутрь
+      const [x, y] = polar(CX, CY, R_BAND[b] - pull, deg);
+      stars.push({ ...it, tone: BAND_TONE[b], x, y });
     });
-  });
-  // внешнее поле — прочие грани + архетипы (точки, размер по глубине узнанного)
-  const outer = [];
-  sections.forEach((s) => {
-    if (!s.key || s.key === "self" || INNER_KEYS.indexOf(s.key) !== -1) return;
-    outer.push({ label: s.label, summary: s.summary, cls: facetCls(s), r: starR(s.evidence_count), theme: s.theme });
-  });
-  (archetypes || []).forEach((a) => {
-    outer.push({ label: a.name, summary: a.summary, cls: facetCls(a), r: starR(a.evidence_count), theme: a.theme, arch: true });
-  });
-  const step = outer.length ? 360 / outer.length : 0;
-  outer.forEach((s, i) => {
-    const [x, y] = polar(CX, CY, R_OUTER, -90 + step / 2 + step * i);
-    stars.push({ ...s, x, y });
   });
 
   // нити: соединяем звёзды, делящие один мотив (theme)
@@ -719,56 +739,86 @@ function psycheMap(sections, archetypes, threads) {
   });
 
   const svg = [];
-  AMBIENT_STARS.forEach(([x, y, o]) =>
-    svg.push(`<circle cx="${x}" cy="${y}" r="1" fill="#e8c074" opacity="${(o * 0.24).toFixed(2)}" />`),
+  // мягкое свечение центра (радиальный ореол Самости)
+  svg.push(
+    '<defs><radialGradient id="selfGlow" cx="50%" cy="50%" r="50%">' +
+      '<stop offset="0%" stop-color="#e8c074" stop-opacity="0.22"/>' +
+      '<stop offset="100%" stop-color="#e8c074" stop-opacity="0"/></radialGradient></defs>',
   );
-  // тонкая тяга великих фигур к центру (движение к целостности, не финиш)
-  stars.forEach((st) => {
-    if (!st.anchor || st.label === "Самость") return;
+  svg.push(`<circle cx="${CX}" cy="${CY}" r="${R_BAND[2] + 6}" fill="url(#selfGlow)" />`);
+  // тонкие направляющие кольца мандалы — структура глубины
+  R_BAND.forEach((r) =>
     svg.push(
-      `<line x1="${st.x.toFixed(1)}" y1="${st.y.toFixed(1)}" x2="${CX}" y2="${CY}" ` +
-        `stroke="#e8c074" stroke-width="1" stroke-dasharray="2 5" opacity="0.13" />`,
-    );
+      `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="#e8c074" ` +
+        `stroke-width="0.6" stroke-dasharray="1 6" opacity="0.16" />`,
+    ),
+  );
+  // фоновые звёзды (часть мерцает)
+  AMBIENT_STARS.forEach(([x, y, o], i) => {
+    const tw = i % 3 === 0 ? ` class="twinkle" style="animation-delay:${(i % 5) * 0.7}s"` : "";
+    svg.push(`<circle cx="${x}" cy="${y}" r="1"${tw} fill="#e8c074" opacity="${(o * 0.22).toFixed(2)}" />`);
   });
   // золотые нити мотива — свечение + яркая линия
   links.forEach(([a, b]) => {
     const c = `x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"`;
     svg.push(`<line ${c} stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round" />`);
-    svg.push(`<line ${c} stroke="#e8c074" stroke-width="1.2" opacity="0.7" stroke-linecap="round" />`);
+    svg.push(`<line ${c} stroke="#e8c074" stroke-width="1.1" opacity="0.65" stroke-linecap="round" />`);
   });
+  // блик-«лучи» яркой звезды (диффракционный крест) — только для узнанных
+  const glint = (x, y, len) =>
+    `<line x1="${(x - len).toFixed(1)}" y1="${y}" x2="${(x + len).toFixed(1)}" y2="${y}" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>` +
+    `<line x1="${x}" y1="${(y - len).toFixed(1)}" x2="${x}" y2="${(y + len).toFixed(1)}" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>`;
   // звёзды
   stars.forEach((st, i) => {
-    const on = st.cls === "clear";
-    if (st.glyph) {
-      if (on) {
-        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${(st.r + 8).toFixed(0)}" fill="#e8c074" opacity="0.20" />`);
-        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${st.r}" fill="#e8c074" />`);
-        svg.push(`<text x="${st.x}" y="${st.y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
-      } else if (st.cls === "ghost") {
-        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${st.r}" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1" stroke-dasharray="2 3" />`);
-        svg.push(`<text x="${st.x}" y="${st.y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
+    const x = st.x.toFixed(1);
+    const y = st.y.toFixed(1);
+    const twAttr =
+      st.tone === "emerging" ? ` class="twinkle" style="animation-delay:${(i % 6) * 0.6}s"` : "";
+    if (st.self) {
+      // Самость — центр мандалы: гало + кольцо + ядро, чтобы читалась как якорь, вокруг
+      // которого собрано всё. Даже пока «проявляется» — это центр, а не рядовая звезда.
+      const on = st.tone === "clear";
+      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 12).toFixed(1)}" fill="#e8c074" opacity="0.14" />`);
+      svg.push(glint(st.x, st.y, st.r + 9));
+      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 4).toFixed(1)}" fill="none" stroke="#e8c074" stroke-width="0.9" opacity="${on ? 0.6 : 0.4}" />`);
+      if (st.tone === "ghost") {
+        svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#131a2b" stroke="#e8c074" stroke-width="1" stroke-dasharray="2 3" opacity="0.85" />`);
+        svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
       } else {
-        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${(st.r + 4).toFixed(0)}" fill="#e8c074" opacity="0.10" />`);
-        svg.push(`<circle cx="${st.x}" cy="${st.y}" r="${st.r}" fill="rgba(232,192,116,0.16)" stroke="#e8c074" stroke-width="1.2" />`);
-        svg.push(`<text x="${st.x}" y="${st.y}" class="star-glyph star-glyph--mid">${st.glyph}</text>`);
+        svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#e8c074" />`);
+        svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
       }
+      svg.push(`<circle class="star-hit" data-i="${i}" cx="${x}" cy="${y}" r="${(st.r + 10).toFixed(1)}" fill="transparent" />`);
+      return;
+    }
+    if (st.tone === "clear") {
+      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 7).toFixed(1)}" fill="#e8c074" opacity="0.16" />`);
+      svg.push(glint(st.x, st.y, st.r + 5));
+      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#e8c074" />`);
+      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
+    } else if (st.tone === "ghost") {
+      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="2 3" />`);
+      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
+    } else if (st.tone === "working") {
+      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 3).toFixed(1)}" fill="#e8c074" opacity="0.10" />`);
+      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="rgba(232,192,116,0.5)" stroke="#e8c074" stroke-width="1" />`);
+      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--mid">${st.glyph}</text>`);
     } else {
-      const fill = on ? "#e8c074" : "rgba(232,192,116,0.42)";
-      if (on) svg.push(`<circle cx="${st.x.toFixed(1)}" cy="${st.y.toFixed(1)}" r="${(st.r + 3).toFixed(1)}" fill="#e8c074" opacity="0.15" />`);
-      const stroke = st.arch ? ' stroke="#e8c074" stroke-width="0.8"' : "";
-      svg.push(`<circle cx="${st.x.toFixed(1)}" cy="${st.y.toFixed(1)}" r="${st.r.toFixed(1)}" fill="${fill}"${stroke} />`);
+      // emerging — тусклая мерцающая точка
+      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}"${twAttr} fill="rgba(232,192,116,0.34)"${st.arch ? ' stroke="#e8c074" stroke-width="0.7"' : ""} />`);
+      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
     }
     // прозрачный хит-таргет для тапа (data-i → звезда в замыкании)
-    svg.push(`<circle class="star-hit" data-i="${i}" cx="${st.x.toFixed(1)}" cy="${st.y.toFixed(1)}" r="${Math.max(st.r + 7, 13).toFixed(1)}" fill="transparent" />`);
+    svg.push(`<circle class="star-hit" data-i="${i}" cx="${x}" cy="${y}" r="${Math.max(st.r + 7, 13).toFixed(1)}" fill="transparent" />`);
   });
-  // подписи только у 4 знакомых фигур — чтобы поле звёзд не захламлять. Размещаем РАДИАЛЬНО
-  // наружу от центра (Самость — прямо под центром, там пусто), чтобы не налезали друг на друга.
+  // подписи только у Самости и великих фигур — чтобы поле звёзд не захламлять. Радиально
+  // наружу от центра, с тёмным ореолом (paint-order) для читаемости поверх линий.
   stars.forEach((st) => {
     if (!st.anchor) return;
-    const cls = st.cls === "ghost" ? "ghost" : st.cls;
+    const cls = st.tone === "ghost" ? "ghost" : st.tone === "clear" ? "clear" : "emerging";
     let lx, ly, anchor;
-    if (st.mapLabel === "Самость") {
-      lx = CX; ly = CY + st.r + 15; anchor = "middle";
+    if (st.self) {
+      lx = CX; ly = CY + st.r + 16; anchor = "middle";
     } else {
       const dx = st.x - CX;
       const dy = st.y - CY;
@@ -790,13 +840,14 @@ function psycheMap(sections, archetypes, threads) {
     el(
       "p",
       "sky-sub",
-      "В центре — Самость, вокруг неё великие фигуры Юнга, дальше — грани, комплексы и архетипы, " +
-        "что проявились в разговорах. Крупнее звезда — глубже узнана. Золотые нити связывают то, что растёт из одного корня.",
+      "Мандала твоей психики. В центре — Самость, вокруг кольцами — грани, комплексы и архетипы. " +
+        "Ближе к центру то, что уже узнано и принято; на краю — что едва проявляется. Золотые нити " +
+        "связывают растущее из одного корня. Чем больше говорим, тем ярче звёзды и ближе к центру.",
     ),
   );
   const wrap = el("div", "sky-canvas");
   wrap.innerHTML =
-    `<svg viewBox="0 0 300 276" class="sky-svg" role="img" aria-label="Карта психики">${svg.join("")}</svg>`;
+    `<svg viewBox="0 0 300 300" class="sky-svg" role="img" aria-label="Карта психики">${svg.join("")}</svg>`;
   sec.appendChild(wrap);
 
   // строка-раскрытие: тап по звезде показывает её грань (навигация + смысл, не просто точки)
@@ -867,7 +918,7 @@ function renderProfile(p) {
 
   // карта психики — живой центр страницы вместо статичной шкалы «глубины»: все грани,
   // комплексы и архетипы как звёзды вокруг Самости + нити общего мотива, тап раскрывает.
-  const sky = psycheMap(p.sections, p.archetypes, p.threads);
+  const sky = psycheMap(p.sections, p.archetypes);
   if (sky) root.appendChild(sky);
 
   // нить разговоров (новое: meta.chat.summary)

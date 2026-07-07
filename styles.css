@@ -294,21 +294,35 @@ body {
 .star-glyph {
   text-anchor: middle;
   dominant-baseline: central;
-  font-size: 11px;
+  font-size: 10px;
+  pointer-events: none;
 }
 .star-glyph--on {
   fill: #1a1206;
   font-weight: 700;
 }
 .star-glyph--mid {
-  fill: var(--gold);
+  fill: #1a1206;
 }
 .star-glyph--off {
-  fill: var(--muted-soft);
+  fill: var(--gold);
+  opacity: 0.85;
+}
+/* мягкое мерцание тусклых/фоновых звёзд — жизнь без суеты */
+.twinkle {
+  animation: twinkle 3.6s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 0.72; }
 }
 .star-name {
   font-family: "Lora", Georgia, serif;
-  font-size: 12.5px;
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: #0e1320;
+  stroke-width: 2.4px;
+  stroke-linejoin: round;
 }
 .star-name--clear {
   fill: var(--text);
@@ -1048,5 +1062,9 @@ body {
   }
   .orb {
     animation: none;
+  }
+  .twinkle {
+    animation: none;
+    opacity: 0.5;
   }
 }

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; box-sizing: border-box; }
+      html, body { width: 1200px; height: 630px; }
+      body {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(150deg, #0e1320 0%, #131a2b 100%);
+        color: #ece7df;
+        font-family: "Inter", sans-serif;
+        padding: 76px 84px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .aura {
+        position: absolute; top: -240px; right: -120px;
+        width: 760px; height: 700px;
+        background: radial-gradient(circle, rgba(232,192,116,0.22) 0%, transparent 62%);
+      }
+      .brand {
+        position: absolute; top: 64px; left: 84px;
+        display: flex; align-items: center; gap: 16px;
+        font-family: "Lora", serif; font-size: 30px; font-weight: 600;
+      }
+      .mark {
+        width: 46px; height: 46px; border-radius: 50%;
+        background: radial-gradient(circle at 32% 30%, #e8c074 0%, #c79a48 55%, #6b5224 100%);
+        box-shadow: 0 0 32px rgba(232,192,116,0.5);
+      }
+      h1 {
+        position: relative; z-index: 1;
+        font-family: "Lora", serif; font-weight: 600;
+        font-size: 70px; line-height: 1.08; letter-spacing: -0.5px;
+        max-width: 940px; margin-bottom: 28px;
+      }
+      h1 .gold { color: #e8c074; }
+      p {
+        position: relative; z-index: 1;
+        font-size: 30px; line-height: 1.45; color: #c9c4b8; max-width: 880px;
+      }
+      .foot {
+        position: absolute; bottom: 60px; left: 84px; right: 84px;
+        display: flex; align-items: center; justify-content: space-between;
+        font-size: 26px; color: #8a8676;
+      }
+      .pill {
+        color: #20180a; font-weight: 600;
+        background: linear-gradient(135deg, #e8c074 0%, #c79a48 100%);
+        padding: 12px 26px; border-radius: 999px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="aura"></div>
+    <div class="brand"><span class="mark"></span>Проводник самопознания</div>
+    <h1>Разговор с собой,<br />который вы <span class="gold">не бросите</span> на полпути</h1>
+    <p>ИИ-проводник по юнгианской психологии. Помнит ваш путь между сессиями. Полностью анонимно.</p>
+    <div class="foot">
+      <span>@extaz_assistant_bot</span>
+      <span class="pill">Начать бесплатно</span>
+    </div>
+  </body>
+</html>
