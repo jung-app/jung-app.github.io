@@ -708,6 +708,14 @@ function psycheMap(sections, archetypes) {
     r: 10, x: CX, y: CY, anchor: true, self: true, theme: selfSec ? selfSec.theme : null,
   }];
 
+  // Плотностный масштаб: поле карты фиксированное (300×300), поэтому с ростом числа
+  // граней сами звёзды компактнеют (с полом — не исчезают). Небо становится населённее,
+  // а не тесней. Якоря (великие фигуры) держат минимум под глифом.
+  const crowd = Math.max(0.62, Math.min(1, Math.sqrt(18 / Math.max(1, items.length))));
+  items.forEach((it) => {
+    it.r = Math.max(it.anchor ? 6.5 : 2.6, it.r * crowd);
+  });
+
   // раскладываем по кольцам: в каждом кольце звёзды равномерно по кругу, кольца смещены
   // друг относительно друга, чтобы не выстраивались в радиусы. Больше опор → чуть ближе
   // к центру внутри кольца (глубже узнана = ближе к себе).
@@ -717,25 +725,75 @@ function psycheMap(sections, archetypes) {
     // стабильный порядок, чтобы раскладка не прыгала между визитами
     grp.sort((a, z) => hashStr(a.key) - hashStr(z.key));
     const n = grp.length;
+    if (!n) return;
+    // Ёмкость кольца конечна (окружность / диаметр звезды с зазором). Переполненное
+    // кольцо расщепляется на подкольца (до трёх), звёзды идут зигзагом-ожерельем:
+    // плотность растёт в разы, а три глубины мандалы по-прежнему читаются.
+    const maxD = 2 * Math.max(...grp.map((it) => it.r)) + 6;
+    const rows = Math.min(3, Math.max(1, Math.ceil((n * maxD) / (2 * Math.PI * R_BAND[b]))));
+    const rowGap = b === 0 ? 10 : 12; // внутреннее кольцо не лезет в ореол Самости
     grp.forEach((it, i) => {
       const spread = n > 1 ? (360 / n) * i : 0;
-      const deg = -90 + b * 29 + spread + (hashStr(it.key) % 11) - 5;
-      const pull = Math.min(6, (it.r - 3.2) / 0.85) * 1.4; // до -8.4 внутрь
-      const [x, y] = polar(CX, CY, R_BAND[b] - pull, deg);
+      // в ожерелье без углового дрожания — зигзаг сам разбивает «радиусы»
+      const jitter = rows > 1 ? 0 : (hashStr(it.key) % 11) - 5;
+      const deg = -90 + b * 29 + spread + jitter;
+      const rowOff = rows > 1 ? ((i % rows) - (rows - 1) / 2) * rowGap : 0;
+      const pull =
+        rows > 1 ? 0 : Math.min(6, Math.max(0, it.r - 3.2) / 0.85) * 1.4; // до -8.4 внутрь
+      const [x, y] = polar(CX, CY, R_BAND[b] + rowOff - pull, deg);
       stars.push({ ...it, tone: BAND_TONE[b], x, y });
     });
   });
 
-  // нити: соединяем звёзды, делящие один мотив (theme)
+  // Страховка от каши: детерминированный пасс растаскивает пересёкшиеся звёзды
+  // (вход и порядок стабильны → раскладка та же между визитами). Самость неподвижна.
+  for (let pass = 0; pass < 24; pass++) {
+    let moved = false;
+    for (let i = 0; i < stars.length; i++) {
+      for (let j = i + 1; j < stars.length; j++) {
+        const a = stars[i];
+        const z = stars[j];
+        const min = a.r + z.r + 4;
+        let dx = z.x - a.x;
+        let dy = z.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 0.01) {
+          dx = 1; dy = 0; d = 1; // совпали точь-в-точь — толкаем в фиксированную сторону
+        }
+        const push = (min - d) / 2 + 0.3;
+        const ux = dx / d;
+        const uy = dy / d;
+        if (!a.self) {
+          a.x -= ux * push;
+          a.y -= uy * push;
+        }
+        z.x += ux * push * (a.self ? 2 : 1);
+        z.y += uy * push * (a.self ? 2 : 1);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  stars.forEach((st) => {
+    if (st.self) return;
+    st.x = Math.max(10, Math.min(290, st.x));
+    st.y = Math.max(10, Math.min(290, st.y));
+  });
+
+  // нити: звёзды одного мотива соединяем дугой-созвездием (путь по углу вокруг центра),
+  // не полным графом: N звёзд дают N-1 линий вместо N·(N-1)/2 — при росте нет паутины,
+  // и рисунок ближе к настоящим созвездиям.
   const byTheme = {};
   stars.forEach((st) => {
     if (st.theme) (byTheme[st.theme] = byTheme[st.theme] || []).push(st);
   });
   const links = [];
   Object.keys(byTheme).forEach((th) => {
-    const g = byTheme[th];
-    for (let i = 0; i < g.length; i++)
-      for (let j = i + 1; j < g.length; j++) links.push([g[i], g[j]]);
+    const g = byTheme[th]
+      .slice()
+      .sort((a, z) => Math.atan2(a.y - CY, a.x - CX) - Math.atan2(z.y - CY, z.x - CX));
+    for (let i = 0; i + 1 < g.length; i++) links.push([g[i], g[i + 1]]);
   });
 
   const svg = [];
@@ -789,7 +847,6 @@ function psycheMap(sections, archetypes) {
         svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#e8c074" />`);
         svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
       }
-      svg.push(`<circle class="star-hit" data-i="${i}" cx="${x}" cy="${y}" r="${(st.r + 10).toFixed(1)}" fill="transparent" />`);
       return;
     }
     if (st.tone === "clear") {
@@ -809,8 +866,6 @@ function psycheMap(sections, archetypes) {
       svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}"${twAttr} fill="rgba(232,192,116,0.34)"${st.arch ? ' stroke="#e8c074" stroke-width="0.7"' : ""} />`);
       if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
     }
-    // прозрачный хит-таргет для тапа (data-i → звезда в замыкании)
-    svg.push(`<circle class="star-hit" data-i="${i}" cx="${x}" cy="${y}" r="${Math.max(st.r + 7, 13).toFixed(1)}" fill="transparent" />`);
   });
   // подвижное кольцо-фокус вокруг выбранной звезды (появляется по тапу)
   svg.push('<circle id="starFocus" class="star-focus" cx="0" cy="0" r="0" fill="none" stroke="#e8c074" stroke-width="1.4" opacity="0" />');
@@ -869,10 +924,27 @@ function psycheMap(sections, archetypes) {
   const focus = wrap.querySelector("#starFocus");
   const glows = wrap.querySelectorAll(".thread-line, .thread-glow");
   let active = -1;
-  wrap.querySelectorAll(".star-hit").forEach((hit) => {
-    hit.style.cursor = "pointer";
-    hit.addEventListener("click", () => {
-      const i = +hit.getAttribute("data-i");
+  // Тап = ближайшая звезда к точке касания (а не свой хит-круг у каждой): при плотном
+  // небе хит-круги накладывались бы и перехватывали чужие тапы, ближайшая — работает
+  // при любой плотности. Промах дальше 18px от края звезды — просто тап по небу.
+  const svgEl = wrap.querySelector("svg");
+  if (svgEl) {
+    svgEl.style.cursor = "pointer";
+    svgEl.addEventListener("click", (e) => {
+      const rect = svgEl.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const px = ((e.clientX - rect.left) / rect.width) * 300;
+      const py = ((e.clientY - rect.top) / rect.height) * 300;
+      let i = -1;
+      let bestD = Infinity;
+      stars.forEach((st2, k) => {
+        const d = Math.hypot(st2.x - px, st2.y - py) - st2.r;
+        if (d < bestD) {
+          bestD = d;
+          i = k;
+        }
+      });
+      if (i < 0 || bestD > 18) return;
       const st = stars[i];
       // повторный тап по той же звезде — снять выделение (карта остаётся спокойной)
       if (i === active) {
@@ -899,7 +971,7 @@ function psycheMap(sections, archetypes) {
       readout.appendChild(el("span", "sky-readout-name", st.label));
       if (st.summary) readout.appendChild(el("span", "sky-readout-text", st.summary));
     });
-  });
+  }
   return sec;
 }
 
