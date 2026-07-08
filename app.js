@@ -362,10 +362,9 @@ function dynamicsBlock(d) {
       el("p", "dynamics-text", "Это первый снимок твоего образа. В следующий раз покажу, что в нём изменилось."),
     );
   } else if (!d.has_changes) {
-    // Не «ничего не произошло» (антиценность), а «новое рождается в разговоре» + живой CTA.
-    sec.appendChild(
-      el("p", "dynamics-text", "Образ ждёт продолжения — новое здесь рождается из разговоров. Расскажи в чате, что живо сегодня, и появится свежий штрих."),
-    );
+    // Без изменений — блока нет (08.07): вечный текст-заполнитель хуже, чем ничего.
+    // Блок появляется, только когда ему есть что сказать (дельта/новые грани).
+    return null;
   } else {
     const row = el("div", "dynamics-row");
     if (d.delta_percent) {
@@ -529,12 +528,13 @@ function upgradeSection(billing) {
   );
   const perks = el("ul", "upgrade-perks");
   // Канон ценности — зеркало subscription_comparison() в app/handlers/payments.py.
-  // Держи в синхроне с ботом и лендингом (активное воображение скрыто до раскатки).
+  // Держи в синхроне с ботом и лендингом.
   [
     "Память между сессиями — продолжаем, где остановились",
     "Свободные разговоры с проводником — каждый день",
     "Растущий портрет тебя и вехи внутреннего роста",
     "Дневник снов 🌙 — бережная работа с образами снов",
+    "Глубинная сессия 🌀 — встреча с внутренней фигурой",
     "Работа с привычками 🌿 — чему служит привычка и чем её заместить",
     "Голосовые ответы 🔊 без лимита — на бесплатном лишь проба",
     "Я сам бережно пишу первым между сессиями",
@@ -660,12 +660,19 @@ function hashStr(s) {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
+// Ярлыки граней и имена архетипов приходят из extraction (LLM) — в SVG-разметку только
+// через экранирование, чтобы случайные <, & или кавычки не ломали (и не инжектили) DOM.
+function escXml(s) {
+  return String(s == null ? "" : s).replace(/[<>&"]/g, (c) =>
+    c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : "&quot;");
+}
 
-// Карта психики как мандала: Самость в центре, вокруг — грани, комплексы, архетипы кольцами
-// по глубине узнанного (ближе к центру = увереннее и принятее). Размер звезды = число опор.
-// Золотые нити связывают то, что растёт из одного мотива (theme). Тап раскрывает грань.
-// Рост виден как звёзды, стягивающиеся к центру, а не как заполнение шкалы. Рисуем, когда
-// есть хоть одна грань.
+// Карта психики как живой граф (референс — graph view Obsidian, 08.07): Самость в центре,
+// грани/комплексы/архетипы — звёзды на пружинах. Физика: звёзды отталкиваются, нити мотива
+// стягивают своих, радиальная гравитация держит кольца глубины (семантика мандалы жива:
+// ближе к центру = узнано и принято). Звёзды можно таскать, карту — панорамировать и
+// зумить (щипок/колесо, двойной тап — сброс). Тап по звезде подсвечивает её созвездие
+// и гасит остальное; подписи проявляются при зуме. Рисуем, когда есть хоть одна грань.
 function psycheMap(sections, archetypes) {
   if (!sections.length && !(archetypes && archetypes.length)) return null;
   const byKey = {};
@@ -781,116 +788,121 @@ function psycheMap(sections, archetypes) {
     st.y = Math.max(10, Math.min(290, st.y));
   });
 
-  // нити: звёзды одного мотива соединяем дугой-созвездием (путь по углу вокруг центра),
-  // не полным графом: N звёзд дают N-1 линий вместо N·(N-1)/2 — при росте нет паутины,
-  // и рисунок ближе к настоящим созвездиям.
+  // Нити мотива: цепочка по углу (N-1 линий, не полный граф) — они же пружины физики.
+  // Индексная адресация: физика и DOM-линии живут на одних индексах массива stars.
   const byTheme = {};
-  stars.forEach((st) => {
-    if (st.theme) (byTheme[st.theme] = byTheme[st.theme] || []).push(st);
+  stars.forEach((st, i) => {
+    if (st.theme) (byTheme[st.theme] = byTheme[st.theme] || []).push(i);
   });
-  const links = [];
+  const themeLinks = []; // {a, b, th} — индексы звёзд
   Object.keys(byTheme).forEach((th) => {
     const g = byTheme[th]
       .slice()
-      .sort((a, z) => Math.atan2(a.y - CY, a.x - CX) - Math.atan2(z.y - CY, z.x - CX));
-    for (let i = 0; i + 1 < g.length; i++) links.push([g[i], g[i + 1]]);
+      .sort((a, z) =>
+        Math.atan2(stars[a].y - CY, stars[a].x - CX) - Math.atan2(stars[z].y - CY, stars[z].x - CX));
+    for (let i = 0; i + 1 < g.length; i++) themeLinks.push({ a: g[i], b: g[i + 1], th });
+  });
+  // Оси мандалы: Самость ↔ великие фигуры, едва заметные — каркас, как хаб в графе Obsidian.
+  const axisLinks = [];
+  stars.forEach((st, i) => {
+    if (st.anchor && !st.self) axisLinks.push({ a: 0, b: i });
   });
 
+  // --- разметка: звезда = <g translate> (физика двигает одну трансформацию на звезду) ---
+  const relGlint = (len) =>
+    `<line x1="${(-len).toFixed(1)}" y1="0" x2="${len.toFixed(1)}" y2="0" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>` +
+    `<line x1="0" y1="${(-len).toFixed(1)}" x2="0" y2="${len.toFixed(1)}" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>`;
+
+  const starMarkup = (st, i) => {
+    const parts = [];
+    const r = st.r;
+    const tw = ` class="twinkle" style="animation-delay:${(i % 6) * 0.6}s"`;
+    if (st.self) {
+      // Самость — центр: гало + кольцо + ядро. Прикована к центру — якорь всего графа.
+      const on = st.tone === "clear";
+      parts.push(`<circle r="${(r + 12).toFixed(1)}" fill="#e8c074" opacity="0.14"/>`);
+      parts.push(relGlint(r + 9));
+      parts.push(`<circle r="${(r + 4).toFixed(1)}" fill="none" stroke="#e8c074" stroke-width="0.9" opacity="${on ? 0.6 : 0.4}"/>`);
+      if (st.tone === "ghost") {
+        parts.push(`<circle r="${r.toFixed(1)}" fill="#131a2b" stroke="#e8c074" stroke-width="1" stroke-dasharray="2 3" opacity="0.85"/>`);
+        parts.push(`<text class="star-glyph star-glyph--off">${st.glyph}</text>`);
+      } else {
+        parts.push(`<circle r="${r.toFixed(1)}" fill="#e8c074"/>`);
+        parts.push(`<text class="star-glyph star-glyph--on">${st.glyph}</text>`);
+      }
+    } else if (st.tone === "clear") {
+      parts.push(`<circle r="${(r + 7).toFixed(1)}" fill="#e8c074" opacity="0.16"/>`);
+      parts.push(relGlint(r + 5));
+      parts.push(`<circle r="${r.toFixed(1)}" fill="#e8c074"/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--on">${st.glyph}</text>`);
+    } else if (st.tone === "ghost") {
+      parts.push(`<circle r="${r.toFixed(1)}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="2 3"/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--off">${st.glyph}</text>`);
+    } else if (st.tone === "working") {
+      parts.push(`<circle r="${(r + 3).toFixed(1)}" fill="#e8c074" opacity="0.10"/>`);
+      parts.push(`<circle r="${r.toFixed(1)}" fill="rgba(232,192,116,0.5)" stroke="#e8c074" stroke-width="1"/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--mid">${st.glyph}</text>`);
+    } else {
+      parts.push(`<circle r="${r.toFixed(1)}"${tw} fill="rgba(232,192,116,0.34)"${st.arch ? ' stroke="#e8c074" stroke-width="0.7"' : ""}/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--off">${st.glyph}</text>`);
+    }
+    // Подпись под звездой: якоря видны всегда, остальные проявляются при зуме или подсветке
+    // (как в Obsidian). Тёмный ореол (paint-order в CSS) — читаемость поверх линий.
+    const toneCls = st.tone === "ghost" ? "ghost" : st.tone === "clear" ? "clear" : "emerging";
+    const labelCls = st.anchor
+      ? `star-label star-label--anchor star-label--${toneCls}`
+      : "star-label";
+    parts.push(
+      `<text y="${(r + (st.self ? 16 : 10)).toFixed(1)}" class="${labelCls}">${escXml(st.mapLabel || st.label)}</text>`,
+    );
+    return `<g class="star" data-i="${i}" transform="translate(${st.x.toFixed(1)},${st.y.toFixed(1)})">${parts.join("")}</g>`;
+  };
+
+  const linkMarkup = (lk) => {
+    const a = stars[lk.a];
+    const b = stars[lk.b];
+    const c = `x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"`;
+    const d = `data-a="${lk.a}" data-b="${lk.b}" data-th="${escXml(lk.th || "")}"`;
+    if (!lk.th) {
+      return `<line ${c} ${d} class="axis-line" stroke="#e8c074" stroke-width="0.7" opacity="0.10"/>`;
+    }
+    return (
+      `<line ${c} ${d} class="thread-glow" stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round"/>` +
+      `<line ${c} ${d} class="thread-line" stroke="#e8c074" stroke-width="1.1" opacity="0.65" stroke-linecap="round"/>`
+    );
+  };
+
   const svg = [];
-  // мягкое свечение центра (радиальный ореол Самости)
   svg.push(
     '<defs><radialGradient id="selfGlow" cx="50%" cy="50%" r="50%">' +
       '<stop offset="0%" stop-color="#e8c074" stop-opacity="0.22"/>' +
       '<stop offset="100%" stop-color="#e8c074" stop-opacity="0"/></radialGradient></defs>',
   );
-  svg.push(`<circle cx="${CX}" cy="${CY}" r="${R_BAND[2] + 6}" fill="url(#selfGlow)" />`);
-  // тонкие направляющие кольца мандалы — структура глубины
+  // фоновые звёзды — неподвижное дальнее небо ВНЕ камеры (лёгкий параллакс при панораме)
+  svg.push('<g class="sky-ambient">');
+  AMBIENT_STARS.forEach(([x, y, o], i) => {
+    const tw = i % 3 === 0 ? ` class="twinkle" style="animation-delay:${(i % 5) * 0.7}s"` : "";
+    svg.push(`<circle cx="${x}" cy="${y}" r="1"${tw} fill="#e8c074" opacity="${(o * 0.22).toFixed(2)}"/>`);
+  });
+  svg.push("</g>");
+  // камера: панорама/зум двигают этот слой целиком
+  svg.push('<g class="sky-cam">');
+  svg.push(`<circle cx="${CX}" cy="${CY}" r="${R_BAND[2] + 6}" fill="url(#selfGlow)"/>`);
   R_BAND.forEach((r) =>
     svg.push(
       `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="#e8c074" ` +
-        `stroke-width="0.6" stroke-dasharray="1 6" opacity="0.16" />`,
+        `stroke-width="0.6" stroke-dasharray="1 6" opacity="0.16"/>`,
     ),
   );
-  // фоновые звёзды (часть мерцает)
-  AMBIENT_STARS.forEach(([x, y, o], i) => {
-    const tw = i % 3 === 0 ? ` class="twinkle" style="animation-delay:${(i % 5) * 0.7}s"` : "";
-    svg.push(`<circle cx="${x}" cy="${y}" r="1"${tw} fill="#e8c074" opacity="${(o * 0.22).toFixed(2)}" />`);
-  });
-  // золотые нити мотива — свечение + яркая линия (data-th → подсветка при тапе по звезде)
-  links.forEach(([a, b]) => {
-    const c = `x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"`;
-    const th = a.theme || "";
-    svg.push(`<line ${c} class="thread-glow" data-th="${th}" stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round" />`);
-    svg.push(`<line ${c} class="thread-line" data-th="${th}" stroke="#e8c074" stroke-width="1.1" opacity="0.65" stroke-linecap="round" />`);
-  });
-  // блик-«лучи» яркой звезды (диффракционный крест) — только для узнанных
-  const glint = (x, y, len) =>
-    `<line x1="${(x - len).toFixed(1)}" y1="${y}" x2="${(x + len).toFixed(1)}" y2="${y}" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>` +
-    `<line x1="${x}" y1="${(y - len).toFixed(1)}" x2="${x}" y2="${(y + len).toFixed(1)}" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>`;
-  // звёзды
-  stars.forEach((st, i) => {
-    const x = st.x.toFixed(1);
-    const y = st.y.toFixed(1);
-    const twAttr =
-      st.tone === "emerging" ? ` class="twinkle" style="animation-delay:${(i % 6) * 0.6}s"` : "";
-    if (st.self) {
-      // Самость — центр мандалы: гало + кольцо + ядро, чтобы читалась как якорь, вокруг
-      // которого собрано всё. Даже пока «проявляется» — это центр, а не рядовая звезда.
-      const on = st.tone === "clear";
-      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 12).toFixed(1)}" fill="#e8c074" opacity="0.14" />`);
-      svg.push(glint(st.x, st.y, st.r + 9));
-      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 4).toFixed(1)}" fill="none" stroke="#e8c074" stroke-width="0.9" opacity="${on ? 0.6 : 0.4}" />`);
-      if (st.tone === "ghost") {
-        svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#131a2b" stroke="#e8c074" stroke-width="1" stroke-dasharray="2 3" opacity="0.85" />`);
-        svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
-      } else {
-        svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#e8c074" />`);
-        svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
-      }
-      return;
-    }
-    if (st.tone === "clear") {
-      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 7).toFixed(1)}" fill="#e8c074" opacity="0.16" />`);
-      svg.push(glint(st.x, st.y, st.r + 5));
-      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="#e8c074" />`);
-      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--on">${st.glyph}</text>`);
-    } else if (st.tone === "ghost") {
-      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="2 3" />`);
-      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
-    } else if (st.tone === "working") {
-      svg.push(`<circle cx="${x}" cy="${y}" r="${(st.r + 3).toFixed(1)}" fill="#e8c074" opacity="0.10" />`);
-      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}" fill="rgba(232,192,116,0.5)" stroke="#e8c074" stroke-width="1" />`);
-      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--mid">${st.glyph}</text>`);
-    } else {
-      // emerging — тусклая мерцающая точка
-      svg.push(`<circle cx="${x}" cy="${y}" r="${st.r.toFixed(1)}"${twAttr} fill="rgba(232,192,116,0.34)"${st.arch ? ' stroke="#e8c074" stroke-width="0.7"' : ""} />`);
-      if (st.glyph) svg.push(`<text x="${x}" y="${y}" class="star-glyph star-glyph--off">${st.glyph}</text>`);
-    }
-  });
-  // подвижное кольцо-фокус вокруг выбранной звезды (появляется по тапу)
-  svg.push('<circle id="starFocus" class="star-focus" cx="0" cy="0" r="0" fill="none" stroke="#e8c074" stroke-width="1.4" opacity="0" />');
-  // подписи только у Самости и великих фигур — чтобы поле звёзд не захламлять. Радиально
-  // наружу от центра, с тёмным ореолом (paint-order) для читаемости поверх линий.
-  stars.forEach((st) => {
-    if (!st.anchor) return;
-    const cls = st.tone === "ghost" ? "ghost" : st.tone === "clear" ? "clear" : "emerging";
-    let lx, ly, anchor;
-    if (st.self) {
-      lx = CX; ly = CY + st.r + 16; anchor = "middle";
-    } else {
-      const dx = st.x - CX;
-      const dy = st.y - CY;
-      const d = Math.max(1, Math.hypot(dx, dy));
-      const out = d + 15;
-      lx = CX + (dx / d) * out;
-      ly = CY + (dy / d) * out + 4; // +4 — оптический центр текста по вертикали
-      anchor = dx > 12 ? "start" : dx < -12 ? "end" : "middle";
-    }
-    svg.push(
-      `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" ` +
-        `class="star-name star-name--${cls}">${st.mapLabel || st.label}</text>`,
-    );
-  });
+  svg.push('<g class="sky-links">');
+  axisLinks.forEach((lk) => svg.push(linkMarkup(lk)));
+  themeLinks.forEach((lk) => svg.push(linkMarkup(lk)));
+  svg.push("</g>");
+  svg.push('<g class="sky-stars">');
+  stars.forEach((st, i) => svg.push(starMarkup(st, i)));
+  svg.push("</g>");
+  svg.push('<circle id="starFocus" class="star-focus" cx="0" cy="0" r="0" fill="none" stroke="#e8c074" stroke-width="1.4" opacity="0"/>');
+  svg.push("</g>"); // /sky-cam
 
   const sec = el("section", "sky");
   sec.appendChild(el("div", "sky-label", "Карта твоей психики"));
@@ -898,9 +910,9 @@ function psycheMap(sections, archetypes) {
     el(
       "p",
       "sky-sub",
-      "Мандала твоей психики. В центре — Самость, вокруг кольцами — грани, комплексы и архетипы. " +
-        "Ближе к центру то, что уже узнано и принято; на краю — что едва проявляется. Золотые нити " +
-        "связывают растущее из одного корня. Чем больше говорим, тем ярче звёзды и ближе к центру.",
+      "Живая карта: в центре — Самость, вокруг — грани, комплексы и архетипы; золотые нити " +
+        "связывают растущее из одного корня. Потяни звезду — небо отзовётся. Тапни — раскрою " +
+        "грань и подсвечу её созвездие. Щипок — ближе, двойной тап — вернуть как было.",
     ),
   );
   const wrap = el("div", "sky-canvas");
@@ -908,9 +920,9 @@ function psycheMap(sections, archetypes) {
     `<svg viewBox="0 0 300 300" class="sky-svg" role="img" aria-label="Карта психики">${svg.join("")}</svg>`;
   sec.appendChild(wrap);
 
-  // строка-раскрытие: тап по звезде показывает её грань (навигация + смысл, не просто точки)
   const readout = el("div", "sky-readout");
-  readout.appendChild(el("span", "sky-readout-hint", "Нажми на звезду — покажу грань и подсвечу её нить"));
+  const HINT = "Нажми на звезду — покажу грань и подсвечу её созвездие";
+  readout.appendChild(el("span", "sky-readout-hint", HINT));
   sec.appendChild(readout);
 
   const nFacets = sections.length + (archetypes ? archetypes.length : 0);
@@ -921,57 +933,332 @@ function psycheMap(sections, archetypes) {
     (nLinks ? " · " + nLinks + " " + pluralRu(nLinks, "нить", "нити", "нитей") : "");
   sec.appendChild(meta);
 
-  const focus = wrap.querySelector("#starFocus");
-  const glows = wrap.querySelectorAll(".thread-line, .thread-glow");
-  let active = -1;
-  // Тап = ближайшая звезда к точке касания (а не свой хит-круг у каждой): при плотном
-  // небе хит-круги накладывались бы и перехватывали чужие тапы, ближайшая — работает
-  // при любой плотности. Промах дальше 18px от края звезды — просто тап по небу.
   const svgEl = wrap.querySelector("svg");
-  if (svgEl) {
-    svgEl.style.cursor = "pointer";
-    svgEl.addEventListener("click", (e) => {
-      const rect = svgEl.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const px = ((e.clientX - rect.left) / rect.width) * 300;
-      const py = ((e.clientY - rect.top) / rect.height) * 300;
-      let i = -1;
-      let bestD = Infinity;
-      stars.forEach((st2, k) => {
-        const d = Math.hypot(st2.x - px, st2.y - py) - st2.r;
-        if (d < bestD) {
-          bestD = d;
-          i = k;
-        }
-      });
-      if (i < 0 || bestD > 18) return;
+  if (!svgEl) return sec;
+  const camG = svgEl.querySelector(".sky-cam");
+  const starGs = Array.prototype.slice.call(svgEl.querySelectorAll(".sky-stars .star"));
+  const linkEls = Array.prototype.slice.call(svgEl.querySelectorAll(".sky-links line"));
+  const themeLineEls = linkEls.filter((l) => l.getAttribute("data-th"));
+  const focus = svgEl.querySelector("#starFocus");
+
+  // Телеграм сворачивает мини-апп свайпом вниз — на живой карте это ложные закрытия.
+  if (tg && typeof tg.disableVerticalSwipes === "function") {
+    try { tg.disableVerticalSwipes(); } catch (e) { /* старый клиент — не критично */ }
+  }
+
+  // --- физика (пружинный граф в духе Obsidian, без библиотек) ---
+  // Отталкивание всех от всех + пружины нитей + радиальная гравитация к кольцу своей
+  // глубины (семантика мандалы: ближе к центру = узнано). Самость прикована. Симуляция
+  // остывает (alpha → 0) и останавливает rAF — батарею не жжём; взаимодействия греют заново.
+  stars.forEach((st) => {
+    st.vx = 0;
+    st.vy = 0;
+  });
+  const N = stars.length;
+  let alpha = 0;
+  let raf = 0;
+  let dragIdx = -1;
+
+  const physTick = () => {
+    const fx = new Array(N).fill(0);
+    const fy = new Array(N).fill(0);
+    // отталкивание (обрезка по дистанции — локальная структура, O(N²) при наших N дёшев)
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        let dx = stars[j].x - stars[i].x;
+        let dy = stars[j].y - stars[i].y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 > 8100) continue; // дальше 90 — не влияем
+        if (d2 < 0.01) { dx = (i + 1) * 0.03; dy = 0.05; d2 = 0.01; }
+        const d = Math.sqrt(d2);
+        const rep = 260 / d2;
+        fx[i] -= (dx / d) * rep; fy[i] -= (dy / d) * rep;
+        fx[j] += (dx / d) * rep; fy[j] += (dy / d) * rep;
+      }
+    }
+    // пружины нитей мотива: свои стягиваются в созвездие
+    themeLinks.forEach((lk) => {
+      const a = stars[lk.a];
+      const b = stars[lk.b];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const f = (d - 34) * 0.05;
+      fx[lk.a] += (dx / d) * f; fy[lk.a] += (dy / d) * f;
+      fx[lk.b] -= (dx / d) * f; fy[lk.b] -= (dy / d) * f;
+    });
+    // радиальная гравитация к кольцу глубины
+    for (let i = 1; i < N; i++) {
       const st = stars[i];
-      // повторный тап по той же звезде — снять выделение (карта остаётся спокойной)
-      if (i === active) {
+      const dx = st.x - CX;
+      const dy = st.y - CY;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const f = (R_BAND[st.band] - d) * 0.06;
+      fx[i] += (dx / d) * f; fy[i] += (dy / d) * f;
+    }
+    // интеграция (Самость прикована; перетаскиваемая звезда следует за пальцем)
+    for (let i = 1; i < N; i++) {
+      if (i === dragIdx) continue;
+      const st = stars[i];
+      st.vx = (st.vx + fx[i] * alpha) * 0.82;
+      st.vy = (st.vy + fy[i] * alpha) * 0.82;
+      const sp = Math.hypot(st.vx, st.vy);
+      if (sp > 4) { st.vx = (st.vx / sp) * 4; st.vy = (st.vy / sp) * 4; }
+      st.x += st.vx;
+      st.y += st.vy;
+    }
+    // жёсткое разведение оставшихся перекрытий (один быстрый проход)
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const a = stars[i];
+        const b = stars[j];
+        const min = a.r + b.r + 4;
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 0.01) { dx = 1; dy = 0; d = 1; }
+        const push = (min - d) / 2;
+        const ux = dx / d;
+        const uy = dy / d;
+        if (i !== 0 && i !== dragIdx) { a.x -= ux * push; a.y -= uy * push; }
+        if (j !== 0 && j !== dragIdx) { b.x += ux * push; b.y += uy * push; }
+      }
+    }
+  };
+
+  const renderFrame = () => {
+    for (let i = 0; i < N; i++) {
+      starGs[i].setAttribute(
+        "transform", `translate(${stars[i].x.toFixed(2)},${stars[i].y.toFixed(2)})`,
+      );
+    }
+    linkEls.forEach((l) => {
+      const a = stars[+l.getAttribute("data-a")];
+      const b = stars[+l.getAttribute("data-b")];
+      l.setAttribute("x1", a.x.toFixed(1));
+      l.setAttribute("y1", a.y.toFixed(1));
+      l.setAttribute("x2", b.x.toFixed(1));
+      l.setAttribute("y2", b.y.toFixed(1));
+    });
+    if (active >= 0 && focus) {
+      focus.setAttribute("cx", stars[active].x.toFixed(1));
+      focus.setAttribute("cy", stars[active].y.toFixed(1));
+    }
+  };
+
+  const loop = () => {
+    if (!svgEl.isConnected) { raf = 0; return; } // страницу перерисовали — старое небо умерло
+    physTick();
+    renderFrame();
+    alpha *= 0.986;
+    if (alpha > 0.02 || dragIdx >= 0) {
+      raf = requestAnimationFrame(loop);
+    } else {
+      raf = 0;
+    }
+  };
+  const heat = (a) => {
+    alpha = Math.max(alpha, a);
+    if (!raf) raf = requestAnimationFrame(loop);
+  };
+
+  // --- камера: панорама пальцем, зум щипком/колесом, двойной тап — сброс ---
+  const cam = { k: 1, tx: 0, ty: 0 };
+  const applyCam = () => {
+    cam.k = Math.max(0.7, Math.min(3.2, cam.k));
+    // центр мира не должен уехать с экрана — карту нельзя «потерять»
+    cam.tx = Math.max(40 - CX * cam.k, Math.min(260 - CX * cam.k, cam.tx));
+    cam.ty = Math.max(40 - CY * cam.k, Math.min(260 - CY * cam.k, cam.ty));
+    camG.setAttribute(
+      "transform", `translate(${cam.tx.toFixed(2)} ${cam.ty.toFixed(2)}) scale(${cam.k.toFixed(3)})`,
+    );
+    svgEl.classList.toggle("zoomed", cam.k >= 1.5); // подписи всех звёзд проявляются
+  };
+  const toView = (e) => {
+    const rect = svgEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return [0, 0];
+    return [
+      ((e.clientX - rect.left) / rect.width) * 300,
+      ((e.clientY - rect.top) / rect.height) * 300,
+    ];
+  };
+  const toWorld = (vx, vy) => [(vx - cam.tx) / cam.k, (vy - cam.ty) / cam.k];
+  const zoomAt = (vx, vy, factor) => {
+    const [wx, wy] = toWorld(vx, vy);
+    cam.k *= factor;
+    cam.k = Math.max(0.7, Math.min(3.2, cam.k));
+    cam.tx = vx - wx * cam.k;
+    cam.ty = vy - wy * cam.k;
+    applyCam();
+  };
+  const resetCam = () => {
+    cam.k = 1; cam.tx = 0; cam.ty = 0;
+    applyCam();
+  };
+
+  // --- подсветка выбора: звезда + её созвездие горят, остальное гаснет (как в Obsidian) ---
+  let active = -1;
+  const applyFocus = () => {
+    const focused = active >= 0;
+    svgEl.classList.toggle("focused", focused);
+    const th = focused ? stars[active].theme : null;
+    const lit = {};
+    if (focused) {
+      lit[active] = true;
+      if (th && byTheme[th]) byTheme[th].forEach((k) => { lit[k] = true; });
+    }
+    starGs.forEach((g, k) => g.classList.toggle("lit", !!lit[k]));
+    themeLineEls.forEach((l) =>
+      l.classList.toggle("on", !!th && l.getAttribute("data-th") === th));
+    if (focus) {
+      if (focused) {
+        focus.setAttribute("cx", stars[active].x.toFixed(1));
+        focus.setAttribute("cy", stars[active].y.toFixed(1));
+        focus.setAttribute("r", (stars[active].r + 6).toFixed(1));
+        focus.setAttribute("opacity", "0.9");
+      } else {
+        focus.setAttribute("opacity", "0");
+      }
+    }
+    readout.innerHTML = "";
+    if (focused) {
+      readout.appendChild(el("span", "sky-readout-name", stars[active].label));
+      if (stars[active].summary)
+        readout.appendChild(el("span", "sky-readout-text", stars[active].summary));
+    } else {
+      readout.appendChild(el("span", "sky-readout-hint", HINT));
+    }
+  };
+
+  // Тап = ближайшая звезда к касанию (хит-круги при плотном небе перекрывались бы).
+  const starAt = (wx, wy, slack) => {
+    let best = -1;
+    let bestD = Infinity;
+    stars.forEach((st, k) => {
+      const d = Math.hypot(st.x - wx, st.y - wy) - st.r;
+      if (d < bestD) { bestD = d; best = k; }
+    });
+    return best >= 0 && bestD <= slack ? best : -1;
+  };
+
+  // --- жесты: pointer events покрывают палец и мышь одним кодом ---
+  const pointers = new Map(); // pointerId → {vx, vy}
+  let gesture = null; // {type:"drag"|"pan"|"pinch", ...}
+  let tapStart = null; // {vx, vy, t, moved}
+  let lastTap = { t: 0, vx: 0, vy: 0 };
+
+  svgEl.style.cursor = "grab";
+  svgEl.style.touchAction = "none"; // жесты карты не скроллят страницу
+
+  svgEl.addEventListener("pointerdown", (e) => {
+    // capture не критичен (жест доводим и без него), а на нестандартных pointerId кидает
+    try { svgEl.setPointerCapture && svgEl.setPointerCapture(e.pointerId); } catch (err) { /* ок */ }
+    const [vx, vy] = toView(e);
+    pointers.set(e.pointerId, { vx, vy });
+    if (pointers.size === 2) {
+      // второй палец: что бы ни шло — теперь это щипок
+      const pts = Array.from(pointers.values());
+      gesture = {
+        type: "pinch",
+        d0: Math.max(1, Math.hypot(pts[0].vx - pts[1].vx, pts[0].vy - pts[1].vy)),
+        k0: cam.k,
+      };
+      tapStart = null;
+      if (dragIdx >= 0) { dragIdx = -1; }
+      return;
+    }
+    tapStart = { vx, vy, t: Date.now(), moved: false };
+    const [wx, wy] = toWorld(vx, vy);
+    const hit = starAt(wx, wy, 14 / cam.k);
+    if (hit > 0) {
+      // Самость (0) не таскаем — она ось карты; тап по ней работает как выбор
+      gesture = { type: "drag" };
+      dragIdx = hit;
+      svgEl.style.cursor = "grabbing";
+      heat(0.5);
+    } else {
+      gesture = { type: "pan", vx, vy, tx0: cam.tx, ty0: cam.ty };
+      svgEl.style.cursor = "grabbing";
+    }
+  });
+
+  svgEl.addEventListener("pointermove", (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const [vx, vy] = toView(e);
+    pointers.set(e.pointerId, { vx, vy });
+    if (tapStart && Math.hypot(vx - tapStart.vx, vy - tapStart.vy) > 5) tapStart.moved = true;
+    if (gesture && gesture.type === "pinch" && pointers.size >= 2) {
+      const pts = Array.from(pointers.values());
+      const d = Math.max(1, Math.hypot(pts[0].vx - pts[1].vx, pts[0].vy - pts[1].vy));
+      const cx = (pts[0].vx + pts[1].vx) / 2;
+      const cy = (pts[0].vy + pts[1].vy) / 2;
+      const target = gesture.k0 * (d / gesture.d0);
+      const factor = target / cam.k;
+      zoomAt(cx, cy, factor);
+      return;
+    }
+    if (gesture && gesture.type === "drag" && dragIdx >= 0) {
+      const [wx, wy] = toWorld(vx, vy);
+      stars[dragIdx].x = wx;
+      stars[dragIdx].y = wy;
+      stars[dragIdx].vx = 0;
+      stars[dragIdx].vy = 0;
+      heat(0.45);
+      return;
+    }
+    if (gesture && gesture.type === "pan") {
+      cam.tx = gesture.tx0 + (vx - gesture.vx);
+      cam.ty = gesture.ty0 + (vy - gesture.vy);
+      applyCam();
+    }
+  });
+
+  const endPointer = (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (gesture && gesture.type === "pinch") {
+      if (pointers.size < 2) gesture = null;
+      return;
+    }
+    gesture = null;
+    if (dragIdx >= 0) { dragIdx = -1; heat(0.3); }
+    svgEl.style.cursor = "grab";
+    // тап: короткий, почти без движения — выбор звезды или двойной тап (сброс камеры)
+    if (tapStart && !tapStart.moved && Date.now() - tapStart.t < 400) {
+      const { vx, vy } = tapStart;
+      const now = Date.now();
+      if (now - lastTap.t < 320 && Math.hypot(vx - lastTap.vx, vy - lastTap.vy) < 24) {
+        lastTap = { t: 0, vx: 0, vy: 0 };
+        resetCam();
         active = -1;
-        if (focus) focus.setAttribute("opacity", "0");
-        glows.forEach((l) => l.classList.remove("on"));
-        readout.innerHTML = "";
-        readout.appendChild(el("span", "sky-readout-hint", "Нажми на звезду — покажу грань и подсвечу её нить"));
+        applyFocus();
+        tapStart = null;
         return;
       }
-      active = i;
-      // кольцо-фокус на выбранной звезде (позиция ставится сразу — надёжно во всех браузерах)
-      if (focus) {
-        focus.setAttribute("cx", st.x.toFixed(1));
-        focus.setAttribute("cy", st.y.toFixed(1));
-        focus.setAttribute("r", (st.r + 6).toFixed(1));
-        focus.setAttribute("opacity", "0.9");
-      }
-      // подсветка нити мотива этой звезды
-      glows.forEach((l) => l.classList.toggle("on", !!st.theme && l.getAttribute("data-th") === st.theme));
-      // раскрытие грани прямо в строке под картой — единственная поверхность деталей,
-      // без дубля и без ухода со страницы. Карточки ниже — для полного разбора при обычном скролле.
-      readout.innerHTML = "";
-      readout.appendChild(el("span", "sky-readout-name", st.label));
-      if (st.summary) readout.appendChild(el("span", "sky-readout-text", st.summary));
-    });
-  }
+      lastTap = { t: now, vx, vy };
+      const [wx, wy] = toWorld(vx, vy);
+      const hit = starAt(wx, wy, 18 / cam.k);
+      active = hit === active ? -1 : hit >= 0 ? hit : -1;
+      applyFocus();
+    }
+    tapStart = null;
+  };
+  svgEl.addEventListener("pointerup", endPointer);
+  svgEl.addEventListener("pointercancel", endPointer);
+
+  svgEl.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const [vx, vy] = toView(e);
+      zoomAt(vx, vy, Math.pow(1.0015, -e.deltaY));
+    },
+    { passive: false },
+  );
+
+  applyCam();
+  heat(1); // первичная укладка: пружины разводят небо, потом карта засыпает
   return sec;
 }
 
@@ -1021,13 +1308,8 @@ function renderProfile(p) {
   const sky = psycheMap(p.sections, p.archetypes);
   if (sky) root.appendChild(sky);
 
-  // нить разговоров (новое: meta.chat.summary)
-  if (p.conversation_summary) {
-    const thread = el("section", "thread");
-    thread.appendChild(el("div", "thread-label", "Нить наших разговоров"));
-    thread.appendChild(el("p", "thread-text", p.conversation_summary));
-    root.appendChild(thread);
-  }
+  // Блок «Нить наших разговоров» убран (08.07): показывал внутренний конспект бэкенда,
+  // который читался как вечный банальный текст. Живое лицо — карта, нити, динамика.
 
   // метрики
   const confirmed = p.sections.filter((s) => s.user_confirmed).length;

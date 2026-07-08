@@ -282,7 +282,8 @@ body {
 }
 .sky-canvas {
   width: 100%;
-  overflow-x: auto;
+  overflow: hidden; /* карту двигает камера (пан/зум), не скролл */
+  border-radius: 12px;
 }
 .sky-svg {
   display: block;
@@ -290,6 +291,9 @@ body {
   max-width: 340px;
   height: auto;
   margin: 0 auto;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .star-glyph {
   text-anchor: middle;
@@ -316,25 +320,60 @@ body {
   0%, 100% { opacity: 0.28; }
   50% { opacity: 0.72; }
 }
-.star-name {
+/* Подписи звёзд (как в графе Obsidian): якоря видны всегда, остальные проявляются
+   при зуме (svg.zoomed) или когда звезда подсвечена выбором (.star.lit). */
+.star-label {
   font-family: "Lora", Georgia, serif;
-  font-size: 12px;
+  font-size: 8px;
+  text-anchor: middle;
+  fill: var(--muted);
   paint-order: stroke;
   stroke: #0e1320;
-  stroke-width: 2.4px;
+  stroke-width: 2px;
   stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
 }
-.star-name--clear {
+.sky-svg.zoomed .star-label,
+.star.lit .star-label {
+  opacity: 1;
+}
+.star-label--anchor {
+  font-size: 11px;
+  opacity: 1;
+}
+.star-label--clear {
   fill: var(--text);
 }
-.star-name--emerging {
+.star-label--emerging {
   fill: var(--muted);
 }
-.star-name--ghost {
+.star-label--ghost {
   fill: var(--muted-soft);
 }
-.star-hit {
-  -webkit-tap-highlight-color: transparent;
+/* Выбор гасит всё, кроме звезды и её созвездия, — фокус как в Obsidian. */
+.star,
+.axis-line {
+  transition: opacity 0.25s ease;
+}
+.sky-svg.focused .star:not(.lit) {
+  opacity: 0.22;
+}
+.sky-svg.focused .axis-line,
+.sky-svg.focused .sky-ambient {
+  opacity: 0.4;
+}
+.sky-svg.focused .thread-line:not(.on) {
+  opacity: 0.12;
+}
+.sky-svg.focused .thread-glow:not(.on) {
+  opacity: 0.03;
+}
+.thread-line,
+.thread-glow,
+.sky-ambient {
+  transition: opacity 0.25s ease;
 }
 /* кольцо вокруг выбранной звезды + подсветка её нити. Только opacity в переходе —
    анимация геометрии SVG (cx/cy/r) ненадёжна в Safari/Telegram-iOS, позицию ставим сразу. */
