@@ -1004,8 +1004,9 @@ function psycheMap(sections, archetypes) {
       st.vy = (st.vy + fy[i] * alpha) * 0.82;
       const sp = Math.hypot(st.vx, st.vy);
       if (sp > 4) { st.vx = (st.vx / sp) * 4; st.vy = (st.vy / sp) * 4; }
-      st.x += st.vx;
-      st.y += st.vy;
+      // мир конечен (камера клэмпится к 300×300) — звезда не может улететь за карту
+      st.x = Math.max(6, Math.min(294, st.x + st.vx));
+      st.y = Math.max(6, Math.min(294, st.y + st.vy));
     }
     // жёсткое разведение оставшихся перекрытий (один быстрый проход)
     for (let i = 0; i < N; i++) {
@@ -1045,6 +1046,7 @@ function psycheMap(sections, archetypes) {
       focus.setAttribute("cx", stars[active].x.toFixed(1));
       focus.setAttribute("cy", stars[active].y.toFixed(1));
     }
+    updateLabels(); // звёзды сдвинулись — пере-решить, чьи подписи помещаются
   };
 
   const loop = () => {
@@ -1065,15 +1067,67 @@ function psycheMap(sections, archetypes) {
 
   // --- камера: панорама пальцем, зум щипком/колесом, двойной тап — сброс ---
   const cam = { k: 1, tx: 0, ty: 0 };
+  const K_MIN = 1; // мельче «всё небо целиком» не отдаляем
+  const K_MAX = 3.2;
+
+  // Подписи как в Obsidian: живут в мире (двигаются со звёздами), но контр-масштабируются
+  // 1/k — на любом зуме один экранный размер, никаких огромных надписей. Наложения решает
+  // приоритетный отбор: выбранная → якоря → подсвеченные → крупные; проигравшие прячутся
+  // (class clash), пока зум не освободит место. Ширину текста оцениваем по числу знаков:
+  // DOM-замер (getComputedTextLength) невозможен — svg ещё не в документе.
+  const labelEls = starGs.map((g) => g.querySelector(".star-label"));
+  const labelBase = stars.map((st) => (st.anchor ? 11 : 8));
+  const labelLen = stars.map((st) => String(st.mapLabel || st.label || "").length);
+  const updateLabels = () => {
+    const k = cam.k;
+    const zoomed = k >= 1.35;
+    const candidates = [];
+    for (let i = 0; i < N; i++) {
+      const t = labelEls[i];
+      if (!t) continue;
+      const fs = labelBase[i] / k;
+      t.style.fontSize = fs.toFixed(2) + "px";
+      t.style.strokeWidth = (2 / k).toFixed(2) + "px";
+      // базлайн так, чтобы зазор под краем звезды был постоянным на экране
+      t.setAttribute("y", (stars[i].r + 3 / k + fs).toFixed(2));
+      const lit = starGs[i].classList.contains("lit");
+      if (stars[i].anchor || lit || zoomed) {
+        candidates.push({
+          i, prio: (i === active ? 8 : 0) + (stars[i].anchor ? 4 : 0) + (lit ? 2 : 0),
+        });
+      } else {
+        t.classList.remove("clash"); // скрытую CSS-ом подпись в борьбу за место не берём
+      }
+    }
+    candidates.sort((a, b) => b.prio - a.prio || stars[b.i].r - stars[a.i].r);
+    const taken = [];
+    candidates.forEach(({ i }) => {
+      const st = stars[i];
+      const w = labelLen[i] * labelBase[i] * 0.58; // экранные (вью-)единицы
+      const h = labelBase[i];
+      const cx = st.x * k + cam.tx;
+      const y0 = (st.y + st.r) * k + cam.ty + 3;
+      const box = { x0: cx - w / 2, x1: cx + w / 2, y0, y1: y0 + h };
+      const hit = taken.some(
+        (b) => box.x0 < b.x1 + 2 && b.x0 < box.x1 + 2 && box.y0 < b.y1 + 1 && b.y0 < box.y1 + 1,
+      );
+      labelEls[i].classList.toggle("clash", hit);
+      if (!hit) taken.push(box);
+    });
+  };
+
   const applyCam = () => {
-    cam.k = Math.max(0.7, Math.min(3.2, cam.k));
-    // центр мира не должен уехать с экрана — карту нельзя «потерять»
-    cam.tx = Math.max(40 - CX * cam.k, Math.min(260 - CX * cam.k, cam.tx));
-    cam.ty = Math.max(40 - CY * cam.k, Math.min(260 - CY * cam.k, cam.ty));
+    cam.k = Math.max(K_MIN, Math.min(K_MAX, cam.k));
+    // Вью всегда целиком внутри мира: карту нельзя сдвинуть в угол и «потерять»
+    // (при k=1 пан — no-op: небо и так видно целиком).
+    const over = 300 * (cam.k - 1);
+    cam.tx = Math.min(0, Math.max(-over, cam.tx));
+    cam.ty = Math.min(0, Math.max(-over, cam.ty));
     camG.setAttribute(
       "transform", `translate(${cam.tx.toFixed(2)} ${cam.ty.toFixed(2)}) scale(${cam.k.toFixed(3)})`,
     );
-    svgEl.classList.toggle("zoomed", cam.k >= 1.5); // подписи всех звёзд проявляются
+    svgEl.classList.toggle("zoomed", cam.k >= 1.35); // подписи всех звёзд проявляются
+    updateLabels();
   };
   const toView = (e) => {
     const rect = svgEl.getBoundingClientRect();
@@ -1087,7 +1141,7 @@ function psycheMap(sections, archetypes) {
   const zoomAt = (vx, vy, factor) => {
     const [wx, wy] = toWorld(vx, vy);
     cam.k *= factor;
-    cam.k = Math.max(0.7, Math.min(3.2, cam.k));
+    cam.k = Math.max(K_MIN, Math.min(K_MAX, cam.k));
     cam.tx = vx - wx * cam.k;
     cam.ty = vy - wy * cam.k;
     applyCam();
@@ -1121,6 +1175,7 @@ function psycheMap(sections, archetypes) {
         focus.setAttribute("opacity", "0");
       }
     }
+    updateLabels(); // состав lit изменился — пере-решить видимость подписей
     readout.innerHTML = "";
     if (focused) {
       readout.appendChild(el("span", "sky-readout-name", stars[active].label));
@@ -1200,8 +1255,8 @@ function psycheMap(sections, archetypes) {
     }
     if (gesture && gesture.type === "drag" && dragIdx >= 0) {
       const [wx, wy] = toWorld(vx, vy);
-      stars[dragIdx].x = wx;
-      stars[dragIdx].y = wy;
+      stars[dragIdx].x = Math.max(8, Math.min(292, wx));
+      stars[dragIdx].y = Math.max(8, Math.min(292, wy));
       stars[dragIdx].vx = 0;
       stars[dragIdx].vy = 0;
       heat(0.45);

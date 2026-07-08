@@ -343,6 +343,11 @@ body {
   font-size: 11px;
   opacity: 1;
 }
+/* Проигравшая борьбу за место подпись прячется (JS-отбор наложений), пока зум
+   не освободит место. Специфичность 4 классов — перебивает zoomed/lit/anchor. */
+.sky-svg .star .star-label.clash {
+  opacity: 0;
+}
 .star-label--clear {
   fill: var(--text);
 }
