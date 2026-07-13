@@ -638,8 +638,20 @@ function latestProfileCue(p) {
 }
 
 function todayPrompt(p) {
-  const cue = latestProfileCue(p);
-  if (cue) return "Что сегодня изменилось вокруг темы «" + cue + "»?";
+  const sync = (p && p.live_sync) || {};
+  const lastAt = sync.last_turn_at ? new Date(sync.last_turn_at) : null;
+  const today = new Date();
+  const isToday =
+    lastAt &&
+    !isNaN(lastAt) &&
+    lastAt.getFullYear() === today.getFullYear() &&
+    lastAt.getMonth() === today.getMonth() &&
+    lastAt.getDate() === today.getDate();
+  const cue = isToday ? sync.last_user_preview || latestProfileCue(p) : "";
+  if (cue && sync.pending_profile_update) {
+    return "Я уже вижу последний разговор: «" + cue + "». Образ обновляется, что важно не потерять?";
+  }
+  if (cue) return "Что из сегодняшней темы «" + cue + "» хочется продолжить?";
   const idx = Math.floor(Date.now() / 86400000) % TODAY_QUESTIONS.length;
   return TODAY_QUESTIONS[idx];
 }
@@ -1628,6 +1640,32 @@ function renderEmpty() {
   );
 }
 
+let refreshTimer = null;
+
+function clearRefreshTimer() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+async function refreshProfileView() {
+  try {
+    const profile = await fetchProfile();
+    setView(profile ? renderProfile(profile) : renderEmpty());
+    scheduleRefresh(profile);
+  } catch (_) {
+    scheduleRefresh(null);
+  }
+}
+
+function scheduleRefresh(profile) {
+  clearRefreshTimer();
+  const pending = profile && profile.live_sync && profile.live_sync.pending_profile_update;
+  const delay = pending ? 5000 : 60000;
+  refreshTimer = setTimeout(refreshProfileView, delay);
+}
+
 // --- запуск -----------------------------------------------------------------
 
 // Грузим config.js динамически с cache-buster. Telegram-webview агрессивно кэширует
@@ -1656,6 +1694,7 @@ async function main() {
   try {
     const profile = await fetchProfile();
     setView(profile ? renderProfile(profile) : renderEmpty());
+    scheduleRefresh(profile);
   } catch (e) {
     const msg =
       e.message === "unauthorized"
@@ -1664,7 +1703,13 @@ async function main() {
           ? "Эту страницу нужно открывать из Telegram — кнопкой «Мой профиль»."
           : "Не получилось дотянуться до профиля. Попробуй чуть позже.";
     setView(stateView("Не сейчас", msg, "✦"));
+    scheduleRefresh(null);
   }
 }
 
 main();
+
+window.addEventListener("focus", refreshProfileView);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshProfileView();
+});
