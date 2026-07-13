@@ -7,5 +7,5 @@
 // ПОСЛЕ переезда на VPS (mindcoachbot.ru за Caddy): мини-апп и бэкенд same-origin,
 // API_BASE станет пустой строкой → относительные запросы, без CORS и без туннеля.
 window.JUNG_CONFIG = {
-  API_BASE: "https://replica-banners-volvo-physics.trycloudflare.com",
+  API_BASE: "https://encourage-efficiency-candidate-outside.trycloudflare.com",
 };
