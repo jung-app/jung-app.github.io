@@ -138,13 +138,25 @@ function stateView(title, sub, glyph) {
 
 // --- сеть -------------------------------------------------------------------
 
+// Бесплатный ngrok показывает browser interstitial для запросов из Telegram WebView.
+// Служебный заголовок отключает HTML-заглушку и пропускает запрос к нашему API.
+// На будущих VPS/same-origin он безвреден и может быть удалён вместе с API_BASE.
+function apiHeaders(initData, withJson) {
+  const headers = {
+    Authorization: "tma " + initData,
+    "ngrok-skip-browser-warning": "true",
+  };
+  if (withJson) headers["Content-Type"] = "application/json";
+  return headers;
+}
+
 async function fetchProfile() {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
 
   const res = await fetch(base.replace(/\/$/, "") + "/api/profile", {
-    headers: { Authorization: "tma " + initData },
+    headers: apiHeaders(initData, false),
   });
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
@@ -160,7 +172,7 @@ async function dismissSection(key) {
 
   const res = await fetch(base.replace(/\/$/, "") + "/api/profile/dismiss", {
     method: "POST",
-    headers: { Authorization: "tma " + initData, "Content-Type": "application/json" },
+    headers: apiHeaders(initData, true),
     body: JSON.stringify({ key }),
   });
   if (!res.ok) throw new Error("http-" + res.status);
@@ -439,7 +451,7 @@ async function requestInvoice(period) {
   if (!initData) throw new Error("no-init-data");
   const res = await fetch(base.replace(/\/$/, "") + "/api/invoice", {
     method: "POST",
-    headers: { Authorization: "tma " + initData, "Content-Type": "application/json" },
+    headers: apiHeaders(initData, true),
     body: JSON.stringify({ period: period || "monthly" }),
   });
   if (!res.ok) throw new Error("http-" + res.status);
@@ -486,7 +498,7 @@ function pollForActivation() {
       const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
       const initData = tg && tg.initData ? tg.initData : "";
       const res = await fetch(base.replace(/\/$/, "") + "/api/profile", {
-        headers: { Authorization: "tma " + initData },
+        headers: apiHeaders(initData, false),
       });
       if (res.ok) {
         const data = await res.json();
