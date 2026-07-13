@@ -150,13 +150,19 @@ function apiHeaders(initData, withJson) {
   return headers;
 }
 
-async function fetchProfile() {
+function freshApiUrl(path) {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const sep = path.includes("?") ? "&" : "?";
+  return base.replace(/\/$/, "") + path + sep + "ts=" + Date.now();
+}
+
+async function fetchProfile() {
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
 
-  const res = await fetch(base.replace(/\/$/, "") + "/api/profile", {
+  const res = await fetch(freshApiUrl("/api/profile"), {
     headers: apiHeaders(initData, false),
+    cache: "no-store",
   });
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
@@ -495,10 +501,10 @@ function pollForActivation() {
   const tick = async () => {
     attempts += 1;
     try {
-      const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
       const initData = tg && tg.initData ? tg.initData : "";
-      const res = await fetch(base.replace(/\/$/, "") + "/api/profile", {
+      const res = await fetch(freshApiUrl("/api/profile"), {
         headers: apiHeaders(initData, false),
+        cache: "no-store",
       });
       if (res.ok) {
         const data = await res.json();
@@ -610,14 +616,40 @@ const TODAY_QUESTIONS = [
   "Если бы у сегодняшнего дня было имя — какое?",
 ];
 
-// Блок «Сегодня»: вопрос дня + возврат в чат. Причина открывать мини-апп каждый день —
-// не только смотреть образ, но и продолжать его в разговоре. Вопрос генерится на клиенте
-// (без бэкенда и без психоконтента в payload), ответ идёт в чат, где работает продукт.
-function todayBlock() {
+function firstText(items) {
+  return (items || []).find((x) => typeof x === "string" && x.trim());
+}
+
+function latestProfileCue(p) {
+  const d = p && p.dynamics;
+  const changed =
+    firstText(d && d.new_habits) ||
+    firstText(d && d.new_sections) ||
+    firstText(d && d.new_archetypes);
+  if (changed) return changed;
+
+  const habit = (p.habits || []).find((h) => h && (h.serves || h.summary || h.name));
+  if (habit) return habit.serves || habit.summary || habit.name;
+  const archetype = (p.archetypes || []).find((a) => a && (a.name || a.summary));
+  if (archetype) return archetype.name || archetype.summary;
+  const section = (p.sections || []).find((s) => s && (s.label || s.summary));
+  if (section) return section.label || section.summary;
+  return "";
+}
+
+function todayPrompt(p) {
+  const cue = latestProfileCue(p);
+  if (cue) return "Что сегодня изменилось вокруг темы «" + cue + "»?";
   const idx = Math.floor(Date.now() / 86400000) % TODAY_QUESTIONS.length;
+  return TODAY_QUESTIONS[idx];
+}
+
+// Блок «Сегодня»: персональный вопрос + возврат в чат. Он зависит от свежего payload
+// профиля, поэтому после разговора с ботом верх мини-аппа меняется вместе с образом.
+function todayBlock(p) {
   const sec = el("section", "today");
   sec.appendChild(el("div", "today-label", "Сегодня"));
-  sec.appendChild(el("p", "today-q", TODAY_QUESTIONS[idx]));
+  sec.appendChild(el("p", "today-q", todayPrompt(p)));
   const btn = el("button", "today-cta", "Продолжить в чате");
   btn.type = "button";
   // Закрываем мини-апп → возврат в чат с ботом, где можно ответить прямо сейчас.
@@ -1346,7 +1378,7 @@ function renderProfile(p) {
   root.appendChild(top);
 
   // «Сегодня» — вопрос дня + возврат в чат: причина открывать мини-апп каждый день
-  root.appendChild(todayBlock());
+  root.appendChild(todayBlock(p));
 
   // что изменилось с прошлого визита (динамика между сессиями)
   const dyn = dynamicsBlock(p.dynamics);
