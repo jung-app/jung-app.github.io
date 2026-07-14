@@ -1369,7 +1369,9 @@ function psycheMap(sections, archetypes) {
   );
 
   applyCam();
-  heat(1); // первичная укладка: пружины разводят небо, потом карта засыпает
+  // Initial layout is already deterministic and overlap-free. Do not start physics on
+  // mount: a real profile update may rebuild the map, but it must not visibly collapse
+  // toward the default rings. Physics wakes only when the user drags a star.
   return sec;
 }
 
@@ -1643,6 +1645,18 @@ function renderEmpty() {
 let refreshTimer = null;
 let refreshInFlight = null;
 let refreshQueued = false;
+let renderedProfileFingerprint = null;
+
+function renderFetchedProfile(profile) {
+  // Polling/lifecycle events usually return the same document. Replacing the whole DOM
+  // in that case resets scroll, focus and the star map, making a quiet refresh look like
+  // a page reload. Only reconcile the view when the payload actually changed.
+  const fingerprint = JSON.stringify(profile || null);
+  if (fingerprint === renderedProfileFingerprint) return false;
+  renderedProfileFingerprint = fingerprint;
+  setView(profile ? renderProfile(profile) : renderEmpty());
+  return true;
+}
 
 function clearRefreshTimer() {
   if (refreshTimer) {
@@ -1663,7 +1677,7 @@ function refreshProfileView() {
   refreshInFlight = (async () => {
     try {
       const profile = await fetchProfile();
-      setView(profile ? renderProfile(profile) : renderEmpty());
+      renderFetchedProfile(profile);
       scheduleRefresh(profile);
     } catch (_) {
       scheduleRefresh(null);
@@ -1712,7 +1726,7 @@ async function main() {
   }
   try {
     const profile = await fetchProfile();
-    setView(profile ? renderProfile(profile) : renderEmpty());
+    renderFetchedProfile(profile);
     scheduleRefresh(profile);
   } catch (e) {
     const msg =
