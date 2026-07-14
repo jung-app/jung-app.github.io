@@ -400,6 +400,12 @@ function dynamicsBlock(d) {
     (d.new_habits || []).forEach((name) =>
       row.appendChild(el("span", "delta delta--habit", "практика: " + name)),
     );
+    (d.updated_sections || []).forEach((label) =>
+      row.appendChild(el("span", "delta delta--new", "стало яснее: " + label)),
+    );
+    (d.updated_archetypes || []).forEach((name) =>
+      row.appendChild(el("span", "delta delta--arch", "стал яснее: " + name)),
+    );
     sec.appendChild(row);
   }
   return sec;
@@ -1647,11 +1653,22 @@ let refreshInFlight = null;
 let refreshQueued = false;
 let renderedProfileFingerprint = null;
 
+function profileRenderFingerprint(profile) {
+  if (!profile) return "null";
+  // GET /api/profile records the visit and therefore rotates dynamics.since/history.at
+  // even when the actual profile is unchanged. Those presentation-only timestamps must
+  // not remount the whole page. A real dialogue/profile/payment change still alters the
+  // rest of the payload and triggers a render; the fresh dynamics block is rendered with it.
+  const stable = { ...profile };
+  delete stable.dynamics;
+  return JSON.stringify(stable);
+}
+
 function renderFetchedProfile(profile) {
   // Polling/lifecycle events usually return the same document. Replacing the whole DOM
   // in that case resets scroll, focus and the star map, making a quiet refresh look like
   // a page reload. Only reconcile the view when the payload actually changed.
-  const fingerprint = JSON.stringify(profile || null);
+  const fingerprint = profileRenderFingerprint(profile);
   if (fingerprint === renderedProfileFingerprint) return false;
   renderedProfileFingerprint = fingerprint;
   setView(profile ? renderProfile(profile) : renderEmpty());
