@@ -38,10 +38,15 @@
       </section>
     </main>
 
-    <!-- Конфиг бэкенда грузится динамически внутри app.js с cache-buster (?v=timestamp).
-         Раньше был статичный <script src="./config.js"> — Telegram-webview кэшировал его
-         ~10 мин, и при ротации туннеля телефон держал МЁРТВЫЙ API_BASE → «не дотянулся до
-         профиля». Теперь каждое открытие тянет свежий config. -->
-    <script src="./app.js?v=20260713-live-sync"></script>
+    <!-- И bundle, и конфиг грузятся с новым URL. Telegram может держать ресурсы WebView
+         дольше HTTP cache-control, поэтому версия по времени надёжнее статичного номера,
+         который легко забыть обновить при следующем релизе. -->
+    <script>
+      (function () {
+        var script = document.createElement("script");
+        script.src = "./app.js?v=" + Date.now();
+        document.body.appendChild(script);
+      })();
+    </script>
   </body>
 </html>

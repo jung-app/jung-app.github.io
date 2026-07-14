@@ -1641,6 +1641,8 @@ function renderEmpty() {
 }
 
 let refreshTimer = null;
+let refreshInFlight = null;
+let refreshQueued = false;
 
 function clearRefreshTimer() {
   if (refreshTimer) {
@@ -1649,14 +1651,31 @@ function clearRefreshTimer() {
   }
 }
 
-async function refreshProfileView() {
-  try {
-    const profile = await fetchProfile();
-    setView(profile ? renderProfile(profile) : renderEmpty());
-    scheduleRefresh(profile);
-  } catch (_) {
-    scheduleRefresh(null);
+function refreshProfileView() {
+  // focus, visibilitychange, Telegram activated и минутный таймер могут сработать
+  // почти одновременно. Один запрос за раз не даёт более старому ответу перерисовать
+  // уже свежий профиль и не создаёт лишнюю нагрузку перед трафиком.
+  if (refreshInFlight) {
+    refreshQueued = true;
+    return refreshInFlight;
   }
+
+  refreshInFlight = (async () => {
+    try {
+      const profile = await fetchProfile();
+      setView(profile ? renderProfile(profile) : renderEmpty());
+      scheduleRefresh(profile);
+    } catch (_) {
+      scheduleRefresh(null);
+    } finally {
+      refreshInFlight = null;
+      if (refreshQueued) {
+        refreshQueued = false;
+        queueMicrotask(refreshProfileView);
+      }
+    }
+  })();
+  return refreshInFlight;
 }
 
 function scheduleRefresh(profile) {
@@ -1705,11 +1724,17 @@ async function main() {
     setView(stateView("Не сейчас", msg, "✦"));
     scheduleRefresh(null);
   }
+
+  // Telegram 8.0+ явно сообщает, когда сохранённый WebView снова стал активным.
+  // focus/visibility/pageshow остаются fallback для старых клиентов и браузеров.
+  if (tg && typeof tg.onEvent === "function") tg.onEvent("activated", refreshProfileView);
+  window.addEventListener("focus", refreshProfileView);
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) refreshProfileView();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshProfileView();
+  });
 }
 
 main();
-
-window.addEventListener("focus", refreshProfileView);
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshProfileView();
-});
