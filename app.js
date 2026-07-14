@@ -384,29 +384,60 @@ function dynamicsBlock(d) {
     // Блок появляется, только когда ему есть что сказать (дельта/новые грани).
     return null;
   } else {
-    const row = el("div", "dynamics-row");
+    const newItems = [
+      ...(d.new_sections || []),
+      ...(d.new_archetypes || []),
+      ...(d.new_habits || []),
+    ];
+    const refinedItems = [
+      ...(d.updated_sections || []),
+      ...(d.updated_archetypes || []),
+    ];
+    const summary = el("div", "dynamics-summary");
+    summary.setAttribute("aria-live", "polite");
     if (d.delta_percent) {
       const up = d.delta_percent > 0;
       const pill = el("span", "delta" + (up ? " delta--up" : " delta--down"));
-      pill.textContent = (up ? "+" : "−") + Math.abs(d.delta_percent) + "% глубины";
-      row.appendChild(pill);
+      pill.textContent = (up ? "+" : "−") + Math.abs(d.delta_percent) + "% к полноте образа";
+      summary.appendChild(pill);
     }
-    (d.new_sections || []).forEach((label) =>
-      row.appendChild(el("span", "delta delta--new", "новое: " + label)),
-    );
-    (d.new_archetypes || []).forEach((name) =>
-      row.appendChild(el("span", "delta delta--arch", "архетип: " + name)),
-    );
-    (d.new_habits || []).forEach((name) =>
-      row.appendChild(el("span", "delta delta--habit", "практика: " + name)),
-    );
-    (d.updated_sections || []).forEach((label) =>
-      row.appendChild(el("span", "delta delta--new", "стало яснее: " + label)),
-    );
-    (d.updated_archetypes || []).forEach((name) =>
-      row.appendChild(el("span", "delta delta--arch", "стал яснее: " + name)),
-    );
-    sec.appendChild(row);
+    let message = "Образ обновился после последних разговоров.";
+    if (newItems.length && refinedItems.length) {
+      message = "Появилось новое и стали точнее уже знакомые части образа.";
+    } else if (newItems.length) {
+      message = "В образе проявилось " + newItems.length + " " + pluralRu(newItems.length, "новое направление", "новых направления", "новых направлений") + ".";
+    } else if (refinedItems.length) {
+      message = refinedItems.length + " " + pluralRu(refinedItems.length, "часть образа стала", "части образа стали", "частей образа стали") + " точнее.";
+    }
+    summary.appendChild(el("p", "dynamics-title", message));
+    sec.appendChild(summary);
+
+    const allItems = [...newItems, ...refinedItems];
+    if (allItems.length) {
+      const preview = el("p", "dynamics-preview", allItems.slice(0, 3).join(" · "));
+      sec.appendChild(preview);
+    }
+
+    if (allItems.length > 3) {
+      const details = el("details", "dynamics-details");
+      const more = el("summary", "dynamics-more", "Показать все изменения (" + allItems.length + ")");
+      details.appendChild(more);
+      const list = el("ul", "dynamics-list");
+      newItems.forEach((name) => {
+        const item = el("li", "dynamics-item");
+        item.appendChild(el("span", "dynamics-kind", "Новое"));
+        item.appendChild(document.createTextNode(name));
+        list.appendChild(item);
+      });
+      refinedItems.forEach((name) => {
+        const item = el("li", "dynamics-item");
+        item.appendChild(el("span", "dynamics-kind dynamics-kind--refined", "Точнее"));
+        item.appendChild(document.createTextNode(name));
+        list.appendChild(item);
+      });
+      details.appendChild(list);
+      sec.appendChild(details);
+    }
   }
   return sec;
 }

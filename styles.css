@@ -435,9 +435,10 @@ body {
 /* --- динамика «с прошлого визита» --- */
 .dynamics {
   margin: 14px 0 18px;
-  padding: 14px 16px;
+  padding: 16px;
   background: var(--panel);
   border: 1px solid var(--line);
+  border-left: 2px solid var(--gold-deep);
   border-radius: var(--radius);
 }
 .dynamics-label {
@@ -456,17 +457,32 @@ body {
   line-height: 1.55;
   color: var(--text);
 }
-.dynamics-row {
+.dynamics-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+}
+.dynamics-title {
+  flex: 1 1 190px;
+  margin: 0;
+  font-family: "Lora", Georgia, serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.dynamics-preview {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 .delta {
   display: inline-flex;
   align-items: center;
   font-size: 12.5px;
   font-weight: 600;
-  padding: 5px 11px;
+  padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid var(--line-strong);
   color: var(--text);
@@ -486,6 +502,51 @@ body {
   color: var(--gold);
   border-color: rgba(232, 192, 116, 0.3);
   background: var(--gold-soft);
+}
+.dynamics-details {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.dynamics-more {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.dynamics-more:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.dynamics-list {
+  margin: 2px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+.dynamics-item {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 7px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+}
+.dynamics-kind {
+  flex: 0 0 52px;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.dynamics-kind--refined {
+  color: var(--muted);
 }
 
 /* --- спарклайн глубины во времени --- */
