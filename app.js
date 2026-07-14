@@ -486,8 +486,7 @@ function shareRow(referral, inviteUrl) {
   return sec;
 }
 
-// Запросить у бэкенда ссылку на оплату подписки картой (lava.top). Та же страница оплаты,
-// что и по кнопке «Оплатить картой» в чате; зачисление приходит вебхуком lava.
+// Запросить у бэкенда нативную ссылку на Telegram Stars invoice.
 async function requestInvoice(period) {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
   const initData = tg && tg.initData ? tg.initData : "";
@@ -501,10 +500,9 @@ async function requestInvoice(period) {
   return (await res.json()).url;
 }
 
-// Оплата прямо из мини-аппа: человек увидел свой образ → платит картой, не возвращаясь
-// в чат. Замыкает петлю «ценность → оплата» в точке пика. lava.top — внешняя защищённая
-// страница, поэтому открываем её tg.openLink (НЕ openInvoice — тот только для нативных
-// Telegram-инвойсов в звёздах). Доступ начисляет вебхук; профиль перечитается как платный.
+// Оплата прямо из мини-аппа: человек увидел свой образ → открывает нативный Stars invoice.
+// Telegram.WebApp.openInvoice даёт статус закрытия, после успешной оплаты перечитываем
+// профиль. Fallback открывает invoice link обычным способом на старых клиентах.
 function startUpgrade(btn, period) {
   const original = btn.textContent;
   btn.disabled = true;
@@ -515,13 +513,16 @@ function startUpgrade(btn, period) {
   };
   requestInvoice(period)
     .then((url) => {
-      if (tg && typeof tg.openLink === "function") {
-        tg.openLink(url); // встроенный браузер Telegram → защищённая страница оплаты
+      if (tg && typeof tg.openInvoice === "function") {
+        tg.openInvoice(url, (status) => {
+          if (status === "paid") pollForActivation();
+        });
+      } else if (tg && typeof tg.openTelegramLink === "function") {
+        tg.openTelegramLink(url);
       } else {
         window.open(url, "_blank");
       }
       restore();
-      pollForActivation(); // когда вебхук зачислит подписку — покажем подтверждение сами
     })
     .catch(() => {
       restore();
@@ -530,9 +531,8 @@ function startUpgrade(btn, period) {
     });
 }
 
-// После открытия страницы оплаты картой — лёгкий поллинг профиля: как только вебхук lava
-// начислит подписку (is_paid=true), показываем подтверждение, не требуя ручного обновления.
-// Внешняя оплата не даёт колбэка статуса (в отличие от openInvoice), поэтому опрашиваем сами.
+// После успешного Stars invoice слегка поллим профиль: successful_payment может прийти
+// в long-polling на секунду позже callback Mini App.
 function pollForActivation() {
   let attempts = 0;
   const tick = async () => {
@@ -600,30 +600,35 @@ function upgradeSection(billing) {
     perks.appendChild(li);
   });
   sec.appendChild(perks);
-  // Два тарифа: месяц — дефолт (низкий порог первого «да»), год — якорь со скидкой.
-  // Цены приходят в payload.billing (ярлыки UI; суммы живут на офферах lava).
+  // Месяц — recurring Stars. Год показываем только если включён разовый Stars-инвойс.
   const b = billing || {};
-  const monthly = b.monthly_rub || 0;
+  const monthly = b.monthly_xtr || 0;
   const btn = el(
     "button",
     "upgrade-btn",
-    monthly ? "Месяц — " + monthly + " ₽" : "Продолжить с памятью",
+    monthly ? monthly + " ⭐ в месяц" : "Продолжить с памятью",
   );
   btn.type = "button";
   btn.addEventListener("click", () => startUpgrade(btn, "monthly"));
   sec.appendChild(btn);
-  if (b.annual_available && b.annual_rub) {
-    const saved = monthly ? Math.round((1 - b.annual_rub / (12 * monthly)) * 100) : 0;
+  if (b.annual_available && b.annual_xtr) {
+    const saved = monthly ? Math.round((1 - b.annual_xtr / (12 * monthly)) * 100) : 0;
     const ybtn = el(
       "button",
       "upgrade-btn upgrade-btn-annual",
-      "Год — " + b.annual_rub + " ₽" + (saved > 0 ? " (выгода " + saved + "%)" : ""),
+      "Год — " + b.annual_xtr + " ⭐" + (saved > 0 ? " (выгода " + saved + "%)" : ""),
     );
     ybtn.type = "button";
     ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual"));
     sec.appendChild(ybtn);
   }
-  sec.appendChild(el("p", "upgrade-hint", "Оплата банковской картой. Доступ открывается сразу после оплаты."));
+  sec.appendChild(
+    el(
+      "p",
+      "upgrade-hint",
+      "Оплата в Telegram Stars. Если пополнение недоступно на телефоне, открой счёт в Telegram Desktop или Web.",
+    ),
+  );
   return sec;
 }
 
