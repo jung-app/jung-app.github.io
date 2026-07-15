@@ -297,7 +297,7 @@ function habitField(label, text, extraClass) {
   return box;
 }
 
-// Карточка привычки: {привычка, чему служит, ритуал замещения, прогресс}.
+// Карточка привычки: {триггер, потребность, замена, минимальная версия, прогресс}.
 // Прогресс — луна-уверенность + опора наблюдений, НЕ стрики (бот — спутник, не надзиратель).
 function habitCard(item) {
   const card = el("article", "card");
@@ -320,8 +320,10 @@ function habitCard(item) {
   );
   card.appendChild(el("p", "card-summary", item.summary));
 
+  if (item.trigger) card.appendChild(habitField("когда включается", item.trigger));
   if (item.serves) card.appendChild(habitField("чему служит", item.serves));
   if (item.ritual) card.appendChild(habitField("ритуал замещения", item.ritual, "habit-field--ritual"));
+  if (item.fallback) card.appendChild(habitField("минимум на трудный день", item.fallback));
 
   const meta = el("div", "card-meta");
   meta.appendChild(confidence(item.confidence));
@@ -566,31 +568,32 @@ function pollForActivation() {
   setTimeout(tick, 8000); // первая проверка — после возможной быстрой оплаты
 }
 
-// Панель подписки (только для free): после показа реального образа продаём ПАМЯТЬ —
-// продолжение пути, а не «безлимит». Существующие грани не прячем (это данные юзера,
+// Панель подписки (только для free): после показа реального образа продаём переход
+// от понимания к действию, а память делает этот путь непрерывным. Существующие грани не прячем (это данные юзера,
 // 152-ФЗ «ты хозяин данных») — показываем, что открывает подписка, и кнопку оплаты.
 function upgradeSection(billing) {
   const sec = el("section", "upgrade");
   sec.appendChild(el("div", "upgrade-label", "Дальше — вместе"));
-  sec.appendChild(el("h2", "upgrade-title serif", "Я не забуду тебя завтра"));
+  sec.appendChild(el("h2", "upgrade-title serif", "Не только понять. Начать действовать иначе"));
   sec.appendChild(
     el(
       "p",
       "upgrade-text",
-      "Сейчас этот образ живёт, пока мы говорим. С подпиской я помню твой путь между " +
-        "сессиями: возвращаюсь к тому, что важно, и веду глубже — а не с чистого листа.",
+      "С подпиской я замечаю повторяющиеся сценарии, помню твои шаги и то, что уже " +
+        "сработало. Каждый разговор продолжает путь и помогает корректировать его в жизни.",
     ),
   );
   const perks = el("ul", "upgrade-perks");
   // Канон ценности — зеркало subscription_comparison() в app/handlers/payments.py.
   // Держи в синхроне с ботом и лендингом.
   [
-    "Память между сессиями — продолжаем, где остановились",
+    "Повторяющиеся сценарии превращаются в конкретные шаги",
+    "Память между сессиями — помню, что уже сработало",
     "Свободные разговоры с проводником — каждый день",
-    "Растущий портрет тебя и вехи внутреннего роста",
-    "Дневник снов 🌙 — бережная работа с образами снов",
+    "Растущая карта твоих тем, опор и изменений",
+    "Привычки 🌿 — триггер, потребность, замена и новый минимальный шаг",
     "Глубинная сессия 🌀 — встреча с внутренней фигурой",
-    "Работа с привычками 🌿 — чему служит привычка и чем её заместить",
+    "Дневник снов 🌙 — одна из практик для работы с образами",
     "Голосовые ответы 🔊 без лимита — на бесплатном лишь проба",
     "Я сам бережно пишу первым между сессиями",
   ].forEach((t) => {
@@ -622,11 +625,29 @@ function upgradeSection(billing) {
     ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual"));
     sec.appendChild(ybtn);
   }
+  const guide = el("div", "stars-guide");
+  guide.appendChild(el("strong", "stars-guide-title", "Нет Stars?"));
+  guide.appendChild(
+    el(
+      "p",
+      "stars-guide-text",
+      "Открой @PremiumBot → /start → «Звёзды Telegram». Выбери 500 ⭐ для месяца или 5000 ⭐ для года, затем вернись и нажми тариф.",
+    ),
+  );
+  const premiumBtn = el("button", "premiumbot-btn", "Купить Stars в @PremiumBot");
+  premiumBtn.type = "button";
+  premiumBtn.addEventListener("click", () => {
+    const url = "https://t.me/PremiumBot";
+    if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(url);
+    else window.open(url, "_blank");
+  });
+  guide.appendChild(premiumBtn);
+  sec.appendChild(guide);
   sec.appendChild(
     el(
       "p",
       "upgrade-hint",
-      "Оплата в Telegram Stars. Если пополнение недоступно на телефоне, открой счёт в Telegram Desktop или Web.",
+      "Месяц продлевается каждые 30 дней. Год оплачивается один раз на 365 дней.",
     ),
   );
   return sec;
@@ -1548,7 +1569,7 @@ function renderProfile(p) {
       el(
         "p",
         "group-sub",
-        "Из сессий /habit: чему служит привычка и какой ритуал может кормить ту же потребность честнее.",
+        "Триггер → потребность → замена → минимальная версия на трудный день. Срыв уточняет карту, а не обнуляет путь.",
       ),
     );
     p.habits.forEach((h) => sec.appendChild(habitCard(h)));

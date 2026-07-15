@@ -706,6 +706,36 @@ body {
   line-height: 1.5;
   color: var(--muted-soft);
 }
+.stars-guide {
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.stars-guide-title {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+.stars-guide-text {
+  margin: 5px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.premiumbot-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(232, 192, 116, 0.38);
+  border-radius: 999px;
+  color: var(--gold);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
 
 /* --- полоса метрик --- */
 .stats {
