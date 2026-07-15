@@ -615,11 +615,16 @@ function upgradeSection(billing) {
   btn.addEventListener("click", () => startUpgrade(btn, "monthly"));
   sec.appendChild(btn);
   if (b.annual_available && b.annual_xtr) {
-    const saved = monthly ? Math.round((1 - b.annual_xtr / (12 * monthly)) * 100) : 0;
+    const paidMonths = monthly ? b.annual_xtr / monthly : 0;
+    const derivedBonus = Number.isInteger(paidMonths) ? Math.max(0, 12 - paidMonths) : 0;
+    const bonusMonths = Number(b.annual_bonus_months || derivedBonus);
+    const bonusLabel = bonusMonths > 0
+      ? " (" + bonusMonths + " " + pluralRu(bonusMonths, "месяц", "месяца", "месяцев") + " в подарок)"
+      : "";
     const ybtn = el(
       "button",
       "upgrade-btn upgrade-btn-annual",
-      "Год — " + b.annual_xtr + " ⭐" + (saved > 0 ? " (выгода " + saved + "%)" : ""),
+      "Год — " + b.annual_xtr + " ⭐" + bonusLabel,
     );
     ybtn.type = "button";
     ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual"));
