@@ -43,9 +43,15 @@
          который легко забыть обновить при следующем релизе. -->
     <script>
       (function () {
-        var script = document.createElement("script");
-        script.src = "./app.js?v=" + Date.now();
-        document.body.appendChild(script);
+        var ts = Date.now();
+        var config = document.createElement("script");
+        config.src = "./config.js?v=" + ts;
+        config.onload = function () {
+          var app = document.createElement("script");
+          app.src = "./app.js?v=" + ts;
+          document.body.appendChild(app);
+        };
+        document.body.appendChild(config);
       })();
     </script>
   </body>
