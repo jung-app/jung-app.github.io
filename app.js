@@ -138,13 +138,9 @@ function stateView(title, sub, glyph) {
 
 // --- сеть -------------------------------------------------------------------
 
-// Бесплатный ngrok показывает browser interstitial для запросов из Telegram WebView.
-// Служебный заголовок отключает HTML-заглушку и пропускает запрос к нашему API.
-// На будущих VPS/same-origin он безвреден и может быть удалён вместе с API_BASE.
 function apiHeaders(initData, withJson) {
   const headers = {
     Authorization: "tma " + initData,
-    "ngrok-skip-browser-warning": "true",
   };
   if (withJson) headers["Content-Type"] = "application/json";
   return headers;
@@ -460,7 +456,7 @@ function shareRow(referral, inviteUrl) {
   if (r.invited) {
     const stats = el("div", "referral-stats");
     stats.appendChild(stat(r.invited, "приглашено"));
-    stats.appendChild(stat(r.rewarded || 0, "остались с подпиской"));
+    stats.appendChild(stat(r.rewarded || 0, "оформили подписку"));
     stats.appendChild(stat("+" + (r.earned_days || 0), "дней тебе"));
     sec.appendChild(stats);
   }
@@ -508,9 +504,11 @@ async function requestInvoice(period) {
 function startUpgrade(btn, period) {
   const original = btn.textContent;
   btn.disabled = true;
+  btn.setAttribute("aria-busy", "true");
   btn.textContent = "Открываю оплату…";
   const restore = () => {
     btn.disabled = false;
+    btn.removeAttribute("aria-busy");
     btn.textContent = original;
   };
   requestInvoice(period)
@@ -531,6 +529,13 @@ function startUpgrade(btn, period) {
       if (tg && typeof tg.showAlert === "function")
         tg.showAlert("Не получилось открыть оплату. Попробуй ещё раз или набери /upgrade в чате.");
     });
+}
+
+function scrollToUpgrade() {
+  const up = document.querySelector(".upgrade");
+  if (!up) return;
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  up.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
 }
 
 // После успешного Stars invoice слегка поллим профиль: successful_payment может прийти
@@ -609,7 +614,7 @@ function upgradeSection(billing) {
   const btn = el(
     "button",
     "upgrade-btn",
-    monthly ? monthly + " ⭐ в месяц" : "Продолжить с памятью",
+    monthly ? monthly + " ⭐ / 30 дней" : "Продолжить с памятью",
   );
   btn.type = "button";
   btn.addEventListener("click", () => startUpgrade(btn, "monthly"));
@@ -655,6 +660,39 @@ function upgradeSection(billing) {
       "Месяц продлевается каждые 30 дней. Год оплачивается один раз на 365 дней.",
     ),
   );
+  return sec;
+}
+
+// Компактный апгрейд показываем сразу после карты, когда человек уже увидел личную
+// ценность. Полное сравнение остаётся ниже, поэтому карточка не перекрывает профиль.
+function upgradeNudge(p) {
+  const access = p.access || {};
+  const billing = p.billing || {};
+  const remaining = Number(access.free_remaining);
+  const exhausted = Boolean(access.demo_exhausted);
+  const sec = el("section", "upgrade-nudge");
+  sec.appendChild(el("div", "upgrade-nudge-label", exhausted ? "Демо завершено" : "Твой путь"));
+  sec.appendChild(el("h2", "upgrade-nudge-title serif", "Продолжи путь без паузы"));
+
+  let copy = "Подписка сохраняет нить разговоров, замечает повторяющиеся сценарии и помогает проверять маленькие шаги в жизни.";
+  if (!exhausted && Number.isFinite(remaining) && remaining > 0) {
+    copy = "В бесплатном знакомстве осталось " + remaining + " " +
+      pluralRu(remaining, "сообщение", "сообщения", "сообщений") +
+      ". С подпиской проводник продолжает помнить путь и помогает доводить понимание до действия.";
+  }
+  sec.appendChild(el("p", "upgrade-nudge-text", copy));
+
+  const actions = el("div", "upgrade-nudge-actions");
+  const monthly = Number(billing.monthly_xtr || 0);
+  const pay = el("button", "upgrade-nudge-pay", monthly ? monthly + " ⭐ / 30 дней" : "Продолжить с памятью");
+  pay.type = "button";
+  pay.addEventListener("click", () => startUpgrade(pay, "monthly"));
+  actions.appendChild(pay);
+  const more = el("button", "upgrade-nudge-more", "Что входит");
+  more.type = "button";
+  more.addEventListener("click", scrollToUpgrade);
+  actions.appendChild(more);
+  sec.appendChild(actions);
   return sec;
 }
 
@@ -737,6 +775,63 @@ function todayBlock(p) {
     if (tg && typeof tg.close === "function") tg.close();
   });
   sec.appendChild(btn);
+  return sec;
+}
+
+function pathBlock(path) {
+  const p = path || {};
+  const features = p.features || {};
+  const specs = [
+    ["dream", "🌙", "Сны", ["разбор", "разбора", "разборов"]],
+    ["journal", "🖊", "Вопрос дня", ["открытие", "открытия", "открытий"]],
+    ["imagination", "🕯", "Глубинные сессии", ["сессия", "сессии", "сессий"]],
+    ["habit", "🌿", "Работа с привычкой", ["шаг", "шага", "шагов"]],
+    ["grow", "🌱", "Новая привычка", ["шаг", "шага", "шагов"]],
+  ];
+  const rows = specs
+    .map(([key, icon, label, forms]) => {
+      const usage = features[key] || {};
+      const started = Number(usage.started || 0);
+      let completed = Number(usage.completed || 0);
+      if (key === "habit") completed = Math.max(completed, Number(p.ritual_done_count || 0));
+      if (key === "grow") completed = Math.max(completed, Number(p.growth_done_count || 0));
+      if (!started && !completed) return null;
+      const value = completed || started;
+      const suffix = pluralRu(value, forms[0], forms[1], forms[2]);
+      const lastAt = usage.last_completed_at || usage.last_started_at;
+      return { icon, label, value, suffix, lastAt };
+    })
+    .filter(Boolean);
+  if (!rows.length && !p.weekly_letter_at) return null;
+
+  const sec = el("section", "product-path");
+  sec.appendChild(el("div", "product-path-label", "Мой путь"));
+  sec.appendChild(
+    el("p", "product-path-sub", "То, к чему ты уже возвращался. Без стриков и оценок."),
+  );
+  const list = el("div", "product-path-list");
+  rows.forEach((row) => {
+    const item = el("div", "product-path-row");
+    item.appendChild(el("span", "product-path-icon", row.icon));
+    const copy = el("div", "product-path-text");
+    copy.appendChild(el("strong", null, row.label));
+    const date = fmtDate(row.lastAt);
+    copy.appendChild(
+      el("span", null, row.value + " " + row.suffix + (date ? " · " + date : "")),
+    );
+    item.appendChild(copy);
+    list.appendChild(item);
+  });
+  if (p.weekly_letter_at) {
+    const item = el("div", "product-path-row");
+    item.appendChild(el("span", "product-path-icon", "✉️"));
+    const copy = el("div", "product-path-text");
+    copy.appendChild(el("strong", null, "Письмо недели"));
+    copy.appendChild(el("span", null, "последнее · " + fmtDate(p.weekly_letter_at)));
+    item.appendChild(copy);
+    list.appendChild(item);
+  }
+  sec.appendChild(list);
   return sec;
 }
 
@@ -1462,6 +1557,9 @@ function renderProfile(p) {
   // «Сегодня» — вопрос дня + возврат в чат: причина открывать мини-апп каждый день
   root.appendChild(todayBlock(p));
 
+  const path = pathBlock(p.path);
+  if (path) root.appendChild(path);
+
   // что изменилось с прошлого визита (динамика между сессиями)
   const dyn = dynamicsBlock(p.dynamics);
   if (dyn) root.appendChild(dyn);
@@ -1488,6 +1586,9 @@ function renderProfile(p) {
   // комплексы и архетипы как звёзды вокруг Самости + нити общего мотива, тап раскрывает.
   const sky = psycheMap(p.sections, p.archetypes);
   if (sky) root.appendChild(sky);
+
+  // Первый CTA следует за персональной картой, а не теряется после длинного профиля.
+  if (!p.is_paid) root.appendChild(upgradeNudge(p));
 
   // Блок «Нить наших разговоров» убран (08.07): показывал внутренний конспект бэкенда,
   // который читался как вечный банальный текст. Живое лицо — карта, нити, динамика.
@@ -1661,10 +1762,7 @@ function renderProfile(p) {
       ),
     );
     const btn = el("button", "upgrade-btn weave-locked-btn", "Открыть нити 🔓");
-    btn.addEventListener("click", () => {
-      const up = document.querySelector(".upgrade");
-      if (up) up.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    btn.addEventListener("click", scrollToUpgrade);
     card.appendChild(btn);
     sec.appendChild(card);
     root.appendChild(sec);

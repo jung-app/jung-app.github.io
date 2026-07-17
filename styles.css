@@ -14,7 +14,7 @@
 
   --text: #ece7df; /* тёплый «пергаментный» белый */
   --muted: #8a8676;
-  --muted-soft: #6f6c62;
+  --muted-soft: #8a8676;
 
   --gold: #e8c074; /* алхимическое золото — главный акцент */
   --gold-deep: #c79a48;
@@ -33,6 +33,11 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+}
+
+:where(button, a, summary):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
 }
 
 body {
@@ -245,6 +250,7 @@ body {
   font-size: 13.5px;
   font-weight: 600;
   padding: 9px 16px;
+  min-height: 44px;
   border-radius: 12px;
   cursor: pointer;
   transition:
@@ -254,6 +260,62 @@ body {
 .today-cta:hover {
   background: var(--gold-soft);
   border-color: rgba(232, 192, 116, 0.4);
+}
+
+/* --- накопленная польза от практик, без соревновательных стриков --- */
+.product-path {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.product-path-label {
+  color: var(--gold-deep);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.product-path-sub {
+  margin: 7px 0 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.product-path-list {
+  display: grid;
+  gap: 1px;
+}
+.product-path-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 48px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.product-path-row:first-child {
+  border-top: 0;
+}
+.product-path-icon {
+  flex: 0 0 28px;
+  text-align: center;
+  font-size: 17px;
+}
+.product-path-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.product-path-text strong {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.product-path-text span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 /* --- путь индивидуации (Персона → Тень → Анима/Анимус → Самость) --- */
@@ -727,6 +789,7 @@ body {
 .premiumbot-btn {
   width: 100%;
   padding: 10px 12px;
+  min-height: 44px;
   border: 1px solid rgba(232, 192, 116, 0.38);
   border-radius: 999px;
   color: var(--gold);
@@ -735,6 +798,77 @@ body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* --- ранний CTA подписки после персональной карты --- */
+.upgrade-nudge {
+  margin: 2px 0 24px;
+  padding: 18px;
+  border: 1px solid rgba(232, 192, 116, 0.28);
+  border-radius: var(--radius);
+  background: linear-gradient(150deg, rgba(232, 192, 116, 0.11), var(--panel));
+}
+.upgrade-nudge-label {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.upgrade-nudge-title {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 19px;
+  line-height: 1.3;
+}
+.upgrade-nudge-text {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.upgrade-nudge-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  margin-top: 15px;
+}
+.upgrade-nudge-pay,
+.upgrade-nudge-more {
+  min-height: 44px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.upgrade-nudge-pay {
+  border: 0;
+  color: var(--bg-0);
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+}
+.upgrade-nudge-more {
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  color: var(--gold);
+  background: transparent;
+}
+.upgrade-nudge-pay:hover:not(:disabled) {
+  box-shadow: 0 7px 20px rgba(232, 192, 116, 0.25);
+}
+.upgrade-nudge-more:hover {
+  border-color: rgba(232, 192, 116, 0.42);
+  background: var(--gold-soft);
+}
+.upgrade-nudge-pay:active:not(:disabled),
+.upgrade-nudge-more:active {
+  opacity: 0.78;
+}
+.upgrade-nudge-pay:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* --- полоса метрик --- */
@@ -872,6 +1006,9 @@ body {
   color: var(--muted);
   transition: color 0.15s;
   -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
 }
 .card-guide-q::-webkit-details-marker {
   display: none;
@@ -879,6 +1016,7 @@ body {
 .card-guide-q::after {
   content: " +";
   color: var(--gold-deep);
+  margin-left: 4px;
 }
 .card-guide[open] .card-guide-q {
   color: var(--gold);
@@ -948,6 +1086,7 @@ body {
   font: inherit;
   font-size: 0.82rem;
   padding: 6px 12px;
+  min-height: 44px;
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
@@ -1210,6 +1349,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   .profile > * {
     animation: none;
   }
