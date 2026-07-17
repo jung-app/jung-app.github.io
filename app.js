@@ -446,6 +446,7 @@ function dynamicsBlock(d) {
 function shareRow(referral, inviteUrl) {
   const r = referral || {};
   const days = r.reward_days || 14;
+  const bonus = r.bonus_messages || 5;
   const daysWord = pluralRu(days, "день", "дня", "дней");
   const sec = el("section", "referral");
   sec.appendChild(el("div", "referral-label", "Расти вместе"));
@@ -467,7 +468,7 @@ function shareRow(referral, inviteUrl) {
       "referral-text",
       r.rewarded
         ? "Спасибо, что делишься путём. Когда останется ещё один близкий — тебе снова +" + days + " " + daysWord + "."
-        : "Когда близкий останется с подпиской — тебе +" + days + " " + daysWord + " доступа. Ему — расширенное знакомство с проводником.",
+        : "Близкому откроется 7-дневный маршрут и +" + bonus + " дополнительных ответов. После его первой оплаты тебе +" + days + " " + daysWord + " подписки.",
     ),
   );
 
@@ -475,7 +476,7 @@ function shareRow(referral, inviteUrl) {
   btn.type = "button";
   btn.addEventListener("click", () => {
     const text =
-      "Я иду путём самопознания с этим проводником — юнгианская работа над собой прямо в Telegram. Попробуй и ты 🌑";
+      "Я прохожу 7-дневный маршрут с ИИ-проводником: замечаю повторяющиеся сценарии и проверяю маленькие шаги в жизни. Тебе по моей ссылке дадут +" + bonus + " ответов 🌑";
     const link = "https://t.me/share/url?url=" + encodeURIComponent(inviteUrl) + "&text=" + encodeURIComponent(text);
     if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(link);
     else window.open(link, "_blank");
@@ -558,7 +559,7 @@ function pollForActivation() {
           setView(
             stateView(
               "Подписка активна",
-              "Спасибо 🌑 Теперь я помню твой путь между сессиями. Возвращайся в чат — продолжим оттуда, где остановились.",
+              "Спасибо 🌑 Возвращайся в чат: продолжим твой путь без пауз, с того места, где остановились.",
               "✦",
             ),
           );
@@ -576,7 +577,7 @@ function pollForActivation() {
 // Панель подписки (только для free): после показа реального образа продаём переход
 // от понимания к действию, а память делает этот путь непрерывным. Существующие грани не прячем (это данные юзера,
 // 152-ФЗ «ты хозяин данных») — показываем, что открывает подписка, и кнопку оплаты.
-function upgradeSection(billing) {
+function upgradeSection(billing, access) {
   const sec = el("section", "upgrade");
   sec.appendChild(el("div", "upgrade-label", "Дальше — вместе"));
   sec.appendChild(el("h2", "upgrade-title serif", "Не только понять. Начать действовать иначе"));
@@ -584,17 +585,17 @@ function upgradeSection(billing) {
     el(
       "p",
       "upgrade-text",
-      "С подпиской я замечаю повторяющиеся сценарии, помню твои шаги и то, что уже " +
-        "сработало. Каждый разговор продолжает путь и помогает корректировать его в жизни.",
+      "Подписка продолжает работу без пауз: замечаем сценарий, выбираем шаг, проверяем " +
+        "его в жизни и корректируем путь. Твой портрет остаётся твоим в любом случае.",
     ),
   );
   const perks = el("ul", "upgrade-perks");
   // Канон ценности — зеркало subscription_comparison() в app/handlers/payments.py.
   // Держи в синхроне с ботом и лендингом.
   [
-    "Повторяющиеся сценарии превращаются в конкретные шаги",
-    "Память между сессиями — помню, что уже сработало",
-    "Свободные разговоры с проводником — каждый день",
+    "Полный цикл: сценарий → потребность → шаг → проверка → корректировка",
+    "Непрерывность между сессиями — помню твои шаги и что уже сработало",
+    "Разговоры без пауз после пробного маршрута",
     "Растущая карта твоих тем, опор и изменений",
     "Привычки 🌿 — триггер, потребность, замена и новый минимальный шаг",
     "Глубинная сессия 🌀 — встреча с внутренней фигурой",
@@ -614,7 +615,7 @@ function upgradeSection(billing) {
   const btn = el(
     "button",
     "upgrade-btn",
-    monthly ? monthly + " ⭐ / 30 дней" : "Продолжить с памятью",
+    monthly ? "Продолжить путь · " + monthly + " ⭐ / 30 дней" : "Продолжить путь",
   );
   btn.type = "button";
   btn.addEventListener("click", () => startUpgrade(btn, "monthly"));
@@ -671,20 +672,45 @@ function upgradeNudge(p) {
   const remaining = Number(access.free_remaining);
   const exhausted = Boolean(access.demo_exhausted);
   const sec = el("section", "upgrade-nudge");
-  sec.appendChild(el("div", "upgrade-nudge-label", exhausted ? "Демо завершено" : "Твой путь"));
-  sec.appendChild(el("h2", "upgrade-nudge-title serif", "Продолжи путь без паузы"));
+  const stageLabels = {
+    portrait_ready: "Портрет готов",
+    pattern_named: "Сценарий замечен",
+    step_chosen: "Маленький шаг выбран",
+    outcome_shared: "Результат принесён в разговор",
+    loop_completed: "Первый цикл завершён",
+  };
+  const stage = stageLabels[access.activation_stage] || "Маршрут начат";
+  const returnPassActive = Boolean(access.reactivation_pass_active);
+  sec.appendChild(el(
+    "div",
+    "upgrade-nudge-label",
+    returnPassActive ? "Доступ возвращён" : (exhausted ? "Маршрут завершён" : "7-дневный маршрут"),
+  ));
+  sec.appendChild(el("h2", "upgrade-nudge-title serif", returnPassActive ? "Продолжим нить" : stage));
 
-  let copy = "Подписка сохраняет нить разговоров, замечает повторяющиеся сценарии и помогает проверять маленькие шаги в жизни.";
-  if (!exhausted && Number.isFinite(remaining) && remaining > 0) {
+  let copy = "Твой портрет сохранён. Подписка продолжает работу без пауз: следующие шаги, проверка в жизни и корректировка пути.";
+  const trialRemaining = Number(access.trial_messages_remaining);
+  const trialDays = Number(access.trial_days_remaining);
+  const returnRemaining = Number(access.reactivation_pass_messages_remaining);
+  const returnDays = Number(access.reactivation_pass_days_remaining);
+  if (returnPassActive && Number.isFinite(returnRemaining)) {
+    copy = "На " + returnDays + " " + pluralRu(returnDays, "день", "дня", "дней") +
+      " открыт полный доступ: осталось " + returnRemaining + " " +
+      pluralRu(returnRemaining, "ответ", "ответа", "ответов") +
+      ". Можно продолжить прежнюю тему или принести то, что изменилось.";
+  } else if (access.trial_active && Number.isFinite(trialRemaining)) {
+    copy = "Осталось " + trialDays + " " + pluralRu(trialDays, "день", "дня", "дней") +
+      " и " + trialRemaining + " " + pluralRu(trialRemaining, "ответ", "ответа", "ответов") +
+      ". Цель маршрута: пройти один цикл от замеченного сценария до проверки шага в жизни.";
+  } else if (!access.trial_started && !exhausted && Number.isFinite(remaining) && remaining > 0) {
     copy = "В бесплатном знакомстве осталось " + remaining + " " +
-      pluralRu(remaining, "сообщение", "сообщения", "сообщений") +
-      ". С подпиской проводник продолжает помнить путь и помогает доводить понимание до действия.";
+      pluralRu(remaining, "сообщение", "сообщения", "сообщений") + ".";
   }
   sec.appendChild(el("p", "upgrade-nudge-text", copy));
 
   const actions = el("div", "upgrade-nudge-actions");
   const monthly = Number(billing.monthly_xtr || 0);
-  const pay = el("button", "upgrade-nudge-pay", monthly ? monthly + " ⭐ / 30 дней" : "Продолжить с памятью");
+  const pay = el("button", "upgrade-nudge-pay", monthly ? "Продолжить · " + monthly + " ⭐" : "Продолжить путь");
   pay.type = "button";
   pay.addEventListener("click", () => startUpgrade(pay, "monthly"));
   actions.appendChild(pay);
@@ -1994,7 +2020,7 @@ function renderProfile(p) {
   }
 
   // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
-  if (!p.is_paid) root.appendChild(upgradeSection(p.billing));
+  if (!p.is_paid) root.appendChild(upgradeSection(p.billing, p.access));
 
   if (p.invite_url) root.appendChild(shareRow(p.referral, p.invite_url));
 
