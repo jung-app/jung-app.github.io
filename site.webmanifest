@@ -1,0 +1,10 @@
+{
+  "name": "MindCoach — проводник самопознания",
+  "short_name": "MindCoach",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#090f1d",
+  "theme_color": "#0a1020",
+  "lang": "ru",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
