@@ -13,6 +13,10 @@
 - `app.js` — загрузка профиля и рендер (чистый JS, без сборки).
 - `styles.css` — стили, цвета из Telegram `themeParams` (свет/тьма).
 - `config.js` — **единственное, что правится при деплое:** `API_BASE` (URL бэкенда).
+- `landing.html`, `landing.css`, `landing.js` — публичный лендинг `mindcoachbot.ru` с
+  CSS 3D-композицией, privacy-safe событиями конверсии и Telegram CTA.
+- `robots.txt`, `sitemap.xml`, `site.webmanifest`, `og-image-v2.png` — SEO и social preview.
+- `tests/landing-smoke.mjs` — статический smoke критического пути до Telegram.
 
 ## Деплой (GitHub Pages)
 
