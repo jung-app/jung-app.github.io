@@ -778,18 +778,58 @@ function todayBlock(p) {
   return sec;
 }
 
+function closeToChat() {
+  if (tg && typeof tg.close === "function") tg.close();
+}
+
+// Статические Lucide-подобные SVG вместо системных emoji: одинаковы на iOS/Android,
+// наследуют тему и не меняют метрики строки от шрифта устройства.
+const PATH_ICON_SVG = {
+  dream: '<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/>',
+  journal: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+  imagination: '<path d="m12 3-1.4 3.6L7 8l3.6 1.4L12 13l1.4-3.6L17 8l-3.6-1.4Z"/><path d="m5 14-.8 2.2L2 17l2.2.8L5 20l.8-2.2L8 17l-2.2-.8Z"/>',
+  habit: '<path d="M20 7h-9a4 4 0 0 0-4 4v1"/><path d="m17 4 3 3-3 3"/><path d="M4 17h9a4 4 0 0 0 4-4v-1"/><path d="m7 20-3-3 3-3"/>',
+  grow: '<path d="M12 22V10"/><path d="M12 13C7 13 4 10 4 5c5 0 8 3 8 8Z"/><path d="M12 17c5 0 8-3 8-8-5 0-8 3-8 8Z"/>',
+  letter: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+};
+
+function pathIcon(kind) {
+  const icon = el("span", "product-path-icon");
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' + PATH_ICON_SVG[kind] + "</svg>";
+  return icon;
+}
+
 function pathBlock(path) {
   const p = path || {};
   const features = p.features || {};
   const specs = [
-    ["dream", "🌙", "Сны", ["разбор", "разбора", "разборов"]],
-    ["journal", "🖊", "Вопрос дня", ["открытие", "открытия", "открытий"]],
-    ["imagination", "🕯", "Глубинные сессии", ["сессия", "сессии", "сессий"]],
-    ["habit", "🌿", "Работа с привычкой", ["шаг", "шага", "шагов"]],
-    ["grow", "🌱", "Новая привычка", ["шаг", "шага", "шагов"]],
+    {
+      key: "dream", label: "Разборы снов", forms: ["разбор", "разбора", "разборов"],
+      next: "Продолжи в чате с образом, который всё ещё цепляет.",
+    },
+    {
+      key: "journal", label: "Вопрос дня", forms: ["раз", "раза", "раз"],
+      next: "Ответь в чате на то, что хочется не потерять.",
+    },
+    {
+      key: "imagination", label: "Глубинные сессии", forms: ["сессия", "сессии", "сессий"],
+      next: "Вернись к образу, когда есть спокойное время.",
+    },
+    {
+      key: "habit", label: "Изменение привычки", forms: ["раз", "раза", "раз"],
+      next: "Повтори выбранную замену при знакомом триггере.",
+    },
+    {
+      key: "grow", label: "Полезная привычка", forms: ["раз", "раза", "раз"],
+      next: "Сделай минимальную версию сегодня. Пропуск ничего не обнуляет.",
+    },
   ];
   const rows = specs
-    .map(([key, icon, label, forms]) => {
+    .map((spec) => {
+      const key = spec.key;
       const usage = features[key] || {};
       const started = Number(usage.started || 0);
       let completed = Number(usage.completed || 0);
@@ -797,41 +837,64 @@ function pathBlock(path) {
       if (key === "grow") completed = Math.max(completed, Number(p.growth_done_count || 0));
       if (!started && !completed) return null;
       const value = completed || started;
-      const suffix = pluralRu(value, forms[0], forms[1], forms[2]);
-      const lastAt = usage.last_completed_at || usage.last_started_at;
-      return { icon, label, value, suffix, lastAt };
+      let state;
+      if (completed) {
+        const suffix = pluralRu(value, spec.forms[0], spec.forms[1], spec.forms[2]);
+        state = key === "habit" || key === "grow"
+          ? "Получилось " + value + " " + suffix
+          : value + " " + suffix;
+      } else if (key === "journal") {
+        state = "Открывал " + value + " " + pluralRu(value, "раз", "раза", "раз");
+      } else {
+        state = key === "dream" ? "Разбор начат" : key === "imagination"
+          ? "Сессия начата" : "Практика начата";
+      }
+      const fallbackAt = key === "habit" ? p.ritual_done_at : key === "grow" ? p.growth_done_at : null;
+      const lastAt = completed
+        ? usage.last_completed_at || fallbackAt || usage.last_started_at
+        : usage.last_started_at;
+      return { kind: key, label: spec.label, state, next: spec.next, lastAt };
     })
     .filter(Boolean);
+  if (p.weekly_letter_at) {
+    rows.push({
+      kind: "letter",
+      label: "Письмо недели",
+      state: "Пришло в чат " + fmtDate(p.weekly_letter_at),
+      next: "Ответь на вопрос из письма: так наблюдение станет следующим шагом.",
+      lastAt: p.weekly_letter_at,
+    });
+  }
   if (!rows.length && !p.weekly_letter_at) return null;
+  rows.sort((a, b) => (Date.parse(b.lastAt || "") || 0) - (Date.parse(a.lastAt || "") || 0));
 
   const sec = el("section", "product-path");
   sec.appendChild(el("div", "product-path-label", "Мой путь"));
   sec.appendChild(
-    el("p", "product-path-sub", "То, к чему ты уже возвращался. Без стриков и оценок."),
+    el(
+      "p",
+      "product-path-sub",
+      "Здесь разговор превращается в действие. Продолжай один маленький шаг, без гонки и стриков.",
+    ),
   );
   const list = el("div", "product-path-list");
   rows.forEach((row) => {
     const item = el("div", "product-path-row");
-    item.appendChild(el("span", "product-path-icon", row.icon));
+    item.appendChild(pathIcon(row.kind));
     const copy = el("div", "product-path-text");
     copy.appendChild(el("strong", null, row.label));
     const date = fmtDate(row.lastAt);
-    copy.appendChild(
-      el("span", null, row.value + " " + row.suffix + (date ? " · " + date : "")),
-    );
+    const state = row.kind === "letter" ? row.state : row.state + (date ? " · " + date : "");
+    copy.appendChild(el("span", "product-path-state", state));
+    copy.appendChild(el("span", "product-path-next", "Следующий шаг: " + row.next));
     item.appendChild(copy);
     list.appendChild(item);
   });
-  if (p.weekly_letter_at) {
-    const item = el("div", "product-path-row");
-    item.appendChild(el("span", "product-path-icon", "✉️"));
-    const copy = el("div", "product-path-text");
-    copy.appendChild(el("strong", null, "Письмо недели"));
-    copy.appendChild(el("span", null, "последнее · " + fmtDate(p.weekly_letter_at)));
-    item.appendChild(copy);
-    list.appendChild(item);
-  }
   sec.appendChild(list);
+  const cta = el("button", "product-path-cta", "Продолжить в чате");
+  cta.type = "button";
+  cta.addEventListener("click", closeToChat);
+  sec.appendChild(cta);
   return sec;
 }
 
@@ -842,6 +905,7 @@ const FIGURE_GLYPH = { self: "✦", persona: "◐", shadow: "●", anima_animus:
 // Короткие подписи фигур на карте (полное имя — в раскрытии по тапу; длинное налезало бы).
 const FIGURE_SHORT = { self: "Самость", persona: "Персона", shadow: "Тень", anima_animus: "Анима" };
 const GREAT_KEYS = ["persona", "shadow", "anima_animus"]; // великие фигуры (подписываем)
+const MAP_ITEM_LIMIT = 18; // Самость не входит: защищаем обзор от бесконечного роста архетипов
 const CX = 150;
 const CY = 146; // центр мандалы (Самость)
 // Три кольца глубины: ближе к центру — то, что уже узнано и принято; на краю — что едва
@@ -900,11 +964,11 @@ function psycheMap(sections, archetypes) {
   });
 
   // собираем все грани в единый список звёзд (кроме Самости — она центр)
-  const items = [];
+  const allItems = [];
   sections.forEach((s) => {
     if (s.key === "self") return;
     const great = GREAT_KEYS.indexOf(s.key) !== -1;
-    items.push({
+    allItems.push({
       label: s.label,
       mapLabel: great ? FIGURE_SHORT[s.key] : null,
       glyph: great ? FIGURE_GLYPH[s.key] : null,
@@ -913,15 +977,28 @@ function psycheMap(sections, archetypes) {
       r: great ? 7.5 : starR(s.evidence_count),
       theme: s.theme,
       anchor: great,
+      evidenceCount: Number(s.evidence_count || 0),
       key: s.label,
     });
   });
   (archetypes || []).forEach((a) => {
-    items.push({
+    allItems.push({
       label: a.name, mapLabel: null, glyph: null, summary: a.summary,
       band: depthBand(a), r: starR(a.evidence_count), theme: a.theme, arch: true, key: a.name,
+      evidenceCount: Number(a.evidence_count || 0),
     });
   });
+
+  // Все фиксированные грани остаются на карте. Если архетипов со временем станет много,
+  // показываем самые проявленные; полный список всё равно остаётся карточками ниже.
+  const fixedItems = allItems.filter((it) => !it.arch);
+  const archetypeItems = allItems
+    .filter((it) => it.arch)
+    .sort((a, z) => a.band - z.band || z.evidenceCount - a.evidenceCount || hashStr(a.key) - hashStr(z.key));
+  const items = fixedItems
+    .concat(archetypeItems.slice(0, Math.max(0, MAP_ITEM_LIMIT - fixedItems.length)))
+    .slice(0, MAP_ITEM_LIMIT);
+  const hiddenMapItems = Math.max(0, allItems.length - items.length);
 
   // Самость — центр (или призрачный центр, если ещё не проявилась)
   const selfSec = byKey.self;
@@ -1074,7 +1151,10 @@ function psycheMap(sections, archetypes) {
     parts.push(
       `<text y="${(r + (st.self ? 16 : 10)).toFixed(1)}" class="${labelCls}">${escXml(st.mapLabel || st.label)}</text>`,
     );
-    return `<g class="star" data-i="${i}" transform="translate(${st.x.toFixed(1)},${st.y.toFixed(1)})">${parts.join("")}</g>`;
+    const accessible = escXml(
+      st.label + (st.summary ? ". " + st.summary : ". Нажми, чтобы раскрыть тему"),
+    );
+    return `<g class="star" data-i="${i}" role="button" tabindex="0" aria-label="${accessible}" aria-pressed="false" transform="translate(${st.x.toFixed(1)},${st.y.toFixed(1)})">${parts.join("")}</g>`;
   };
 
   const linkMarkup = (lk) => {
@@ -1129,18 +1209,30 @@ function psycheMap(sections, archetypes) {
     el(
       "p",
       "sky-sub",
-      "Живая карта: в центре — Самость, вокруг — грани, комплексы и архетипы; золотые нити " +
-        "связывают растущее из одного корня. Потяни звезду — небо отзовётся. Тапни — раскрою " +
-        "грань и подсвечу её созвездие. Щипок — ближе, двойной тап — вернуть как было.",
+      "Каждая звезда — тема, которую мы заметили. Ярче и ближе к центру значит больше " +
+        "подтверждений, золотая нить показывает возможную общую потребность. Карта будет " +
+        "дополняться, но лишние подписи скрываются, чтобы оставалось место.",
     ),
   );
+  const legend = el("div", "sky-legend");
+  [
+    ["sky-legend-dot sky-legend-dot--clear", "узнано и подтверждается"],
+    ["sky-legend-dot sky-legend-dot--emerging", "пока рабочая гипотеза"],
+    ["sky-legend-line", "темы могут расти из одного корня"],
+  ].forEach(([cls, text]) => {
+    const item = el("span", "sky-legend-item");
+    item.appendChild(el("i", cls));
+    item.appendChild(document.createTextNode(text));
+    legend.appendChild(item);
+  });
+  sec.appendChild(legend);
   const wrap = el("div", "sky-canvas");
   wrap.innerHTML =
-    `<svg viewBox="0 0 300 300" class="sky-svg" role="img" aria-label="Карта психики">${svg.join("")}</svg>`;
+    `<svg viewBox="0 0 300 300" class="sky-svg" role="group" aria-label="Интерактивная карта психики. Выбирай звёзды клавишей Enter или нажатием.">${svg.join("")}</svg>`;
   sec.appendChild(wrap);
 
   const readout = el("div", "sky-readout");
-  const HINT = "Нажми на звезду — покажу грань и подсвечу её созвездие";
+  const HINT = "Нажми на звезду: покажу, что она значит и с чем связана";
   readout.appendChild(el("span", "sky-readout-hint", HINT));
   sec.appendChild(readout);
 
@@ -1148,7 +1240,9 @@ function psycheMap(sections, archetypes) {
   const nLinks = Object.keys(byTheme).filter((th) => byTheme[th].length >= 2).length;
   const meta = el("div", "sky-meta");
   meta.textContent =
-    nFacets + " " + pluralRu(nFacets, "грань", "грани", "граней") +
+    (hiddenMapItems
+      ? "На карте " + (nFacets - hiddenMapItems) + " из " + nFacets + " тем"
+      : nFacets + " " + pluralRu(nFacets, "тема", "темы", "тем")) +
     (nLinks ? " · " + nLinks + " " + pluralRu(nLinks, "нить", "нити", "нитей") : "");
   sec.appendChild(meta);
 
@@ -1315,11 +1409,20 @@ function psycheMap(sections, archetypes) {
           i, prio: (i === active ? 8 : 0) + (stars[i].anchor ? 4 : 0) + (lit ? 2 : 0),
         });
       } else {
-        t.classList.remove("clash"); // скрытую CSS-ом подпись в борьбу за место не берём
+        t.classList.remove("label-visible");
+        t.classList.remove("clash");
       }
     }
     candidates.sort((a, b) => b.prio - a.prio || stars[b.i].r - stars[a.i].r);
     const taken = [];
+    const maxVisible = k < 1.35 ? 4 : k < 2 ? 7 : 11;
+    const nodeBoxes = stars.map((st) => {
+      const rr = (st.r + 3) * k;
+      const x = st.x * k + cam.tx;
+      const y = st.y * k + cam.ty;
+      return { x0: x - rr, x1: x + rr, y0: y - rr, y1: y + rr };
+    });
+    let visible = 0;
     candidates.forEach(({ i }) => {
       const st = stars[i];
       const w = labelLen[i] * labelBase[i] * 0.58; // экранные (вью-)единицы
@@ -1327,11 +1430,21 @@ function psycheMap(sections, archetypes) {
       const cx = st.x * k + cam.tx;
       const y0 = (st.y + st.r) * k + cam.ty + 3;
       const box = { x0: cx - w / 2, x1: cx + w / 2, y0, y1: y0 + h };
-      const hit = taken.some(
+      const hitsLabel = taken.some(
         (b) => box.x0 < b.x1 + 2 && b.x0 < box.x1 + 2 && box.y0 < b.y1 + 1 && b.y0 < box.y1 + 1,
       );
-      labelEls[i].classList.toggle("clash", hit);
-      if (!hit) taken.push(box);
+      const hitsNode = nodeBoxes.some(
+        (b, j) => j !== i && box.x0 < b.x1 + 1 && b.x0 < box.x1 + 1 && box.y0 < b.y1 + 1 && b.y0 < box.y1 + 1,
+      );
+      const clipped = box.x0 < 2 || box.x1 > 298 || box.y0 < 2 || box.y1 > 298;
+      const overLimit = visible >= maxVisible && i !== active;
+      const hidden = hitsLabel || hitsNode || clipped || overLimit;
+      labelEls[i].classList.toggle("clash", hidden);
+      labelEls[i].classList.toggle("label-visible", !hidden);
+      if (!hidden) {
+        taken.push(box);
+        visible += 1;
+      }
     });
   };
 
@@ -1381,7 +1494,10 @@ function psycheMap(sections, archetypes) {
       lit[active] = true;
       if (th && byTheme[th]) byTheme[th].forEach((k) => { lit[k] = true; });
     }
-    starGs.forEach((g, k) => g.classList.toggle("lit", !!lit[k]));
+    starGs.forEach((g, k) => {
+      g.classList.toggle("lit", !!lit[k]);
+      g.setAttribute("aria-pressed", k === active ? "true" : "false");
+    });
     themeLineEls.forEach((l) =>
       l.classList.toggle("on", !!th && l.getAttribute("data-th") === th));
     if (focus) {
@@ -1400,10 +1516,27 @@ function psycheMap(sections, archetypes) {
       readout.appendChild(el("span", "sky-readout-name", stars[active].label));
       if (stars[active].summary)
         readout.appendChild(el("span", "sky-readout-text", stars[active].summary));
+      const discuss = el("button", "sky-readout-cta", "Обсудить эту тему в чате");
+      discuss.type = "button";
+      discuss.addEventListener("click", closeToChat);
+      readout.appendChild(discuss);
     } else {
       readout.appendChild(el("span", "sky-readout-hint", HINT));
     }
   };
+
+  starGs.forEach((g, i) => {
+    g.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      active = active === i ? -1 : i;
+      applyFocus();
+    });
+    g.addEventListener("focus", () => {
+      active = i;
+      applyFocus();
+    });
+  });
 
   // Тап = ближайшая звезда к касанию (хит-круги при плотном небе перекрывались бы).
   const starAt = (wx, wy, slack) => {

@@ -13,8 +13,8 @@
   --line-strong: rgba(255, 255, 255, 0.16);
 
   --text: #ece7df; /* тёплый «пергаментный» белый */
-  --muted: #8a8676;
-  --muted-soft: #8a8676;
+  --muted: #989485; /* 5.2:1 на panel-solid, WCAG AA для обычного текста */
+  --muted-soft: #908c7d; /* 4.7:1: вторичный текст остаётся тихим, но читаемым */
 
   --gold: #e8c074; /* алхимическое золото — главный акцент */
   --gold-deep: #c79a48;
@@ -280,42 +280,82 @@ body {
 .product-path-sub {
   margin: 7px 0 12px;
   color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .product-path-list {
   display: grid;
-  gap: 1px;
+  gap: 8px;
 }
 .product-path-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-height: 48px;
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
-}
-.product-path-row:first-child {
-  border-top: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.015);
 }
 .product-path-icon {
-  flex: 0 0 28px;
-  text-align: center;
-  font-size: 17px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid rgba(232, 192, 116, 0.18);
+  border-radius: 11px;
+}
+.product-path-icon svg {
+  width: 20px;
+  height: 20px;
 }
 .product-path-text {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .product-path-text strong {
   color: var(--text);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
 }
-.product-path-text span {
+.product-path-state {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 12.5px;
+}
+.product-path-next {
+  color: var(--text) !important;
+  font-size: 12.5px !important;
+  line-height: 1.45;
+}
+.product-path-cta,
+.sky-readout-cta {
+  appearance: none;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.product-path-cta:hover,
+.sky-readout-cta:hover {
+  background: var(--gold-soft);
+  border-color: rgba(232, 192, 116, 0.4);
+}
+.product-path-cta:active,
+.sky-readout-cta:active {
+  opacity: 0.72;
 }
 
 /* --- путь индивидуации (Персона → Тень → Анима/Анимус → Самость) --- */
@@ -337,10 +377,50 @@ body {
   margin-bottom: 8px;
 }
 .sky-sub {
-  margin: 0 0 6px;
+  margin: 0 0 10px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
+}
+.sky-legend {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.sky-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.sky-legend-dot,
+.sky-legend-line {
+  flex: 0 0 auto;
+  display: block;
+}
+.sky-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.sky-legend-dot--clear {
+  background: var(--gold);
+  box-shadow: 0 0 0 4px rgba(232, 192, 116, 0.12);
+}
+.sky-legend-dot--emerging {
+  background: rgba(232, 192, 116, 0.36);
+  border: 1px solid rgba(232, 192, 116, 0.7);
+}
+.sky-legend-line {
+  width: 14px;
+  height: 1px;
+  background: var(--gold);
+  box-shadow: 0 0 4px rgba(232, 192, 116, 0.5);
 }
 .sky-canvas {
   width: 100%;
@@ -397,13 +477,11 @@ body {
   transition: opacity 0.25s ease;
   pointer-events: none;
 }
-.sky-svg.zoomed .star-label,
-.star.lit .star-label {
+.star-label.label-visible {
   opacity: 1;
 }
 .star-label--anchor {
   font-size: 11px;
-  opacity: 1;
 }
 /* Проигравшая борьбу за место подпись прячется (JS-отбор наложений), пока зум
    не освободит место. Специфичность 4 классов — перебивает zoomed/lit/anchor. */
@@ -484,6 +562,11 @@ body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text);
+}
+.sky-readout-cta {
+  align-self: flex-start;
+  width: auto;
+  margin-top: 10px;
 }
 .sky-meta {
   margin-top: 10px;

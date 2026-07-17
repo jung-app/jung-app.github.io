@@ -24,9 +24,8 @@
    `WEBAPP_ALLOWED_ORIGIN` (= `https://<user>.github.io`), перезапустить бота —
    он сам поставит кнопку-меню «Мой профиль».
 
-## Важно про бэкенд
+## Бэкенд
 
-Бот крутится через launchd на ноуте и **публичного домена не имеет**. Чтобы страница
-(на GitHub Pages, HTTPS) достучалась до `/api/profile`, бэкенду нужен HTTPS-туннель —
-например Cloudflare Tunnel (`cloudflared`) или ngrok на `WEBAPP_PORT`. Адрес туннеля
-и идёт в `API_BASE` + `WEBAPP_ALLOWED_ORIGIN` бэкенда.
+Production работает на FirstVDS под `systemd`, за Caddy на постоянном
+`https://api.mindcoachbot.ru`. Этот адрес задан в `config.js`; туннели и `launchd` больше
+не входят в production-контур. Данные остаются в managed Supabase/PostgreSQL.
