@@ -1200,6 +1200,7 @@ function psycheMap(sections, archetypes) {
   svg.push('<g class="sky-stars">');
   stars.forEach((st, i) => svg.push(starMarkup(st, i)));
   svg.push("</g>");
+  svg.push('<circle id="starHalo" class="star-halo" cx="0" cy="0" r="0" fill="#e8c074" opacity="0"/>');
   svg.push('<circle id="starFocus" class="star-focus" cx="0" cy="0" r="0" fill="none" stroke="#e8c074" stroke-width="1.4" opacity="0"/>');
   svg.push("</g>"); // /sky-cam
 
@@ -1232,8 +1233,16 @@ function psycheMap(sections, archetypes) {
   sec.appendChild(wrap);
 
   const readout = el("div", "sky-readout");
+  readout.setAttribute("aria-live", "polite");
+  readout.setAttribute("aria-atomic", "true");
   const HINT = "Нажми на звезду: покажу, что она значит и с чем связана";
-  readout.appendChild(el("span", "sky-readout-hint", HINT));
+  const renderReadoutHint = () => {
+    readout.innerHTML = "";
+    readout.classList.remove("is-active");
+    readout.appendChild(el("span", "sky-readout-kicker", "Живая карта"));
+    readout.appendChild(el("span", "sky-readout-hint", HINT));
+  };
+  renderReadoutHint();
   sec.appendChild(readout);
 
   const nFacets = sections.length + (archetypes ? archetypes.length : 0);
@@ -1252,6 +1261,7 @@ function psycheMap(sections, archetypes) {
   const starGs = Array.prototype.slice.call(svgEl.querySelectorAll(".sky-stars .star"));
   const linkEls = Array.prototype.slice.call(svgEl.querySelectorAll(".sky-links line"));
   const themeLineEls = linkEls.filter((l) => l.getAttribute("data-th"));
+  const halo = svgEl.querySelector("#starHalo");
   const focus = svgEl.querySelector("#starFocus");
 
   // Телеграм сворачивает мини-апп свайпом вниз — на живой карте это ложные закрытия.
@@ -1510,19 +1520,81 @@ function psycheMap(sections, archetypes) {
         focus.setAttribute("opacity", "0");
       }
     }
+    if (halo) {
+      halo.classList.toggle("on", focused);
+      if (focused) {
+        halo.setAttribute("cx", stars[active].x.toFixed(1));
+        halo.setAttribute("cy", stars[active].y.toFixed(1));
+        halo.setAttribute("r", (stars[active].r + 12).toFixed(1));
+      } else {
+        halo.setAttribute("opacity", "0");
+      }
+    }
     updateLabels(); // состав lit изменился — пере-решить видимость подписей
     readout.innerHTML = "";
+    readout.classList.toggle("is-active", focused);
     if (focused) {
-      readout.appendChild(el("span", "sky-readout-name", stars[active].label));
+      const st = stars[active];
+      const head = el("div", "sky-readout-head");
+      const heading = el("div", "sky-readout-heading");
+      const toneLabel = st.tone === "clear"
+        ? "Узнано и подтверждается"
+        : st.tone === "working"
+          ? "Сейчас в работе"
+          : st.tone === "ghost"
+            ? "Пока в тени"
+            : "Только проявляется";
+      heading.appendChild(el("span", "sky-readout-kicker", toneLabel));
+      heading.appendChild(el("span", "sky-readout-name", st.label));
+      head.appendChild(heading);
+      const close = el("button", "sky-readout-close", "×");
+      close.type = "button";
+      close.setAttribute("aria-label", "Снять выбор темы");
+      close.addEventListener("click", () => {
+        active = -1;
+        applyFocus();
+      });
+      head.appendChild(close);
+      readout.appendChild(head);
       if (stars[active].summary)
         readout.appendChild(el("span", "sky-readout-text", stars[active].summary));
-      const discuss = el("button", "sky-readout-cta", "Обсудить эту тему в чате");
+      const related = th && byTheme[th] ? Math.max(0, byTheme[th].length - 1) : 0;
+      if (related) {
+        readout.appendChild(
+          el(
+            "span",
+            "sky-readout-meta",
+            "Связано ещё с " + related + " " + pluralRu(related, "темой", "темами", "темами"),
+          ),
+        );
+      }
+      const discuss = el("button", "sky-readout-cta", "Продолжить в разговоре");
       discuss.type = "button";
       discuss.addEventListener("click", closeToChat);
       readout.appendChild(discuss);
     } else {
-      readout.appendChild(el("span", "sky-readout-hint", HINT));
+      renderReadoutHint();
     }
+  };
+
+  const selectionFeedback = () => {
+    const haptics = tg && tg.HapticFeedback;
+    if (!haptics) return;
+    try {
+      if (typeof haptics.selectionChanged === "function") haptics.selectionChanged();
+      else if (typeof haptics.impactOccurred === "function") haptics.impactOccurred("light");
+    } catch (_) { /* старый Telegram-клиент */ }
+  };
+
+  const revealReadout = () => {
+    if (active < 0) return;
+    requestAnimationFrame(() => {
+      const rect = readout.getBoundingClientRect();
+      const viewportBottom = window.innerHeight - 12;
+      if (rect.bottom > viewportBottom) {
+        readout.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+      }
+    });
   };
 
   starGs.forEach((g, i) => {
@@ -1531,8 +1603,13 @@ function psycheMap(sections, archetypes) {
       e.preventDefault();
       active = active === i ? -1 : i;
       applyFocus();
+      if (active >= 0) selectionFeedback();
     });
     g.addEventListener("focus", () => {
+      // Тап сам переводит SVG-элемент в focus до pointerup. Не выбираем звезду здесь,
+      // иначе pointerup увидит её уже активной и тут же снимет выбор. Для Tab-фокуса
+      // pointers пуст, поэтому клавиатурная навигация по-прежнему раскрывает тему.
+      if (pointers.size) return;
       active = i;
       applyFocus();
     });
@@ -1648,6 +1725,10 @@ function psycheMap(sections, archetypes) {
       const hit = starAt(wx, wy, 18 / cam.k);
       active = hit === active ? -1 : hit >= 0 ? hit : -1;
       applyFocus();
+      if (active >= 0) {
+        selectionFeedback();
+        revealReadout();
+      }
     }
     tapStart = null;
   };
