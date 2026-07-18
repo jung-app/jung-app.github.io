@@ -34,11 +34,17 @@
   var config = document.createElement("script");
   config.src = "./config.js?v=" + version;
   config.onload = function () {
-    var app = document.createElement("script");
-    app.src = "./app.js?v=" + version;
-    app.onload = function () { clearTimeout(timer); };
-    app.onerror = showFailure;
-    document.body.appendChild(app);
+    var today = document.createElement("script");
+    today.src = "./today-prompt.js?v=" + version;
+    today.onload = function () {
+      var app = document.createElement("script");
+      app.src = "./app.js?v=" + version;
+      app.onload = function () { clearTimeout(timer); };
+      app.onerror = showFailure;
+      document.body.appendChild(app);
+    };
+    today.onerror = showFailure;
+    document.body.appendChild(today);
   };
   config.onerror = showFailure;
   timer = setTimeout(showFailure, 15000);

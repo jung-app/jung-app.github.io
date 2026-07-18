@@ -115,6 +115,7 @@ for (const file of [
   "../attribution.js",
   "../root-redirect.js",
   "../miniapp-boot.js",
+  "../today-prompt.js",
 ]) {
   await access(new URL(file, import.meta.url));
 }

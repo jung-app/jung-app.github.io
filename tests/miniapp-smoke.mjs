@@ -8,6 +8,7 @@ const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
+assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -20,6 +21,8 @@ assert.match(app, /svgEl\.style\.touchAction = "pan-y"/);
 assert.doesNotMatch(app, /disableVerticalSwipes/);
 assert.doesNotMatch(app, /last_user_preview/);
 assert.doesNotMatch(app, /last_assistant_preview/);
+assert.doesNotMatch(app, /latestProfileCue|todayPrompt/);
+assert.match(app, /Ответить в чате/);
 assert.doesNotMatch(app, /Выбери 500 ⭐|5000 ⭐ для года/);
 assert.match(app, /Сессия завершилась/);
 assert.match(app, /Обновить статус/);
