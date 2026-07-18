@@ -36,6 +36,24 @@ assert.match(
 assert.match(indexHtml, /<meta\s+[\s\S]*?name="description"/);
 assert.match(css, /prefers-reduced-motion: reduce/);
 assert.match(css, /:focus-visible/);
+assert.match(html, /Ориентиры первого маршрута/);
+assert.match(html, /Посмотреть, как устроен путь/);
+assert.doesNotMatch(html, /Пример диалога|пример разговора|dialog-window/);
+assert.match(html, /data-mobile-cta/);
+assert.match(html, /data-journey/);
+assert.equal(
+  (html.match(/data-journey-step/g) || []).length,
+  4,
+  "Journey must keep four scroll-linked steps",
+);
+assert.match(js, /mobileCtaObserver/);
+assert.match(js, /updateScrollMotion/);
+assert.match(css, /--journey-progress/);
+assert.match(css, /\.journey-steps\.has-motion li\.is-active[\s\S]*?transform: none/);
+assert.match(css, /\.mobile-cta\.is-visible/);
+assert.match(html, /Начать 7 дней бесплатно/);
+assert.match(html, /class="button button-primary"[\s\S]*?data-cta="pricing_free"/);
+assert.match(html, /class="button button-secondary"[\s\S]*?data-cta="pricing_month"/);
 assert.doesNotMatch(html, /target="_blank"/);
 assert.doesNotMatch(html, /http:\/\//);
 assert.doesNotMatch(js, /localStorage|sessionStorage|document\.cookie/);

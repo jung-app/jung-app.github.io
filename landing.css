@@ -428,13 +428,14 @@ canvas {
 .hero-visual {
   --rx: -4deg;
   --ry: 5deg;
+  --sy: 0px;
   position: relative;
   min-height: 560px;
   margin: 0;
   isolation: isolate;
   perspective: 900px;
   transform-style: preserve-3d;
-  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transform: translate3d(0, var(--sy), 0) rotateX(var(--rx)) rotateY(var(--ry));
   transition: transform 320ms ease-out;
 }
 .hero-visual::before {
@@ -449,6 +450,91 @@ canvas {
     transparent 72%
   );
   filter: blur(8px);
+}
+
+.route-proof {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(250px, 0.72fr) minmax(0, 1.5fr);
+  gap: clamp(36px, 6vw, 74px);
+  align-items: center;
+  margin-top: -24px;
+  padding: clamp(28px, 4vw, 42px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(
+    135deg,
+    rgba(239, 199, 123, 0.075),
+    rgba(23, 38, 62, 0.72) 42%,
+    rgba(32, 69, 72, 0.2)
+  );
+  box-shadow: var(--shadow-soft);
+}
+.route-proof::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.045), transparent 34%);
+  pointer-events: none;
+}
+.route-proof-heading,
+.route-proof-list {
+  position: relative;
+  z-index: 1;
+}
+.route-proof-heading .eyebrow {
+  margin-bottom: 12px;
+}
+.route-proof-heading h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.13;
+  letter-spacing: -0.03em;
+}
+.route-proof-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.route-proof-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px clamp(16px, 2.4vw, 28px);
+  border-left: 1px solid var(--line);
+}
+.route-proof-list li:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.route-proof-list li:last-child {
+  padding-right: 0;
+}
+.route-proof-list li > span {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.route-proof-list strong {
+  display: block;
+  margin-top: -2px;
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.25;
+}
+.route-proof-list p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 .psyche-core {
   position: absolute;
@@ -602,7 +688,7 @@ canvas {
 }
 .memory-card-b {
   right: -4%;
-  bottom: 8%;
+  bottom: 16%;
   transform: translateZ(150px) rotate(2deg);
 }
 .card-kicker {
@@ -650,7 +736,7 @@ canvas {
 }
 .visual-caption {
   position: absolute;
-  bottom: -1%;
+  bottom: 0;
   left: 0;
   right: 0;
   margin: 0;
@@ -734,14 +820,39 @@ canvas {
 }
 
 .journey {
+  --journey-progress: 0;
+  --journey-shift: -80px;
+  overflow: clip;
   background: linear-gradient(
     180deg,
     rgba(19, 29, 49, 0.5),
     rgba(10, 16, 29, 0.15)
-  );
+  ), var(--bg);
   border-block: 1px solid var(--line);
 }
+.journey::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  width: 520px;
+  height: 520px;
+  left: calc(50% - 260px);
+  top: 18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(110, 87, 174, 0.14),
+    rgba(43, 121, 113, 0.055) 46%,
+    transparent 70%
+  );
+  filter: blur(12px);
+  transform: translate3d(var(--journey-shift), 0, 0);
+  transition: transform 120ms linear;
+  pointer-events: none;
+}
 .journey-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
   gap: clamp(64px, 9vw, 130px);
@@ -754,11 +865,63 @@ canvas {
 .journey-heading .text-link {
   margin-top: 22px;
 }
+.journey-route {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 30px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.journey-route-track {
+  height: 1px;
+  overflow: hidden;
+  background: var(--line-strong);
+}
+.journey-route-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--mint));
+  transform: scaleX(var(--journey-progress));
+  transform-origin: left;
+  transition: transform 120ms linear;
+}
+.journey-route strong {
+  color: var(--gold);
+  font-size: 11px;
+}
 .journey-steps {
+  --journey-progress: 0;
+  position: relative;
   list-style: none;
   padding: 0;
   margin: 0;
   counter-reset: steps;
+}
+.journey-steps::before,
+.journey-steps::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 31px;
+  top: 32px;
+  bottom: 78px;
+  width: 1px;
+  transform-origin: top;
+}
+.journey-steps::before {
+  background: var(--line-strong);
+}
+.journey-steps::after {
+  background: linear-gradient(var(--gold), var(--mint));
+  box-shadow: 0 0 12px rgba(239, 199, 123, 0.2);
+  transform: scaleY(var(--journey-progress));
+  transition: transform 120ms linear;
 }
 .journey-steps li {
   position: relative;
@@ -767,16 +930,26 @@ canvas {
   gap: 24px;
   padding: 0 0 46px;
 }
+.journey-steps.has-motion li {
+  opacity: 0.62;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+.journey-steps.has-motion li.is-complete {
+  opacity: 0.82;
+}
+.journey-steps.has-motion li.is-active {
+  opacity: 1;
+  transform: none;
+}
 .journey-steps li:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  left: 31px;
-  top: 52px;
-  bottom: 8px;
-  width: 1px;
-  background: linear-gradient(var(--line-strong), var(--line));
+  display: none;
 }
 .step-number {
+  position: relative;
+  z-index: 1;
   width: 64px;
   height: 64px;
   display: grid;
@@ -787,6 +960,22 @@ canvas {
   font-family: var(--serif);
   font-size: 15px;
   background: var(--bg-soft);
+  transition:
+    color 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    box-shadow 220ms ease;
+}
+.journey-steps li.is-complete .step-number {
+  border-color: rgba(131, 213, 176, 0.48);
+  color: var(--mint);
+  background: #102334;
+}
+.journey-steps li.is-active .step-number {
+  border-color: var(--gold);
+  color: #1c160b;
+  background: linear-gradient(135deg, #f3d28f, var(--gold-strong));
+  box-shadow: 0 0 0 7px rgba(239, 199, 123, 0.08), 0 0 34px rgba(239, 199, 123, 0.22);
 }
 .journey-steps h3 {
   margin: 5px 0 7px;
@@ -797,127 +986,6 @@ canvas {
 .journey-steps p {
   margin: 0;
   color: var(--muted);
-}
-
-.demo {
-  overflow: clip;
-}
-.dialog-window {
-  max-width: 950px;
-  margin: auto;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: rgba(14, 23, 39, 0.74);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(16px);
-}
-.dialog-topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 78px;
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.025);
-}
-.dialog-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 36% 30%,
-    #fff1bf,
-    var(--gold) 18%,
-    #725a9b 46%,
-    #152b3b 74%
-  );
-  box-shadow: 0 0 20px rgba(239, 199, 123, 0.18);
-}
-.dialog-topbar div {
-  display: grid;
-  line-height: 1.2;
-}
-.dialog-topbar strong {
-  font-family: var(--serif);
-  font-size: 17px;
-}
-.dialog-topbar small {
-  color: var(--muted);
-  margin-top: 4px;
-}
-.dialog-status {
-  margin-left: auto;
-  color: var(--mint);
-  font-size: 12px;
-  font-weight: 750;
-}
-.dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: clamp(24px, 4vw, 46px);
-  background: radial-gradient(
-    circle at 78% 20%,
-    rgba(82, 67, 130, 0.13),
-    transparent 42%
-  );
-}
-.message {
-  max-width: 72%;
-  padding: 16px 19px;
-  border-radius: 20px;
-  color: var(--text-soft);
-  line-height: 1.55;
-}
-.message-user {
-  align-self: flex-end;
-  border-bottom-right-radius: 6px;
-  background: rgba(66, 83, 113, 0.78);
-  color: var(--text);
-}
-.message-guide {
-  align-self: flex-start;
-  border: 1px solid var(--line);
-  border-bottom-left-radius: 6px;
-  background: rgba(22, 36, 59, 0.9);
-}
-.message-short {
-  max-width: 48%;
-}
-.dialog-memory {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 24px;
-  border-top: 1px solid rgba(131, 213, 176, 0.16);
-  background: rgba(131, 213, 176, 0.07);
-}
-.dialog-memory svg {
-  width: 23px;
-  height: 23px;
-  fill: none;
-  stroke: var(--mint);
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.dialog-memory div {
-  display: grid;
-}
-.dialog-memory strong {
-  color: var(--mint);
-  font-size: 13px;
-}
-.dialog-memory span {
-  color: var(--muted);
-  font-size: 12px;
-}
-.demo-note {
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
-  margin: 16px 0 0;
 }
 
 .difference {
@@ -1093,7 +1161,7 @@ canvas {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.03);
 }
-.paid-card {
+.trial-card {
   border-color: rgba(239, 199, 123, 0.34);
   background: linear-gradient(
     145deg,
@@ -1101,6 +1169,9 @@ canvas {
     rgba(101, 78, 139, 0.08)
   );
   box-shadow: var(--shadow);
+}
+.paid-card {
+  background: rgba(255, 255, 255, 0.022);
 }
 .price-label {
   align-self: flex-start;
@@ -1380,6 +1451,10 @@ canvas {
   font-size: 12px;
 }
 
+.mobile-cta {
+  display: none;
+}
+
 /* Shared legal-document layout. */
 .aura {
   position: fixed;
@@ -1487,6 +1562,15 @@ canvas {
   }
 }
 
+@media (max-width: 1200px) {
+  .memory-card-a {
+    transform: rotate(-2deg);
+  }
+  .memory-card-b {
+    transform: rotate(2deg);
+  }
+}
+
 @media (max-width: 1020px) {
   .site-nav {
     display: none;
@@ -1515,8 +1599,22 @@ canvas {
     margin: -26px auto 0;
     min-height: 500px;
   }
+  .route-proof {
+    grid-template-columns: 1fr;
+    margin-top: 0;
+    text-align: center;
+  }
+  .route-proof-heading {
+    max-width: 650px;
+    margin-inline: auto;
+  }
   .journey-layout {
     gap: 64px;
+  }
+  .journey::before {
+    width: 420px;
+    height: 420px;
+    left: calc(50% - 210px);
   }
   .safety-panel {
     grid-template-columns: 1fr;
@@ -1629,6 +1727,94 @@ canvas {
     min-height: 420px;
     transform: none !important;
   }
+  .route-proof {
+    gap: 28px;
+    padding: 28px 22px;
+    text-align: left;
+  }
+  .route-proof-heading {
+    margin-inline: 0;
+  }
+  .route-proof-list {
+    grid-template-columns: 1fr;
+  }
+  .route-proof-list li,
+  .route-proof-list li:first-child,
+  .route-proof-list li:last-child {
+    min-height: 76px;
+    padding: 18px 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .route-proof-list li:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .mobile-cta {
+    position: fixed;
+    z-index: 90;
+    left: 14px;
+    right: 14px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 66px;
+    padding: 9px 12px 9px 18px;
+    border: 1px solid rgba(239, 199, 123, 0.38);
+    border-radius: 22px;
+    background: rgba(12, 20, 35, 0.94);
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(22px) saturate(145%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(calc(100% + 24px));
+    transition:
+      opacity 220ms ease,
+      transform 220ms ease,
+      visibility 220ms;
+  }
+  .mobile-cta.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+  }
+  .mobile-cta > span:first-child {
+    display: grid;
+    line-height: 1.2;
+  }
+  .mobile-cta strong {
+    font-family: var(--serif);
+    font-size: 17px;
+  }
+  .mobile-cta small {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .mobile-cta-action {
+    display: inline-flex;
+    min-height: 46px;
+    align-items: center;
+    gap: 5px;
+    padding: 11px 16px;
+    border-radius: 999px;
+    color: #1c160b;
+    background: linear-gradient(135deg, #f3d28f, var(--gold-strong));
+    font-weight: 800;
+  }
+  .mobile-cta-action svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
   .psyche-core,
   .core-shell::before,
   .core-shell::after,
@@ -1654,10 +1840,12 @@ canvas {
   .memory-card-a {
     left: 0;
     top: 2%;
+    transform: rotate(-2deg);
   }
   .memory-card-b {
     right: 0;
-    bottom: 3%;
+    bottom: 14%;
+    transform: rotate(2deg);
   }
   .memory-card strong {
     font-size: 14px;
@@ -1678,17 +1866,8 @@ canvas {
   .journey-heading {
     position: static;
   }
-  .message {
-    max-width: 88%;
-  }
-  .message-short {
-    max-width: 72%;
-  }
-  .dialog-topbar {
-    padding-inline: 16px;
-  }
-  .dialog-status {
-    display: none;
+  .journey-route {
+    max-width: 460px;
   }
   .difference-grid,
   .pricing-grid {
@@ -1736,6 +1915,9 @@ canvas {
   .hero-lede {
     font-size: 16px;
   }
+  .route-proof-heading h2 {
+    font-size: 30px;
+  }
   .eyebrow {
     font-size: 10.5px;
     letter-spacing: 0.11em;
@@ -1778,7 +1960,7 @@ canvas {
   }
   .visual-caption {
     font-size: 9px;
-    bottom: -3%;
+    bottom: 0;
   }
   .section-heading-wide {
     margin-bottom: 38px;
@@ -1796,6 +1978,12 @@ canvas {
     grid-template-columns: 52px 1fr;
     gap: 17px;
   }
+  .journey-steps::before,
+  .journey-steps::after {
+    left: 25px;
+    top: 26px;
+    bottom: 68px;
+  }
   .step-number {
     width: 52px;
     height: 52px;
@@ -1806,26 +1994,6 @@ canvas {
   }
   .journey-steps h3 {
     font-size: 21px;
-  }
-  .dialog-window {
-    border-radius: 22px;
-  }
-  .dialog-body {
-    padding: 21px 14px;
-  }
-  .message {
-    max-width: 94%;
-    padding: 13px 15px;
-    font-size: 14px;
-  }
-  .message-short {
-    max-width: 82%;
-  }
-  .dialog-memory {
-    padding-inline: 16px;
-  }
-  .dialog-memory span {
-    line-height: 1.35;
   }
   .safety-panel {
     padding: 28px 22px;
@@ -1871,8 +2039,24 @@ canvas {
   .hero-visual {
     transform: none !important;
   }
+  .journey::before,
+  .journey-steps::after {
+    display: none;
+  }
+  .journey-steps.has-motion li,
+  .journey-steps.has-motion li.is-active,
+  .journey-steps.has-motion li.is-complete {
+    opacity: 1;
+    transform: none;
+  }
+  .journey-route-track i {
+    transform: scaleX(1);
+  }
   .constellation {
     display: none;
+  }
+  .mobile-cta {
+    transition: none;
   }
 }
 
