@@ -54,7 +54,7 @@
     />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./site.webmanifest" />
-    <link rel="stylesheet" href="./landing.css?v=20260718-calm-intelligence" />
+    <link rel="stylesheet" href="./landing.css?v=20260718-truthful-polish" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -116,7 +116,7 @@
           href="https://t.me/extaz_assistant_bot?start=src_landing"
           data-cta="header"
         >
-          Начать в Telegram
+          Попробовать бесплатно
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m8 5 7 7-7 7" />
           </svg>
@@ -128,16 +128,16 @@
       <section class="hero shell" id="top" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow">
-            <span aria-hidden="true"></span> ИИ-проводник, который помнит ваш
-            путь
+            <span aria-hidden="true"></span> ИИ-проводник в Telegram, который
+            помнит ваш путь
           </p>
           <h1 id="hero-title">
             Понять, что <em>повторяется.</em><br />Начать действовать иначе.
           </h1>
           <p class="hero-lede">
-            MindCoach помогает заметить скрытый сценарий, понять, что за ним
-            стоит, и выбрать маленький шаг. В следующем разговоре он помнит, что
-            получилось, а что стоит изменить.
+            MindCoach связывает разговоры между собой, помогает заметить
+            повторяющийся сценарий и выбрать маленький шаг. Потом возвращается к
+            нему, чтобы вместе разобрать результат и скорректировать путь.
           </p>
           <div class="hero-actions">
             <a
@@ -145,12 +145,12 @@
               href="https://t.me/extaz_assistant_bot?start=src_landing"
               data-cta="hero"
             >
-              Пройти бесплатный маршрут
+              Начать 7 дней бесплатно
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m8 5 7 7-7 7" />
               </svg>
             </a>
-            <a class="text-link" href="#demo">Посмотреть пример разговора</a>
+            <a class="text-link" href="#how">Посмотреть, как устроен путь</a>
           </div>
           <ul class="risk-reducers">
             <li>
@@ -209,6 +209,41 @@
       </section>
 
       <section
+        class="route-proof shell"
+        aria-labelledby="route-proof-title"
+      >
+        <div class="route-proof-heading">
+          <p class="eyebrow">Ориентиры первого маршрута</p>
+          <h2 id="route-proof-title">
+            Не просто поговорить. Проверить один шаг в жизни.
+          </h2>
+        </div>
+        <ol class="route-proof-list">
+          <li>
+            <span>01</span>
+            <div>
+              <strong>Рабочая гипотеза</strong>
+              <p>Что именно повторяется в разных ситуациях.</p>
+            </div>
+          </li>
+          <li>
+            <span>02</span>
+            <div>
+              <strong>Один маленький шаг</strong>
+              <p>Что можно попробовать в ближайшей реальной ситуации.</p>
+            </div>
+          </li>
+          <li>
+            <span>03</span>
+            <div>
+              <strong>Память результата</strong>
+              <p>Что получилось и что скорректировать дальше.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section
         class="recognition shell section"
         aria-labelledby="recognition-title"
       >
@@ -251,7 +286,12 @@
         </div>
       </section>
 
-      <section class="journey section" id="how" aria-labelledby="how-title">
+      <section
+        class="journey section"
+        id="how"
+        data-journey
+        aria-labelledby="how-title"
+      >
         <div class="shell journey-layout">
           <div class="section-heading journey-heading">
             <p class="eyebrow">Один понятный цикл</p>
@@ -260,22 +300,27 @@
               Не очередная беседа с чистого листа. Проводник удерживает контекст
               и возвращает к тому, что вы решили проверить в жизни.
             </p>
+            <div class="journey-route" aria-hidden="true">
+              <span>Один непрерывный путь</span>
+              <div class="journey-route-track"><i></i></div>
+              <strong data-journey-count>01 / 04</strong>
+            </div>
             <a
               class="text-link text-link-arrow"
               href="https://t.me/extaz_assistant_bot?start=src_landing"
               data-cta="how"
-              >Начать первый цикл <span aria-hidden="true">→</span></a
+              >Пройти первый цикл <span aria-hidden="true">→</span></a
             >
           </div>
           <ol class="journey-steps">
-            <li>
+            <li data-journey-step>
               <span class="step-number">01</span>
               <div>
                 <h3>Расскажите, что происходит</h3>
                 <p>Текстом или голосом, в своём темпе, прямо в Telegram.</p>
               </div>
             </li>
-            <li>
+            <li data-journey-step>
               <span class="step-number">02</span>
               <div>
                 <h3>Заметьте повторяющийся сценарий</h3>
@@ -285,7 +330,7 @@
                 </p>
               </div>
             </li>
-            <li>
+            <li data-journey-step>
               <span class="step-number">03</span>
               <div>
                 <h3>Выберите маленький шаг</h3>
@@ -295,7 +340,7 @@
                 </p>
               </div>
             </li>
-            <li>
+            <li data-journey-step>
               <span class="step-number">04</span>
               <div>
                 <h3>Вернитесь с результатом</h3>
@@ -307,66 +352,6 @@
             </li>
           </ol>
         </div>
-      </section>
-
-      <section
-        class="demo shell section"
-        id="demo"
-        data-track-view="demo_view"
-        aria-labelledby="demo-title"
-      >
-        <div class="section-heading section-heading-wide">
-          <p class="eyebrow">Как выглядит разговор</p>
-          <h2 id="demo-title">
-            Не готовый совет, а вопрос, который ведёт глубже
-          </h2>
-        </div>
-        <div class="dialog-window">
-          <div class="dialog-topbar">
-            <span class="dialog-avatar" aria-hidden="true"></span>
-            <div>
-              <strong>MindCoach</strong
-              ><small>ИИ-проводник · отвечает текстом</small>
-            </div>
-            <span class="dialog-status">в Telegram</span>
-          </div>
-          <div class="dialog-body" role="group" aria-label="Пример диалога">
-            <div class="message message-user">
-              Я опять согласился помочь, хотя совсем не хотел. Теперь злюсь на
-              человека и на себя. Почему я каждый раз так делаю?
-            </div>
-            <div class="message message-guide">
-              Похоже, знакомый сценарий включается ещё до того, как вы успеваете
-              проверить своё желание. В прошлый раз рядом был страх показаться
-              эгоистичным. Он чувствуется и сейчас?
-            </div>
-            <div class="message message-user message-short">
-              Да. Будто отказ сразу делает меня плохим.
-            </div>
-            <div class="message message-guide">
-              Тогда начнём не с жёсткого «нет». Как вам минимальный шаг: в
-              следующий раз ответить «я проверю свои планы и вернусь через
-              десять минут»? Это даст паузу до автоматического согласия.
-            </div>
-          </div>
-          <div class="dialog-memory">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 3a5 5 0 0 0-5 5v2a3 3 0 0 0-2 3v5h14v-5a3 3 0 0 0-2-3V8a5 5 0 0 0-5-5Z"
-              />
-            </svg>
-            <div>
-              <strong>Память пути</strong
-              ><span
-                >Проводник вернётся к этому шагу в следующем разговоре</span
-              >
-            </div>
-          </div>
-        </div>
-        <p class="demo-note">
-          Пример показывает формат диалога. Ответы формируются индивидуально и
-          могут отличаться.
-        </p>
       </section>
 
       <section
@@ -383,11 +368,11 @@
           </div>
           <div class="difference-grid">
             <article class="difference-card difference-muted">
-              <span class="difference-label">Обычный универсальный чат</span>
+              <span class="difference-label">Разовый разговор с ИИ</span>
               <ul>
-                <li>Отвечает на текущий запрос</li>
-                <li>Легко теряет нить между сессиями</li>
-                <li>Часто заканчивает разговор советом</li>
+                <li>Решает один текущий запрос</li>
+                <li>Контекст приходится собирать заново</li>
+                <li>Следующий шаг легко остаётся без проверки</li>
               </ul>
             </article>
             <article class="difference-card difference-accent">
@@ -513,8 +498,8 @@
         </div>
         <div class="pricing-grid">
           <article class="price-card trial-card">
-            <span class="price-label">Знакомство</span>
-            <h3>Бесплатный маршрут</h3>
+            <span class="price-label">Начните здесь</span>
+            <h3>7-дневный маршрут</h3>
             <p class="price-value">0 ₽</p>
             <ul>
               <li>7 дней и до 30 полных ответов</li>
@@ -523,10 +508,10 @@
               <li>Один полный разбор сна</li>
             </ul>
             <a
-              class="button button-secondary"
+              class="button button-primary"
               href="https://t.me/extaz_assistant_bot?start=src_landing"
               data-cta="pricing_free"
-              >Попробовать бесплатно</a
+              >Начать маршрут бесплатно</a
             >
           </article>
           <article class="price-card paid-card">
@@ -534,16 +519,16 @@
             <h3>Продолжение пути</h3>
             <p class="price-value">500 <span>Stars / 30 дней</span></p>
             <ul>
-              <li>Разговоры и память без пауз</li>
+              <li>Продолжение разговоров и памяти пути</li>
               <li>Работа со сценариями и привычками</li>
-              <li>Глубинные сессии и дневник снов</li>
+              <li>Разбор ситуаций и дневник снов</li>
               <li>Проводник может мягко напомнить о выбранном шаге</li>
             </ul>
             <a
-              class="button button-primary"
+              class="button button-secondary"
               href="https://t.me/extaz_assistant_bot?start=src_landing"
               data-cta="pricing_month"
-              >Выбрать в боте</a
+              >Посмотреть продолжение</a
             >
           </article>
         </div>
@@ -669,7 +654,7 @@
             href="https://t.me/extaz_assistant_bot?start=src_landing"
             data-cta="final"
           >
-            Начать разговор
+            Начать 7 дней бесплатно
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m8 5 7 7-7 7" />
             </svg>
@@ -726,6 +711,22 @@
       </div>
     </footer>
 
-    <script src="./landing.js?v=20260718-calm-intelligence" defer></script>
+    <a
+      class="mobile-cta"
+      href="https://t.me/extaz_assistant_bot?start=src_landing"
+      data-cta="mobile_sticky"
+      data-mobile-cta
+      aria-label="Начать бесплатный 7-дневный маршрут в Telegram"
+    >
+      <span><strong>7 дней бесплатно</strong><small>без карты</small></span>
+      <span class="mobile-cta-action"
+        >Начать
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m8 5 7 7-7 7" />
+        </svg>
+      </span>
+    </a>
+
+    <script src="./landing.js?v=20260718-truthful-polish" defer></script>
   </body>
 </html>
