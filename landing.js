@@ -19,6 +19,10 @@
       )
     : [];
   var journeyCount = document.querySelector("[data-journey-count]");
+  var attribution = window.MindCoachAttribution;
+  var campaignSource = attribution
+    ? attribution.sourceFromSearch(window.location.search)
+    : "landing";
   var mobileCtaState = { heroVisible: true, finalVisible: false };
   var scrollFrame = 0;
 
@@ -156,8 +160,15 @@
   scheduleViewportUpdate();
 
   document.querySelectorAll("[data-cta]").forEach(function (link) {
+    var placement = link.dataset.cta;
+    if (attribution) {
+      link.href = attribution.telegramUrl(link.href, campaignSource, placement);
+    }
     link.addEventListener("click", function () {
-      track("telegram_transition", { location: link.dataset.cta });
+      track("telegram_transition", {
+        location: placement,
+        source: campaignSource,
+      });
     });
   });
 

@@ -13,13 +13,13 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests"
     />
-    <title>MindCoach — увидеть свой сценарий и начать действовать иначе</title>
+    <title>MindCoach: понять повторяющийся сценарий и действовать</title>
     <meta
       name="description"
       content="ИИ-проводник в Telegram помнит ваш путь, помогает замечать повторяющиеся сценарии и превращать понимание в маленькие реальные шаги. 7 дней бесплатно."
     />
     <meta name="robots" content="index,follow,max-image-preview:large" />
-    <link rel="canonical" href="https://mindcoachbot.ru/landing.html" />
+    <link rel="canonical" href="https://mindcoachbot.ru/" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://mindcoachbot.ru/" />
     <meta property="og:site_name" content="MindCoach" />
@@ -691,7 +691,8 @@
         </div>
         <div class="footer-column">
           <h2>Сервис</h2>
-          <a href="https://t.me/extaz_assistant_bot">Открыть бота</a
+          <a href="https://t.me/extaz_assistant_bot?start=src_landing" data-cta="footer"
+            >Открыть бота</a
           ><a href="#how">Как работает</a><a href="#pricing">Тарифы</a>
         </div>
         <div class="footer-column">
@@ -703,7 +704,11 @@
         <div class="footer-column">
           <h2>Поддержка</h2>
           <a href="https://t.me/extz_agent">@extz_agent</a
-          ><a href="https://t.me/extaz_assistant_bot">@extaz_assistant_bot</a>
+          ><a
+            href="https://t.me/extaz_assistant_bot?start=src_landing"
+            data-cta="footer_handle"
+            >@extaz_assistant_bot</a
+          >
         </div>
       </div>
       <div class="shell footer-bottom">
@@ -727,6 +732,7 @@
       </span>
     </a>
 
-    <script src="./landing.js?v=20260718-truthful-polish" defer></script>
+    <script src="./attribution.js?v=20260718-prelaunch-audit" defer></script>
+    <script src="./landing.js?v=20260718-prelaunch-audit" defer></script>
   </body>
 </html>

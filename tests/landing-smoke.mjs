@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { access, readFile } from "node:fs/promises";
+
+const require = createRequire(import.meta.url);
+const attribution = require("../attribution.js");
 
 const html = await readFile(
   new URL("../landing.html", import.meta.url),
@@ -9,8 +13,16 @@ const indexHtml = await readFile(
   new URL("../index.html", import.meta.url),
   "utf8",
 );
+const rootRedirectJs = await readFile(
+  new URL("../root-redirect.js", import.meta.url),
+  "utf8",
+);
 const css = await readFile(new URL("../landing.css", import.meta.url), "utf8");
 const js = await readFile(new URL("../landing.js", import.meta.url), "utf8");
+const attributionJs = await readFile(
+  new URL("../attribution.js", import.meta.url),
+  "utf8",
+);
 const telegramUrl = "https://t.me/extaz_assistant_bot?start=src_landing";
 
 assert.match(html, /<html lang="ru">/);
@@ -21,7 +33,7 @@ assert.equal(
 );
 assert.match(
   html,
-  /rel="canonical" href="https:\/\/mindcoachbot\.ru\/landing\.html"/,
+  /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/,
 );
 assert.match(html, /property="og:image"/);
 assert.match(html, /<meta\s+[\s\S]*?name="description"/);
@@ -29,6 +41,13 @@ assert.match(html, /id="main"/);
 assert.match(html, /class="skip-link"/);
 assert.match(html, /<script type="application\/ld\+json">/);
 assert.match(indexHtml, /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/);
+assert.match(
+  rootRedirectJs,
+  /landing\.html" \+ window\.location\.search \+ window\.location\.hash/,
+);
+assert.match(indexHtml, /Content-Security-Policy/);
+assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);
+assert.doesNotMatch(indexHtml, /<script>(?![\s\S]*application\/ld\+json)/);
 assert.match(
   indexHtml,
   /property="og:image"[\s\S]*?content="https:\/\/mindcoachbot\.ru\/og-image-v2\.png"/,
@@ -57,14 +76,29 @@ assert.match(html, /class="button button-secondary"[\s\S]*?data-cta="pricing_mon
 assert.doesNotMatch(html, /target="_blank"/);
 assert.doesNotMatch(html, /http:\/\//);
 assert.doesNotMatch(js, /localStorage|sessionStorage|document\.cookie/);
+assert.doesNotMatch(attributionJs, /localStorage|sessionStorage|document\.cookie/);
+
+assert.equal(attribution.sourceFromSearch("?src=yandex_launch_a"), "yandex_launch_a");
+assert.equal(attribution.sourceFromSearch("?src=bad%20value"), "landing");
+assert.equal(attribution.sourceFromSearch("?utm_source=yandex"), "landing");
+assert.equal(
+  attribution.sourceForPlacement("yandex_launch_a", "hero"),
+  "yandex_launch_a__hero",
+);
+assert.equal(
+  new URL(
+    attribution.telegramUrl(telegramUrl, "yandex_launch_a", "mobile_sticky"),
+  ).searchParams.get("start"),
+  "src_yandex_launch_a__mobile_sticky",
+);
 
 const ctaTags = [...html.matchAll(/<a\b[^>]*data-cta="([^"]+)"[^>]*>/g)];
 assert.ok(ctaTags.length >= 6, "Expected repeated conversion CTAs");
 for (const match of ctaTags) {
   const [tag, location] = match;
   assert.ok(
-    tag.includes(`href="${telegramUrl}"`),
-    `CTA ${location} must use the tracked Telegram deep link`,
+    tag.includes("start=src_landing"),
+    `CTA ${location} must keep a no-JS attribution fallback`,
   );
 }
 
@@ -74,6 +108,9 @@ for (const file of [
   "../robots.txt",
   "../sitemap.xml",
   "../og-image-v2.png",
+  "../attribution.js",
+  "../root-redirect.js",
+  "../miniapp-boot.js",
 ]) {
   await access(new URL(file, import.meta.url));
 }

@@ -1519,6 +1519,9 @@ canvas {
   padding-top: 9px;
   color: var(--muted);
 }
+.doc-footer-link {
+  margin-top: 40px;
+}
 .placeholder {
   color: #ffb7b7;
   background: rgba(232, 120, 120, 0.12);
