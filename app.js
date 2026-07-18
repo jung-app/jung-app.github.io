@@ -832,70 +832,17 @@ function groupBlock(title, items, sub) {
 
 // --- блок «Сегодня» ---------------------------------------------------------
 
-// Тёплые вопросы дня (юнгианская оптика: роли/персона, тень, образы и сны, «на своём
-// месте» = индивидуация). Не анкета и не трекер — одно приглашение заметить. Ротация
-// по календарному дню → стабилен в течение суток, свой у каждого дня.
-const TODAY_QUESTIONS = [
-  "Что сегодня забрало больше всего сил?",
-  "Где сегодня ты был не совсем собой?",
-  "Какой образ, сон или мысль остались с тобой?",
-  "Чему сегодня хотелось сказать «нет», но ты не сказал?",
-  "Что сегодня неожиданно тронуло?",
-  "Какая роль сегодня давалась тебе тяжелее всего?",
-  "О чём ты сегодня старался не думать?",
-  "Что сегодня дало ощущение, что ты на своём месте?",
-  "Какое чувство сегодня возвращалось чаще других?",
-  "Если бы у сегодняшнего дня было имя — какое?",
-];
-
-function firstText(items) {
-  return (items || []).find((x) => typeof x === "string" && x.trim());
-}
-
-function latestProfileCue(p) {
-  const d = p && p.dynamics;
-  const changed =
-    firstText(d && d.new_habits) ||
-    firstText(d && d.new_sections) ||
-    firstText(d && d.new_archetypes);
-  if (changed) return changed;
-
-  const habit = (p.habits || []).find((h) => h && h.name);
-  if (habit) return habit.name;
-  const archetype = (p.archetypes || []).find((a) => a && (a.name || a.summary));
-  if (archetype) return archetype.name || "Новый образ";
-  const section = (p.sections || []).find((s) => s && s.label);
-  if (section) return section.label;
-  return "";
-}
-
-function todayPrompt(p) {
-  const sync = (p && p.live_sync) || {};
-  const lastAt = sync.last_turn_at ? new Date(sync.last_turn_at) : null;
-  const today = new Date();
-  const isToday =
-    lastAt &&
-    !isNaN(lastAt) &&
-    lastAt.getFullYear() === today.getFullYear() &&
-    lastAt.getMonth() === today.getMonth() &&
-    lastAt.getDate() === today.getDate();
-  const cue = isToday ? latestProfileCue(p) : "";
-  if (cue && sync.pending_profile_update) {
-    return "Последний разговор уже учтён. Образ обновляется, что важно не потерять в теме «" + cue + "»?";
-  }
-  if (cue) return "Что из сегодняшней темы «" + cue + "» хочется продолжить?";
-  const localDay = today.getFullYear() * 372 + (today.getMonth() + 1) * 31 + today.getDate();
-  const idx = localDay % TODAY_QUESTIONS.length;
-  return TODAY_QUESTIONS[idx];
-}
-
-// Блок «Сегодня»: персональный вопрос + возврат в чат. Он зависит от свежего payload
-// профиля, поэтому после разговора с ботом верх мини-аппа меняется вместе с образом.
+// Блок «Сегодня»: ясный вопрос дня + проверяемый статус синхронизации. Он намеренно не
+// подставляет тему из всего профиля: профиль может быть старше сегодняшнего разговора.
 function todayBlock(p) {
+  const state = window.JUNG_TODAY
+    ? window.JUNG_TODAY.todayState(p, new Date())
+    : { question: "Какой момент сегодняшнего дня хочется спокойно разобрать?", syncText: "" };
   const sec = el("section", "today");
   sec.appendChild(el("div", "today-label", "Сегодня"));
-  sec.appendChild(el("p", "today-q", todayPrompt(p)));
-  const btn = el("button", "today-cta", "Продолжить в чате");
+  sec.appendChild(el("p", "today-q", state.question));
+  if (state.syncText) sec.appendChild(el("p", "today-sync", state.syncText));
+  const btn = el("button", "today-cta", "Ответить в чате");
   btn.type = "button";
   // Закрываем мини-апп → возврат в чат с ботом, где можно ответить прямо сейчас.
   btn.addEventListener("click", () => {
@@ -1005,7 +952,7 @@ function pathBlock(path) {
     ),
   );
   const list = el("div", "product-path-list");
-  rows.forEach((row) => {
+  rows.forEach((row, index) => {
     const item = el("div", "product-path-row");
     item.appendChild(pathIcon(row.kind));
     const copy = el("div", "product-path-text");
@@ -1013,15 +960,16 @@ function pathBlock(path) {
     const date = fmtDate(row.lastAt);
     const state = row.kind === "letter" ? row.state : row.state + (date ? " · " + date : "");
     copy.appendChild(el("span", "product-path-state", state));
-    copy.appendChild(el("span", "product-path-next", "Следующий шаг: " + row.next));
+    const lastTimestamp = Date.parse(row.lastAt || "");
+    const recent = Number.isFinite(lastTimestamp) &&
+      lastTimestamp <= Date.now() && Date.now() - lastTimestamp <= 14 * 86400000;
+    if (index === 0 && recent) {
+      copy.appendChild(el("span", "product-path-next", "Можно продолжить: " + row.next));
+    }
     item.appendChild(copy);
     list.appendChild(item);
   });
   sec.appendChild(list);
-  const cta = el("button", "product-path-cta", "Продолжить в чате");
-  cta.type = "button";
-  cta.addEventListener("click", closeToChat);
-  sec.appendChild(cta);
   return sec;
 }
 

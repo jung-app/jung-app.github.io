@@ -267,6 +267,12 @@ body {
   line-height: 1.5;
   color: var(--text);
 }
+.today-sync {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .today-cta {
   appearance: none;
   border: 1px solid var(--line-strong);
@@ -357,7 +363,6 @@ body {
   font-size: 12.5px !important;
   line-height: 1.45;
 }
-.product-path-cta,
 .sky-readout-cta {
   appearance: none;
   width: 100%;
@@ -374,12 +379,10 @@ body {
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
-.product-path-cta:hover,
 .sky-readout-cta:hover {
   background: var(--gold-soft);
   border-color: rgba(232, 192, 116, 0.4);
 }
-.product-path-cta:active,
 .sky-readout-cta:active {
   opacity: 0.72;
 }
