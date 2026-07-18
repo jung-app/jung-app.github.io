@@ -68,7 +68,11 @@ body {
   z-index: 1;
   max-width: 600px;
   margin: 0 auto;
-  padding: 22px 18px calc(40px + env(safe-area-inset-bottom));
+  padding:
+    calc(22px + env(safe-area-inset-top))
+    calc(18px + env(safe-area-inset-right))
+    calc(40px + env(safe-area-inset-bottom))
+    calc(18px + env(safe-area-inset-left));
 }
 
 .serif {
@@ -98,6 +102,28 @@ body {
   color: var(--muted);
   font-size: 15px;
   max-width: 34ch;
+}
+.state-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 320px);
+  margin-top: 4px;
+}
+.state-action {
+  min-height: 48px;
+  border: 1px solid var(--gold-deep);
+  border-radius: 14px;
+  background: var(--gold);
+  color: #141927;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.state-action--quiet {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line-strong);
 }
 .orb {
   width: 64px;
