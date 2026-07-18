@@ -33,7 +33,11 @@ assert.equal(
 );
 assert.match(
   html,
-  /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/,
+  /rel="canonical" href="https:\/\/mindcoachbot\.ru\/landing\.html"/,
+);
+assert.match(
+  html,
+  /property="og:url" content="https:\/\/mindcoachbot\.ru\/landing\.html"/,
 );
 assert.match(html, /property="og:image"/);
 assert.match(html, /<meta\s+[\s\S]*?name="description"/);
