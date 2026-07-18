@@ -126,13 +126,29 @@ function el(tag, className, text) {
 
 function setView(node) {
   document.getElementById("app").replaceChildren(node);
+  const heading = node.querySelector && node.querySelector(".state-title");
+  if (heading) queueMicrotask(() => heading.focus());
 }
 
-function stateView(title, sub, glyph) {
+function stateView(title, sub, glyph, actions, kind) {
   const wrap = el("section", "state");
+  wrap.setAttribute("role", kind === "error" ? "alert" : "status");
+  wrap.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
   wrap.appendChild(el("div", "glyph", glyph || "✦"));
-  wrap.appendChild(el("p", "state-title serif", title));
+  const heading = el("h1", "state-title serif", title);
+  heading.tabIndex = -1;
+  wrap.appendChild(heading);
   if (sub) wrap.appendChild(el("p", "state-sub", sub));
+  if (actions && actions.length) {
+    const row = el("div", "state-actions");
+    actions.forEach((action, index) => {
+      const btn = el("button", index ? "state-action state-action--quiet" : "state-action", action.label);
+      btn.type = "button";
+      btn.addEventListener("click", action.onClick);
+      row.appendChild(btn);
+    });
+    wrap.appendChild(row);
+  }
   return wrap;
 }
 
@@ -152,17 +168,68 @@ function freshApiUrl(path) {
   return base.replace(/\/$/, "") + path + sep + "ts=" + Date.now();
 }
 
-async function fetchProfile() {
+const NETWORK_TIMEOUT_MS = 10000;
+
+async function fetchWithDeadline(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...(options || {}), signal: controller.signal });
+  } catch (error) {
+    if (error && error.name === "AbortError") throw new Error("timeout");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function objectOrEmpty(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function arrayOfObjects(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
+}
+
+function normalizeProfile(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const p = { ...raw };
+  const completeness = objectOrEmpty(p.completeness);
+  p.completeness = {
+    percent: Number.isFinite(Number(completeness.percent)) ? Number(completeness.percent) : 0,
+    is_sufficient: Boolean(completeness.is_sufficient),
+    missing: Array.isArray(completeness.missing) ? completeness.missing.filter((x) => typeof x === "string") : [],
+  };
+  p.sections = arrayOfObjects(p.sections);
+  p.archetypes = arrayOfObjects(p.archetypes);
+  p.habits = arrayOfObjects(p.habits);
+  p.threads = arrayOfObjects(p.threads).map((thread) => ({
+    ...thread,
+    members: arrayOfObjects(thread.members),
+  }));
+  p.billing = objectOrEmpty(p.billing);
+  p.access = objectOrEmpty(p.access);
+  p.path = objectOrEmpty(p.path);
+  p.ritual = objectOrEmpty(p.ritual);
+  p.live_sync = objectOrEmpty(p.live_sync);
+  p.referral = objectOrEmpty(p.referral);
+  p.is_paid = Boolean(p.is_paid);
+  p.show_upgrade = Boolean(p.show_upgrade);
+  return p;
+}
+
+async function fetchProfile(refreshOnly) {
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
 
-  const res = await fetch(freshApiUrl("/api/profile"), {
+  const path = refreshOnly ? "/api/profile?refresh=1" : "/api/profile";
+  const res = await fetchWithDeadline(freshApiUrl(path), {
     headers: apiHeaders(initData, false),
     cache: "no-store",
   });
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
-  return (await res.json()).profile; // null, если профиля ещё нет
+  return normalizeProfile((await res.json()).profile); // null, если профиля ещё нет
 }
 
 // Отклонить гипотезу («это не про меня»). Бэкенд метит раздел dismissed: он выпадает
@@ -172,13 +239,14 @@ async function dismissSection(key) {
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
 
-  const res = await fetch(base.replace(/\/$/, "") + "/api/profile/dismiss", {
+  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/profile/dismiss", {
     method: "POST",
     headers: apiHeaders(initData, true),
     body: JSON.stringify({ key }),
   });
   if (!res.ok) throw new Error("http-" + res.status);
-  return (await res.json()).profile;
+  await res.json();
+  return fetchProfile(true);
 }
 
 // Подтверждение действия: нативное у Telegram, иначе обычный confirm.
@@ -351,7 +419,8 @@ function dismissRow(key, label) {
     btn.textContent = "Убираю…";
     try {
       const updated = await dismissSection(key);
-      setView(updated ? renderProfile(updated) : renderEmpty());
+      renderedProfileFingerprint = null;
+      renderFetchedProfile(updated);
     } catch (e) {
       btn.disabled = false;
       btn.textContent = "Не вышло — ещё раз";
@@ -490,7 +559,7 @@ async function requestInvoice(period) {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
-  const res = await fetch(base.replace(/\/$/, "") + "/api/invoice", {
+  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/invoice", {
     method: "POST",
     headers: apiHeaders(initData, true),
     body: JSON.stringify({ period: period || "monthly" }),
@@ -516,14 +585,28 @@ function startUpgrade(btn, period) {
     .then((url) => {
       if (tg && typeof tg.openInvoice === "function") {
         tg.openInvoice(url, (status) => {
-          if (status === "paid") pollForActivation();
+          if (status === "paid") {
+            activationPending = true;
+            clearRefreshTimer();
+            setView(
+              stateView(
+                "Платёж получен",
+                "Активирую подписку. Обычно это занимает несколько секунд.",
+                "✦",
+              ),
+            );
+            pollForActivation();
+            return;
+          }
+          restore();
         });
       } else if (tg && typeof tg.openTelegramLink === "function") {
         tg.openTelegramLink(url);
+        restore();
       } else {
         window.open(url, "_blank");
+        restore();
       }
-      restore();
     })
     .catch(() => {
       restore();
@@ -542,34 +625,46 @@ function scrollToUpgrade() {
 // После успешного Stars invoice слегка поллим профиль: successful_payment может прийти
 // в long-polling на секунду позже callback Mini App.
 function pollForActivation() {
+  activationPending = true;
   let attempts = 0;
   const tick = async () => {
     attempts += 1;
     try {
-      const initData = tg && tg.initData ? tg.initData : "";
-      const res = await fetch(freshApiUrl("/api/profile"), {
-        headers: apiHeaders(initData, false),
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.profile && data.profile.is_paid) {
-          if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === "function")
-            tg.HapticFeedback.notificationOccurred("success");
-          setView(
-            stateView(
-              "Подписка активна",
-              "Спасибо 🌑 Возвращайся в чат: продолжим твой путь без пауз, с того места, где остановились.",
-              "✦",
-            ),
-          );
-          return; // готово — поллинг прекращаем
-        }
+      const profile = await fetchProfile(true);
+      if (profile && profile.is_paid) {
+        activationPending = false;
+        if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === "function")
+          tg.HapticFeedback.notificationOccurred("success");
+        setView(
+          stateView(
+            "Подписка активна",
+            "Спасибо 🌑 Возвращайся в чат: продолжим твой путь без пауз, с того места, где остановились.",
+            "✦",
+            [{ label: "Вернуться в чат", onClick: closeToChat }],
+          ),
+        );
+        return; // готово — поллинг прекращаем
       }
     } catch (e) {
       /* сеть моргнула — попробуем на следующем тике */
     }
-    if (attempts < 18) setTimeout(tick, 10000); // ~3 минуты ждём завершения оплаты
+    if (attempts < 18) {
+      setTimeout(tick, 10000); // ~3 минуты ждём завершения оплаты
+      return;
+    }
+    setView(
+      stateView(
+        "Проверим оплату ещё раз",
+        "Telegram принял платёж, но активация задержалась. Обнови статус или вернись в чат и напиши /paysupport.",
+        "○",
+        [
+          { label: "Обновить статус", onClick: pollForActivation },
+          { label: "Вернуться в чат", onClick: closeToChat },
+        ],
+        "error",
+      ),
+    );
+    activationPending = false;
   };
   setTimeout(tick, 8000); // первая проверка — после возможной быстрой оплаты
 }
@@ -642,7 +737,10 @@ function upgradeSection(billing, access) {
     el(
       "p",
       "stars-guide-text",
-      "Открой @PremiumBot → /start → «Звёзды Telegram». Выбери 500 ⭐ для месяца или 5000 ⭐ для года, затем вернись и нажми тариф.",
+      "Открой @PremiumBot → /start → «Звёзды Telegram». Для месяца понадобится " +
+        monthly + " ⭐" +
+        (b.annual_available && b.annual_xtr ? ", для года — " + b.annual_xtr + " ⭐" : "") +
+        ". Затем вернись и нажми нужный тариф.",
     ),
   );
   const premiumBtn = el("button", "premiumbot-btn", "Купить Stars в @PremiumBot");
@@ -658,7 +756,9 @@ function upgradeSection(billing, access) {
     el(
       "p",
       "upgrade-hint",
-      "Месяц продлевается каждые 30 дней. Год оплачивается один раз на 365 дней.",
+      b.annual_available
+        ? "Месяц продлевается каждые 30 дней. Год оплачивается один раз на 365 дней."
+        : "Месяц продлевается каждые 30 дней. Отменить можно в настройках Telegram.",
     ),
   );
   return sec;
@@ -760,12 +860,12 @@ function latestProfileCue(p) {
     firstText(d && d.new_archetypes);
   if (changed) return changed;
 
-  const habit = (p.habits || []).find((h) => h && (h.serves || h.summary || h.name));
-  if (habit) return habit.serves || habit.summary || habit.name;
+  const habit = (p.habits || []).find((h) => h && h.name);
+  if (habit) return habit.name;
   const archetype = (p.archetypes || []).find((a) => a && (a.name || a.summary));
-  if (archetype) return archetype.name || archetype.summary;
-  const section = (p.sections || []).find((s) => s && (s.label || s.summary));
-  if (section) return section.label || section.summary;
+  if (archetype) return archetype.name || "Новый образ";
+  const section = (p.sections || []).find((s) => s && s.label);
+  if (section) return section.label;
   return "";
 }
 
@@ -779,12 +879,13 @@ function todayPrompt(p) {
     lastAt.getFullYear() === today.getFullYear() &&
     lastAt.getMonth() === today.getMonth() &&
     lastAt.getDate() === today.getDate();
-  const cue = isToday ? sync.last_user_preview || latestProfileCue(p) : "";
+  const cue = isToday ? latestProfileCue(p) : "";
   if (cue && sync.pending_profile_update) {
-    return "Я уже вижу последний разговор: «" + cue + "». Образ обновляется, что важно не потерять?";
+    return "Последний разговор уже учтён. Образ обновляется, что важно не потерять в теме «" + cue + "»?";
   }
   if (cue) return "Что из сегодняшней темы «" + cue + "» хочется продолжить?";
-  const idx = Math.floor(Date.now() / 86400000) % TODAY_QUESTIONS.length;
+  const localDay = today.getFullYear() * 372 + (today.getMonth() + 1) * 31 + today.getDate();
+  const idx = localDay % TODAY_QUESTIONS.length;
   return TODAY_QUESTIONS[idx];
 }
 
@@ -1290,11 +1391,6 @@ function psycheMap(sections, archetypes) {
   const halo = svgEl.querySelector("#starHalo");
   const focus = svgEl.querySelector("#starFocus");
 
-  // Телеграм сворачивает мини-апп свайпом вниз — на живой карте это ложные закрытия.
-  if (tg && typeof tg.disableVerticalSwipes === "function") {
-    try { tg.disableVerticalSwipes(); } catch (e) { /* старый клиент — не критично */ }
-  }
-
   // --- физика (пружинный граф в духе Obsidian, без библиотек) ---
   // Отталкивание всех от всех + пружины нитей + радиальная гравитация к кольцу своей
   // глубины (семантика мандалы: ближе к центру = узнано). Самость прикована. Симуляция
@@ -1659,7 +1755,9 @@ function psycheMap(sections, archetypes) {
   let lastTap = { t: 0, vx: 0, vy: 0 };
 
   svgEl.style.cursor = "grab";
-  svgEl.style.touchAction = "none"; // жесты карты не скроллят страницу
+  // Один палец по карте прокручивает страницу. Zoom остаётся доступен щипком, колесом
+  // и двойным тапом, поэтому карта не превращается в ловушку на маленьком экране.
+  svgEl.style.touchAction = "pan-y";
 
   svgEl.addEventListener("pointerdown", (e) => {
     // capture не критичен (жест доводим и без него), а на нестандартных pointerId кидает
@@ -1828,7 +1926,7 @@ function renderProfile(p) {
   if (sky) root.appendChild(sky);
 
   // Первый CTA следует за персональной картой, а не теряется после длинного профиля.
-  if (!p.is_paid) root.appendChild(upgradeNudge(p));
+  if (p.show_upgrade) root.appendChild(upgradeNudge(p));
 
   // Блок «Нить наших разговоров» убран (08.07): показывал внутренний конспект бэкенда,
   // который читался как вечный банальный текст. Живое лицо — карта, нити, динамика.
@@ -2020,7 +2118,7 @@ function renderProfile(p) {
   }
 
   // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
-  if (!p.is_paid) root.appendChild(upgradeSection(p.billing, p.access));
+  if (p.show_upgrade) root.appendChild(upgradeSection(p.billing, p.access));
 
   if (p.invite_url) root.appendChild(shareRow(p.referral, p.invite_url));
 
@@ -2045,6 +2143,7 @@ function renderEmpty() {
     "Образ ещё не проявлен",
     "Мы пока толком не разговаривали. Напиши боту что-нибудь о себе — и я начну тебя понимать.",
     "○",
+    [{ label: "Начать разговор", onClick: closeToChat }],
   );
 }
 
@@ -2052,13 +2151,12 @@ let refreshTimer = null;
 let refreshInFlight = null;
 let refreshQueued = false;
 let renderedProfileFingerprint = null;
+let sessionExpired = false;
+let activationPending = false;
 
 function profileRenderFingerprint(profile) {
   if (!profile) return "null";
-  // GET /api/profile records the visit and therefore rotates dynamics.since/history.at
-  // even when the actual profile is unchanged. Those presentation-only timestamps must
-  // not remount the whole page. A real dialogue/profile/payment change still alters the
-  // rest of the payload and triggers a render; the fresh dynamics block is rendered with it.
+  // Dynamics timestamps are presentation-only and must not remount the whole page.
   const stable = { ...profile };
   delete stable.dynamics;
   return JSON.stringify(stable);
@@ -2086,6 +2184,7 @@ function refreshProfileView() {
   // focus, visibilitychange, Telegram activated и минутный таймер могут сработать
   // почти одновременно. Один запрос за раз не даёт более старому ответу перерисовать
   // уже свежий профиль и не создаёт лишнюю нагрузку перед трафиком.
+  if (sessionExpired || activationPending) return Promise.resolve();
   if (refreshInFlight) {
     refreshQueued = true;
     return refreshInFlight;
@@ -2093,11 +2192,25 @@ function refreshProfileView() {
 
   refreshInFlight = (async () => {
     try {
-      const profile = await fetchProfile();
+      const profile = await fetchProfile(true);
       renderFetchedProfile(profile);
       scheduleRefresh(profile);
-    } catch (_) {
-      scheduleRefresh(null);
+    } catch (error) {
+      if (error && (error.message === "unauthorized" || error.message === "no-init-data")) {
+        sessionExpired = true;
+        clearRefreshTimer();
+        setView(
+          stateView(
+            "Сессия завершилась",
+            "Чтобы не показывать старые личные данные, открой «Мой профиль» заново из чата.",
+            "○",
+            [{ label: "Вернуться в чат", onClick: closeToChat }],
+            "error",
+          ),
+        );
+      } else {
+        scheduleRefresh(null);
+      }
     } finally {
       refreshInFlight = null;
       if (refreshQueued) {
@@ -2111,6 +2224,7 @@ function refreshProfileView() {
 
 function scheduleRefresh(profile) {
   clearRefreshTimer();
+  if (sessionExpired || document.hidden) return;
   const pending = profile && profile.live_sync && profile.live_sync.pending_profile_update;
   const delay = pending ? 5000 : 60000;
   refreshTimer = setTimeout(refreshProfileView, delay);
@@ -2140,6 +2254,13 @@ async function main() {
   if (tg) {
     tg.ready();
     tg.expand();
+    try {
+      if (typeof tg.setHeaderColor === "function") tg.setHeaderColor("#0e1320");
+      if (typeof tg.setBackgroundColor === "function") tg.setBackgroundColor("#0e1320");
+      if (typeof tg.setBottomBarColor === "function") tg.setBottomBarColor("#131a2b");
+    } catch (_) {
+      /* Старый клиент Telegram: фирменная тема страницы всё равно сохранится. */
+    }
   }
   try {
     const profile = await fetchProfile();
@@ -2152,8 +2273,23 @@ async function main() {
         : e.message === "no-init-data"
           ? "Эту страницу нужно открывать из Telegram — кнопкой «Мой профиль»."
           : "Не получилось дотянуться до профиля. Попробуй чуть позже.";
-    setView(stateView("Не сейчас", msg, "✦"));
-    scheduleRefresh(null);
+    const terminal = e.message === "unauthorized" || e.message === "no-init-data";
+    sessionExpired = terminal;
+    setView(
+      stateView(
+        terminal ? "Открой из чата" : "Не получилось загрузить профиль",
+        msg,
+        "✦",
+        terminal
+          ? [{ label: "Вернуться в чат", onClick: closeToChat }]
+          : [
+              { label: "Повторить", onClick: () => window.location.reload() },
+              { label: "Вернуться в чат", onClick: closeToChat },
+            ],
+        "error",
+      ),
+    );
+    if (!terminal) scheduleRefresh(null);
   }
 
   // Telegram 8.0+ явно сообщает, когда сохранённый WebView снова стал активным.
