@@ -52,11 +52,9 @@
     />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./site.webmanifest" />
-    <!-- Telegram Mini App SDK: даёт initData, expand() и т.п. -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Заходы НЕ из Telegram (нет подписанного initData) — обычные посетители и модерация
-         платёжного сервиса: показываем публичный лендинг вместо загрузочного экрана мини-аппа.
-         Из Telegram initData присутствует → остаёмся в мини-аппе. -->
+    <!-- Сначала дешёвая проверка Telegram launch-параметров. Обычный рекламный визит
+         уходит на лендинг без ожидания внешнего SDK; SDK и приложение грузит этот скрипт
+         только внутри Telegram WebView. -->
     <script src="./root-redirect.js"></script>
     <!-- Шрифты: Lora (контемплятивный серив для заголовков) + Inter (тело). Оба с кириллицей. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -76,9 +74,5 @@
       </section>
     </main>
 
-    <!-- И bundle, и конфиг грузятся с новым URL. Telegram может держать ресурсы WebView
-         дольше HTTP cache-control, поэтому версия по времени надёжнее статичного номера,
-         который легко забыть обновить при следующем релизе. -->
-    <script src="./miniapp-boot.js"></script>
   </body>
 </html>
