@@ -65,7 +65,7 @@ assert.match(indexHtml, /<meta\s+[\s\S]*?name="description"/);
 assert.match(css, /prefers-reduced-motion: reduce/);
 assert.match(css, /:focus-visible/);
 assert.match(html, /Ориентиры первого маршрута/);
-assert.match(html, /Посмотреть, как устроен путь/);
+assert.match(html, /Как проходит первый цикл/);
 assert.doesNotMatch(html, /Пример диалога|пример разговора|dialog-window/);
 assert.match(html, /data-mobile-cta/);
 assert.match(html, /data-journey/);
@@ -76,10 +76,22 @@ assert.equal(
 );
 assert.match(js, /mobileCtaObserver/);
 assert.match(js, /updateScrollMotion/);
+assert.match(html, /class="hero-scene"/);
+assert.match(css, /@keyframes mobile-scene-drift/);
+assert.match(
+  css,
+  /\.hero-scene\s*\{[\s\S]*?animation: mobile-scene-drift 8s ease-in-out infinite/,
+);
 assert.match(css, /--journey-progress/);
 assert.match(css, /\.journey-steps\.has-motion li\.is-active[\s\S]*?transform: none/);
 assert.match(css, /\.mobile-cta\.is-visible/);
-assert.match(html, /Начать 7 дней бесплатно/);
+assert.match(html, /Пройти первый цикл бесплатно/);
+assert.match(html, /Начать бесплатно в Telegram/);
+assert.match(html, /После маршрута — один короткий ответ раз в 3 дня/);
+assert.match(html, /Данные можно выгрузить и удалить/);
+assert.match(html, /Разговоры не продаются/);
+assert.match(html, /не продаём разговоры рекламодателям/);
+assert.match(html, /Полные разговоры без трёхдневных пауз/);
 assert.match(html, /class="button button-primary"[\s\S]*?data-cta="pricing_free"/);
 assert.match(html, /class="button button-secondary"[\s\S]*?data-cta="pricing_month"/);
 assert.doesNotMatch(html, /target="_blank"/);
