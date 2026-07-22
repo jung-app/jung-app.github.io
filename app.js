@@ -859,6 +859,7 @@ function closeToChat() {
 // Статические Lucide-подобные SVG вместо системных emoji: одинаковы на iOS/Android,
 // наследуют тему и не меняют метрики строки от шрифта устройства.
 const PATH_ICON_SVG = {
+  route: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="m5.6 5.6 2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
   dream: '<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/>',
   journal: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
   imagination: '<path d="m12 3-1.4 3.6L7 8l3.6 1.4L12 13l1.4-3.6L17 8l-3.6-1.4Z"/><path d="m5 14-.8 2.2L2 17l2.2.8L5 20l.8-2.2L8 17l-2.2-.8Z"/>',
@@ -879,6 +880,29 @@ function pathIcon(kind) {
 function pathBlock(path) {
   const p = path || {};
   const features = p.features || {};
+  const activation = p.activation || {};
+  const activationCopy = {
+    portrait_ready: {
+      state: "Портрет готов",
+      next: "Назови один повторяющийся сценарий, который хочется изменить.",
+    },
+    pattern_named: {
+      state: "Сценарий замечен",
+      next: "Выбери минимальный шаг, которым можно проверить новое действие.",
+    },
+    step_chosen: {
+      state: "Маленький шаг выбран",
+      next: "Попробуй его и вернись отметить, что получилось или помешало.",
+    },
+    outcome_shared: {
+      state: "Результат отмечен",
+      next: "Разбери трудный момент без стыда и скорректируй следующий шаг.",
+    },
+    loop_completed: {
+      state: "Первый цикл завершён",
+      next: "Выбери следующую тему, где память проводника поможет увидеть повтор.",
+    },
+  };
   const specs = [
     {
       key: "dream", label: "Разборы снов", forms: ["разбор", "разбора", "разборов"],
@@ -930,6 +954,17 @@ function pathBlock(path) {
       return { kind: key, label: spec.label, state, next: spec.next, lastAt };
     })
     .filter(Boolean);
+  const route = activationCopy[activation.stage];
+  if (route) {
+    rows.push({
+      kind: "route",
+      label: "Первый цикл изменений",
+      state: route.state,
+      next: route.next,
+      lastAt: activation.updated_at,
+      forceNext: true,
+    });
+  }
   if (p.weekly_letter_at) {
     rows.push({
       kind: "letter",
@@ -963,7 +998,7 @@ function pathBlock(path) {
     const lastTimestamp = Date.parse(row.lastAt || "");
     const recent = Number.isFinite(lastTimestamp) &&
       lastTimestamp <= Date.now() && Date.now() - lastTimestamp <= 14 * 86400000;
-    if (index === 0 && recent) {
+    if (row.forceNext || (index === 0 && recent)) {
       copy.appendChild(el("span", "product-path-next", "Можно продолжить: " + row.next));
     }
     item.appendChild(copy);

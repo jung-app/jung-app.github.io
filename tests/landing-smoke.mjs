@@ -49,6 +49,11 @@ assert.match(
   rootRedirectJs,
   /landing\.html" \+ window\.location\.search \+ window\.location\.hash/,
 );
+assert.match(rootRedirectJs, /tgWebAppData=/);
+assert.match(rootRedirectJs, /tgWebAppVersion=/);
+assert.match(rootRedirectJs, /sdk\.async = true/);
+assert.match(rootRedirectJs, /miniapp-boot\.js\?v=/);
+assert.doesNotMatch(indexHtml, /src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
 assert.match(indexHtml, /Content-Security-Policy/);
 assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);
 assert.doesNotMatch(indexHtml, /<script>(?![\s\S]*application\/ld\+json)/);

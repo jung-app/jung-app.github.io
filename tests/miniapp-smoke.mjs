@@ -26,5 +26,7 @@ assert.match(app, /Ответить в чате/);
 assert.doesNotMatch(app, /Выбери 500 ⭐|5000 ⭐ для года/);
 assert.match(app, /Сессия завершилась/);
 assert.match(app, /Обновить статус/);
+assert.match(app, /Первый цикл изменений/);
+assert.match(app, /Разбери трудный момент без стыда/);
 
 console.log("Mini App resilience smoke passed");
