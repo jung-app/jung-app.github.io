@@ -203,6 +203,7 @@ function normalizeProfile(raw) {
   p.sections = arrayOfObjects(p.sections);
   p.archetypes = arrayOfObjects(p.archetypes);
   p.habits = arrayOfObjects(p.habits);
+  p.memories = arrayOfObjects(p.memories);
   p.threads = arrayOfObjects(p.threads).map((thread) => ({
     ...thread,
     members: arrayOfObjects(thread.members),
@@ -833,28 +834,99 @@ function groupBlock(title, items, sub) {
 
 // --- блок «Сегодня» ---------------------------------------------------------
 
-// Блок «Сегодня»: ясный вопрос дня + проверяемый статус синхронизации. Он намеренно не
-// подставляет тему из всего профиля: профиль может быть старше сегодняшнего разговора.
+// Один следующий шаг вместо двух слабых блоков «Сегодня» и «Мой путь».
+// Показываем состояние реального цикла изменения, а не общий вопрос ради ежедневности.
 function todayBlock(p) {
-  const state = window.JUNG_TODAY
-    ? window.JUNG_TODAY.todayState(p, new Date())
-    : { question: "Какой момент сегодняшнего дня хочется спокойно разобрать?", syncText: "" };
+  const stage = p.path && p.path.activation ? p.path.activation.stage : "";
+  const stages = {
+    portrait_ready: {
+      state: "Образ собран",
+      next: "Назови один повторяющийся сценарий, который хочется изменить.",
+    },
+    pattern_named: {
+      state: "Сценарий замечен",
+      next: "Выбери маленький шаг, которым можно проверить новое действие.",
+    },
+    step_chosen: {
+      state: "Маленький шаг выбран",
+      next: "Попробуй его и вернись рассказать, что получилось или помешало.",
+    },
+    outcome_shared: {
+      state: "Результат отмечен",
+      next: "Разбери трудный момент без стыда и скорректируй следующий шаг.",
+    },
+    loop_completed: {
+      state: "Первый цикл завершён",
+      next: "Выбери следующую тему, где знакомый сценарий повторяется.",
+    },
+  };
+  let step = stages[stage];
+  if (!step && p.completeness && p.completeness.missing && p.completeness.missing.length) {
+    step = {
+      state: "Образ ещё уточняется",
+      next: "Расскажи о ситуации, где особенно заметна тема «" + p.completeness.missing[0] + "».",
+    };
+  }
+  if (!step) {
+    step = {
+      state: "Выбери живую тему",
+      next: "Открой одну тему на карте ниже и продолжи её в разговоре.",
+    };
+  }
   const sec = el("section", "today");
-  sec.appendChild(el("div", "today-label", "Сегодня"));
-  sec.appendChild(el("p", "today-q", state.question));
-  if (state.syncText) sec.appendChild(el("p", "today-sync", state.syncText));
-  const btn = el("button", "today-cta", "Ответить в чате");
+  sec.appendChild(el("div", "today-label", "Следующий шаг"));
+  sec.appendChild(el("strong", "today-state", step.state));
+  sec.appendChild(el("p", "today-q", step.next));
+  if (p.live_sync && p.live_sync.pending_profile_update) {
+    sec.appendChild(
+      el("p", "today-sync", "Последний разговор уже принят. Образ обновляется в фоне."),
+    );
+  }
+  const btn = el("button", "today-cta", "Продолжить в чате");
   btn.type = "button";
-  // Закрываем мини-апп → возврат в чат с ботом, где можно ответить прямо сейчас.
-  btn.addEventListener("click", () => {
-    if (tg && typeof tg.close === "function") tg.close();
-  });
+  btn.addEventListener("click", closeToChat);
   sec.appendChild(btn);
   return sec;
 }
 
 function closeToChat() {
   if (tg && typeof tg.close === "function") tg.close();
+}
+
+function topicSelectionFeedback() {
+  const haptic = tg && tg.HapticFeedback;
+  if (haptic && typeof haptic.selectionChanged === "function") {
+    haptic.selectionChanged();
+  }
+}
+
+function memoryBlock(items) {
+  if (!items || !items.length) return null;
+  const sec = el("section", "memory-card");
+  sec.appendChild(el("div", "memory-label", "Что я держу в уме"));
+  sec.appendChild(
+    el(
+      "p",
+      "memory-note",
+      "Только важные факты, которые ты сообщил прямо. Рабочие гипотезы живут отдельно.",
+    ),
+  );
+  const list = el("ul", "memory-list");
+  items.slice(0, 6).forEach((item) => {
+    const row = el("li", "memory-item");
+    row.appendChild(el("span", "memory-mark", "✓"));
+    row.appendChild(el("span", null, item.summary || ""));
+    list.appendChild(row);
+  });
+  sec.appendChild(list);
+  if (items.length > 6) {
+    sec.appendChild(el("p", "memory-more", "Ещё " + (items.length - 6) + " — в /memory и /export."));
+  }
+  const btn = el("button", "memory-cta", "Управлять памятью: /memory");
+  btn.type = "button";
+  btn.addEventListener("click", closeToChat);
+  sec.appendChild(btn);
+  return sec;
 }
 
 // Статические Lucide-подобные SVG вместо системных emoji: одинаковы на iOS/Android,
@@ -1067,7 +1139,7 @@ function escXml(s) {
 // ближе к центру = узнано и принято). Звёзды можно таскать, карту — панорамировать и
 // зумить (щипок/колесо, двойной тап — сброс). Тап по звезде подсвечивает её созвездие
 // и гасит остальное; подписи проявляются при зуме. Рисуем, когда есть хоть одна грань.
-function psycheMap(sections, archetypes) {
+function psycheMapLegacy(sections, archetypes) {
   if (!sections.length && !(archetypes && archetypes.length)) return null;
   const byKey = {};
   sections.forEach((s) => {
@@ -1860,6 +1932,142 @@ function psycheMap(sections, archetypes) {
   return sec;
 }
 
+// Быстрая карта тем. В предыдущей версии одна область одновременно поддерживала drag,
+// pan, pinch-zoom и double-tap reset. В Telegram WebView эти жесты конкурировали со
+// скроллом и скрывали подписи. Теперь каждая тема — обычная доступная кнопка: все названия
+// видны, выбор предсказуем, а связи раскрываются текстом.
+function psycheMap(sections, archetypes) {
+  const items = [
+    ...(sections || []).map((item) => ({ ...item, itemType: "facet" })),
+    ...(archetypes || []).map((item) => ({
+      ...item,
+      key: "archetype:" + (item.name || ""),
+      label: item.name || "Архетип",
+      itemType: "archetype",
+    })),
+  ].filter((item) => item && item.label && item.summary);
+  if (!items.length) return null;
+
+  const sec = el("section", "sky topic-map-section");
+  sec.appendChild(el("div", "sky-label", "Карта тем"));
+  sec.appendChild(
+    el(
+      "p",
+      "sky-sub",
+      "Здесь видны темы, которые уже возникли в разговорах. Нажми на любую: покажу смысл и связь.",
+    ),
+  );
+
+  const confirmed = items.filter((item) => item.user_confirmed).length;
+  const working = items.filter((item) => !item.user_confirmed && item.status === "working").length;
+  const emerging = Math.max(0, items.length - confirmed - working);
+  const progress = el("div", "topic-map-progress");
+  [
+    [confirmed, "подтверждено"],
+    [working, "проверяем"],
+    [emerging, "проявляется"],
+  ].forEach(([value, label]) => {
+    const part = el("span", "topic-map-progress-item");
+    part.appendChild(el("strong", null, String(value)));
+    part.appendChild(document.createTextNode(" " + label));
+    progress.appendChild(part);
+  });
+  sec.appendChild(progress);
+
+  const byTheme = new Map();
+  items.forEach((item, index) => {
+    if (!item.theme) return;
+    const members = byTheme.get(item.theme) || [];
+    members.push(index);
+    byTheme.set(item.theme, members);
+  });
+
+  const grid = el("div", "topic-map-grid");
+  const buttons = [];
+  const readout = el("div", "topic-map-readout");
+  readout.setAttribute("aria-live", "polite");
+  readout.setAttribute("aria-atomic", "true");
+
+  const selectTopic = (index) => {
+    const item = items[index];
+    buttons.forEach((button, buttonIndex) => {
+      const selected = buttonIndex === index;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    readout.replaceChildren();
+    const status = item.user_confirmed
+      ? "Подтверждено тобой"
+      : item.status === "working"
+        ? "Сейчас проверяем"
+        : "Только проявляется";
+    readout.appendChild(el("span", "topic-map-readout-status", status));
+    readout.appendChild(el("h3", "topic-map-readout-title serif", item.label));
+    readout.appendChild(el("p", "topic-map-readout-text", item.summary));
+
+    const relatedIndexes = item.theme
+      ? (byTheme.get(item.theme) || []).filter((memberIndex) => memberIndex !== index)
+      : [];
+    if (relatedIndexes.length) {
+      const related = relatedIndexes.map((memberIndex) => items[memberIndex].label).join(", ");
+      readout.appendChild(
+        el("p", "topic-map-related", "Может быть связано с темами: " + related + "."),
+      );
+    }
+    const cta = el("button", "sky-readout-cta", "Продолжить эту тему в разговоре");
+    cta.type = "button";
+    cta.addEventListener("click", closeToChat);
+    readout.appendChild(cta);
+  };
+
+  items.forEach((item, index) => {
+    const button = el("button", "topic-map-node");
+    button.type = "button";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", "Открыть тему «" + item.label + "»");
+    button.dataset.status = item.user_confirmed ? "confirmed" : item.status || "emerging";
+    const glyph = item.itemType === "facet" && FACET_GUIDE[item.key]
+      ? FACET_GUIDE[item.key].glyph
+      : "✦";
+    button.appendChild(el("span", "topic-map-glyph", glyph));
+    const copy = el("span", "topic-map-node-copy");
+    copy.appendChild(el("strong", null, item.label));
+    copy.appendChild(
+      el(
+        "small",
+        null,
+        item.user_confirmed ? "подтверждено" : STATUS_LABELS[item.status] || "гипотеза",
+      ),
+    );
+    button.appendChild(copy);
+    button.addEventListener("click", () => {
+      topicSelectionFeedback();
+      selectTopic(index);
+    });
+    buttons.push(button);
+    grid.appendChild(button);
+  });
+  sec.appendChild(grid);
+  sec.appendChild(readout);
+
+  const growth = el("details", "topic-map-growth");
+  growth.appendChild(el("summary", "topic-map-growth-toggle", "Как растёт карта"));
+  growth.appendChild(
+    el(
+      "p",
+      "topic-map-growth-text",
+      "Новая тема появляется после реального разговора, когда есть достаточно опоры. " +
+        "Гипотеза становится подтверждённой только после твоего согласия или уточнения. " +
+        "Связи показываются лишь там, где несколько тем действительно сходятся в одном мотиве.",
+    ),
+  );
+  sec.appendChild(growth);
+
+  const firstConfirmed = items.findIndex((item) => item.user_confirmed);
+  selectTopic(firstConfirmed >= 0 ? firstConfirmed : 0);
+  return sec;
+}
+
 // --- сборка профиля ---------------------------------------------------------
 
 function renderProfile(p) {
@@ -1876,11 +2084,11 @@ function renderProfile(p) {
   if (upd) top.appendChild(el("div", "datepill", "обновлён " + upd));
   root.appendChild(top);
 
-  // «Сегодня» — вопрос дня + возврат в чат: причина открывать мини-апп каждый день
+  // Один полезный следующий шаг вместо общих блоков «Сегодня» и «Мой путь».
   root.appendChild(todayBlock(p));
 
-  const path = pathBlock(p.path);
-  if (path) root.appendChild(path);
+  const memories = memoryBlock(p.memories);
+  if (memories) root.appendChild(memories);
 
   // что изменилось с прошлого визита (динамика между сессиями)
   const dyn = dynamicsBlock(p.dynamics);
@@ -2020,75 +2228,8 @@ function renderProfile(p) {
     root.appendChild(sec);
   }
 
-  // «Нити»: синтез — грани/привычки/образы, выросшие из ОДНОЙ потребности (payload.threads,
-  // группировка по мотиву-тегу theme). Момент «меня реально поняли». Держим гипотезой:
-  // eyebrow «возможно, одна нить», без диагноза; сырого evidence тут нет (152-ФЗ).
-  if (p.threads && p.threads.length) {
-    const sec = el("section", "group weave");
-    sec.appendChild(el("h2", "group-title serif", "Что связано в тебе"));
-    sec.appendChild(
-      el(
-        "p",
-        "group-sub",
-        "Разное поведение часто растёт из одного корня. Увидеть эту связь — и есть работа над " +
-          "собой: меняешь не отдельный симптом, а общую нужду под ним. Вот что, похоже, связано у тебя.",
-      ),
-    );
-    p.threads.forEach((t) => {
-      const card = el("div", "weave-thread");
-      card.appendChild(el("div", "weave-eyebrow", "одна нить"));
-      // Инсайт вперёд: общая потребность — крупным. serves/need нередко начинается с
-      // «гипотеза:» — срезаем, чтобы не задваивать рамку.
-      const need = (t.need || "").replace(/^\s*гипотеза\s*[:—-]\s*/i, "").trim();
-      card.appendChild(
-        el(
-          "p",
-          "weave-need serif",
-          need
-            ? "Общий корень: " + need + "."
-            : "Похоже, эти части растут из одной глубинной потребности.",
-        ),
-      );
-      // Что именно связано — чипы граней/образов/привычек.
-      card.appendChild(el("div", "weave-connects", "Связывает"));
-      const chips = el("div", "chips weave-chips");
-      t.members.forEach((m) => {
-        const kindWord =
-          m.kind === "facet" ? "грань" : m.kind === "archetype" ? "образ" : "привычку";
-        const chip = el("span", "chip weave-chip");
-        chip.appendChild(el("span", "weave-kind", kindWord));
-        chip.appendChild(document.createTextNode(m.kind === "facet" ? m.label : m.name || ""));
-        chips.appendChild(chip);
-      });
-      card.appendChild(chips);
-      card.appendChild(
-        el("p", "weave-why", "Потянешь за одну — отзовётся вся нить. На карте выше это золотая связь."),
-      );
-      sec.appendChild(card);
-    });
-    root.appendChild(sec);
-  } else if (p.threads_locked) {
-    // Free после демо: сервер отдал только ЧИСЛО нитей (содержимое не пришло в payload).
-    // Тизер честный — нити реально найдены; открываются с подпиской (CTA скроллит к оплате).
-    const sec = el("section", "group weave");
-    sec.appendChild(el("h2", "group-title serif", "Что связано в тебе"));
-    const card = el("div", "weave-thread");
-    card.appendChild(el("div", "weave-eyebrow", "найдено, но скрыто"));
-    card.appendChild(
-      el(
-        "p",
-        "weave-need serif",
-        "Я вижу " + p.threads_locked + " " +
-          pluralRu(p.threads_locked, "нить", "нити", "нитей") + ": похоже, разные грани, привычки и образы " +
-          "растут из одного корня. С подпиской покажу, что именно их связывает — и что с этим делать.",
-      ),
-    );
-    const btn = el("button", "upgrade-btn weave-locked-btn", "Открыть нити 🔓");
-    btn.addEventListener("click", scrollToUpgrade);
-    card.appendChild(btn);
-    sec.appendChild(card);
-    root.appendChild(sec);
-  }
+  // Отдельный раздел «Одна нить» убран как повтор карты. Связи остаются рядом с
+  // выбранной темой в карте, где у них есть контекст и понятное продолжение.
 
   // что ещё стоит исследовать (если профиль не дозрел)
   if (!c.is_sufficient && c.missing && c.missing.length) {

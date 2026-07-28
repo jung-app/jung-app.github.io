@@ -1,12 +1,19 @@
 (function () {
   "use strict";
 
+  function landingUrl() {
+    var source = new URLSearchParams(window.location.search).get("src") || "";
+    source = source.trim().toLowerCase();
+    if (/^[a-z0-9][a-z0-9_-]{0,31}$/.test(source)) {
+      return "./landing.html?src=" + encodeURIComponent(source);
+    }
+    return "./landing.html";
+  }
+
   function showLanding() {
     settled = true;
     window.clearTimeout(timeout);
-    window.location.replace(
-      "./landing.html" + window.location.search + window.location.hash,
-    );
+    window.location.replace(landingUrl());
   }
 
   function hasTelegramLaunchParams() {

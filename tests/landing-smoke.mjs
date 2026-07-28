@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { access, readFile } from "node:fs/promises";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const attribution = require("../attribution.js");
@@ -45,10 +46,11 @@ assert.match(html, /id="main"/);
 assert.match(html, /class="skip-link"/);
 assert.match(html, /<script type="application\/ld\+json">/);
 assert.match(indexHtml, /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/);
-assert.match(
+assert.doesNotMatch(
   rootRedirectJs,
   /landing\.html" \+ window\.location\.search \+ window\.location\.hash/,
 );
+assert.match(rootRedirectJs, /new URLSearchParams\(window\.location\.search\)/);
 assert.match(rootRedirectJs, /tgWebAppData=/);
 assert.match(rootRedirectJs, /tgWebAppVersion=/);
 assert.match(rootRedirectJs, /sdk\.async = true/);
@@ -98,6 +100,61 @@ assert.doesNotMatch(html, /target="_blank"/);
 assert.doesNotMatch(html, /http:\/\//);
 assert.doesNotMatch(js, /localStorage|sessionStorage|document\.cookie/);
 assert.doesNotMatch(attributionJs, /localStorage|sessionStorage|document\.cookie/);
+
+function fallbackTarget(href) {
+  const current = new URL(href);
+  let replaced = "";
+  const window = {
+    location: {
+      search: current.search,
+      hash: current.hash,
+      replace(target) {
+        replaced = target;
+      },
+    },
+    setTimeout() {
+      return 1;
+    },
+    clearTimeout() {},
+  };
+  const document = {
+    readyState: "complete",
+    createElement() {
+      return {};
+    },
+    head: {
+      appendChild(element) {
+        element.onerror();
+      },
+    },
+    body: {
+      appendChild() {},
+    },
+  };
+  vm.runInNewContext(rootRedirectJs, {
+    URLSearchParams,
+    Date,
+    document,
+    window,
+  });
+  return replaced;
+}
+
+assert.equal(
+  fallbackTarget(
+    "https://mindcoachbot.ru/?src=yandex_launch_a" +
+      "&tgWebAppData=user%3Dprivate-signed-data&tgWebAppVersion=9.6" +
+      "#tgWebAppData=more-private-data",
+  ),
+  "./landing.html?src=yandex_launch_a",
+);
+assert.equal(
+  fallbackTarget(
+    "https://mindcoachbot.ru/?tgWebAppData=private" +
+      "&tgWebAppVersion=9.6&utm_source=ignored#private",
+  ),
+  "./landing.html",
+);
 
 assert.equal(attribution.sourceFromSearch("?src=yandex_launch_a"), "yandex_launch_a");
 assert.equal(attribution.sourceFromSearch("?src=bad%20value"), "landing");
