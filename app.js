@@ -861,6 +861,27 @@ function todayBlock(p) {
     },
   };
   let step = stages[stage];
+  let ctaLabel = "Продолжить в чате";
+  const latestMemory = (p.memories || [])
+    .filter((item) =>
+      item &&
+      item.summary &&
+      ["goal", "commitment", "effective_strategy"].includes(item.kind),
+    )
+    .sort(
+      (a, b) =>
+        (Date.parse(b.last_updated || "") || 0) - (Date.parse(a.last_updated || "") || 0),
+    )[0];
+  if (!step && latestMemory) {
+    step = {
+      state:
+        latestMemory.kind === "effective_strategy"
+          ? "Нашлась рабочая опора"
+          : "Вернёмся к твоему шагу",
+      next: latestMemory.summary + " Что изменилось после последнего разговора?",
+    };
+    ctaLabel = "Отметить, что изменилось";
+  }
   if (!step && p.completeness && p.completeness.missing && p.completeness.missing.length) {
     step = {
       state: "Образ ещё уточняется",
@@ -873,6 +894,13 @@ function todayBlock(p) {
       next: "Открой одну тему на карте ниже и продолжи её в разговоре.",
     };
   }
+  if (p.live_sync && p.live_sync.pending_profile_update) {
+    step = {
+      state: "Последний разговор уже здесь",
+      next: "Я обновляю образ по новой теме. В чате можно продолжить с того же места.",
+    };
+    ctaLabel = "Вернуться к разговору";
+  }
   const sec = el("section", "today");
   sec.appendChild(el("div", "today-label", "Следующий шаг"));
   sec.appendChild(el("strong", "today-state", step.state));
@@ -882,7 +910,7 @@ function todayBlock(p) {
       el("p", "today-sync", "Последний разговор уже принят. Образ обновляется в фоне."),
     );
   }
-  const btn = el("button", "today-cta", "Продолжить в чате");
+  const btn = el("button", "today-cta", ctaLabel);
   btn.type = "button";
   btn.addEventListener("click", closeToChat);
   sec.appendChild(btn);
@@ -2124,31 +2152,44 @@ function renderProfile(p) {
   // который читался как вечный банальный текст. Живое лицо — карта, нити, динамика.
 
   // метрики
-  const confirmed = p.sections.filter((s) => s.user_confirmed).length;
+  const confirmed = [
+    ...p.sections,
+    ...(p.archetypes || []),
+  ].filter((item) => item.user_confirmed).length;
   const stats = el("section", "stats");
   stats.appendChild(stat(p.sections.length, "раскрыто граней"));
   stats.appendChild(stat(p.archetypes ? p.archetypes.length : 0, "активных архетипов"));
   stats.appendChild(stat(confirmed, "подтверждено тобой"));
   root.appendChild(stats);
 
+  // Полные карточки остаются доступны владельцу, но не дублируют карту в основном потоке.
+  const profileDetails = el("details", "profile-details");
+  profileDetails.appendChild(
+    el("summary", "profile-details-toggle", "Все гипотезы и основания"),
+  );
+  const profileDetailsBody = el("div", "profile-details-body");
+  profileDetails.appendChild(profileDetailsBody);
+
   // разделы
   const core = p.sections.filter((s) => s.group === "core");
   const enrichment = p.sections.filter((s) => s.group === "enrichment");
 
   if (core.length) {
-    root.appendChild(groupBlock("Основа личности", core));
+    profileDetailsBody.appendChild(groupBlock("Основа личности", core));
   } else {
     const s = el("section", "group");
     s.appendChild(el("h2", "group-title", "Основа личности"));
     const note = el("div", "empty-note");
     note.textContent = "Базовые грани пока не проявились — расскажи мне о себе побольше в чате.";
     s.appendChild(note);
-    root.appendChild(s);
+    profileDetailsBody.appendChild(s);
   }
 
-  if (enrichment.length) root.appendChild(groupBlock("Глубинные слои", enrichment));
+  if (enrichment.length) {
+    profileDetailsBody.appendChild(groupBlock("Глубинные слои", enrichment));
+  }
   if (p.archetypes && p.archetypes.length) {
-    root.appendChild(
+    profileDetailsBody.appendChild(
       groupBlock(
         "Активные архетипы",
         p.archetypes,
@@ -2193,7 +2234,7 @@ function renderProfile(p) {
       ),
     );
     s.appendChild(invite);
-    root.appendChild(s);
+    profileDetailsBody.appendChild(s);
   }
 
   // Работа с привычкой (/habit): показываем только когда есть что показать — free без
@@ -2225,7 +2266,7 @@ function renderProfile(p) {
       }
       sec.appendChild(el("p", "ritual-practice", parts.join(" · ")));
     }
-    root.appendChild(sec);
+    profileDetailsBody.appendChild(sec);
   }
 
   // Отдельный раздел «Одна нить» убран как повтор карты. Связи остаются рядом с
@@ -2239,8 +2280,10 @@ function renderProfile(p) {
     const chips = el("div", "chips");
     c.missing.forEach((m) => chips.appendChild(el("span", "chip", m)));
     ex.appendChild(chips);
-    root.appendChild(ex);
+    profileDetailsBody.appendChild(ex);
   }
+
+  root.appendChild(profileDetails);
 
   // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
   if (p.show_upgrade) root.appendChild(upgradeSection(p.billing, p.access));

@@ -32,6 +32,9 @@ assert.match(app, /Разбери трудный момент без стыда/
 assert.match(app, /Следующий шаг/);
 assert.match(app, /Как растёт карта/);
 assert.match(app, /Что я держу в уме/);
+assert.match(app, /Отметить, что изменилось/);
+assert.match(app, /Все гипотезы и основания/);
+assert.match(app, /\["goal", "commitment", "effective_strategy"\]/);
 assert.match(app, /function psycheMapLegacy\(sections, archetypes\)/);
 assert.match(app, /function psycheMap\(sections, archetypes\)/);
 assert.doesNotMatch(app, /root\.appendChild\(pathBlock/);

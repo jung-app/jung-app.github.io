@@ -1357,6 +1357,33 @@ body {
 }
 
 /* --- группы и карточки --- */
+.profile-details {
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(13, 18, 32, 0.46);
+}
+.profile-details-toggle {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  padding: 0 16px;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.profile-details-toggle::marker {
+  color: var(--gold-deep);
+}
+.profile-details-body {
+  padding: 4px 14px 1px;
+  border-top: 1px solid var(--line);
+}
+.profile-details-body .group:last-child {
+  margin-bottom: 14px;
+}
 .group {
   margin-bottom: 26px;
 }
