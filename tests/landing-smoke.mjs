@@ -54,7 +54,11 @@ assert.match(rootRedirectJs, /new URLSearchParams\(window\.location\.search\)/);
 assert.match(rootRedirectJs, /tgWebAppData=/);
 assert.match(rootRedirectJs, /tgWebAppVersion=/);
 assert.match(rootRedirectJs, /sdk\.async = true/);
+assert.match(rootRedirectJs, /function waitForTelegramInit\(attempt\)/);
+assert.match(rootRedirectJs, /attempt < 30/);
+assert.match(rootRedirectJs, /waitForTelegramInit\(attempt \+ 1\)/);
 assert.match(rootRedirectJs, /miniapp-boot\.js\?v=/);
+assert.match(indexHtml, /root-redirect\.js\?v=20260728-miniapp-handshake/);
 assert.doesNotMatch(indexHtml, /src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
 assert.match(indexHtml, /Content-Security-Policy/);
 assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);
@@ -155,6 +159,58 @@ assert.equal(
   ),
   "./landing.html",
 );
+
+function delayedTelegramBoot() {
+  const scheduled = [];
+  const bodyScripts = [];
+  let replaced = "";
+  const window = {
+    Telegram: { WebApp: { initData: "" } },
+    location: {
+      search: "?build=release",
+      hash: "#tgWebAppData=signed&tgWebAppVersion=9.6",
+      replace(target) {
+        replaced = target;
+      },
+    },
+    setTimeout(callback, delay) {
+      scheduled.push({ callback, delay });
+      return scheduled.length;
+    },
+    clearTimeout() {},
+  };
+  const document = {
+    readyState: "complete",
+    createElement(tag) {
+      return { tag };
+    },
+    head: {
+      appendChild(element) {
+        element.onload();
+      },
+    },
+    body: {
+      appendChild(element) {
+        bodyScripts.push(element.src);
+      },
+    },
+  };
+  vm.runInNewContext(rootRedirectJs, {
+    URLSearchParams,
+    Date,
+    document,
+    window,
+  });
+  const handshakeRetry = scheduled.find((item) => item.delay === 100);
+  assert.ok(handshakeRetry, "Telegram handshake must retry instead of opening landing");
+  window.Telegram.WebApp.initData = "signed";
+  handshakeRetry.callback();
+  return { bodyScripts, replaced };
+}
+
+const delayedBoot = delayedTelegramBoot();
+assert.equal(delayedBoot.replaced, "");
+assert.match(delayedBoot.bodyScripts[0], /^\.\/miniapp-boot\.js\?v=/);
 
 assert.equal(attribution.sourceFromSearch("?src=yandex_launch_a"), "yandex_launch_a");
 assert.equal(attribution.sourceFromSearch("?src=bad%20value"), "landing");
