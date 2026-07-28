@@ -38,6 +38,25 @@
     });
   }
 
+  function waitForTelegramInit(attempt) {
+    var webApp = window.Telegram && window.Telegram.WebApp;
+    if (webApp && webApp.initData) {
+      settled = true;
+      window.clearTimeout(timeout);
+      loadMiniApp();
+      return;
+    }
+    // Telegram Web иногда загружает SDK раньше, чем завершает postMessage-handshake
+    // с iframe. Мгновенная проверка отправляла настоящий Mini App на лендинг.
+    if (attempt < 30) {
+      window.setTimeout(function () {
+        waitForTelegramInit(attempt + 1);
+      }, 100);
+      return;
+    }
+    showLanding();
+  }
+
   if (!hasTelegramLaunchParams()) {
     showLanding();
     return;
@@ -50,16 +69,7 @@
   var sdk = document.createElement("script");
   sdk.src = "https://telegram.org/js/telegram-web-app.js";
   sdk.async = true;
-  sdk.onload = function () {
-    var webApp = window.Telegram && window.Telegram.WebApp;
-    if (!webApp || !webApp.initData) {
-      showLanding();
-      return;
-    }
-    settled = true;
-    window.clearTimeout(timeout);
-    loadMiniApp();
-  };
+  sdk.onload = function () { waitForTelegramInit(0); };
   sdk.onerror = showLanding;
   document.head.appendChild(sdk);
 })();
