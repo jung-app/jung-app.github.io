@@ -863,15 +863,20 @@ function todayBlock(p) {
   let step = stages[stage];
   let ctaLabel = "Продолжить в чате";
   const latestMemory = (p.memories || [])
-    .filter((item) =>
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) =>
       item &&
       item.summary &&
       ["goal", "commitment", "effective_strategy"].includes(item.kind),
     )
     .sort(
       (a, b) =>
-        (Date.parse(b.last_updated || "") || 0) - (Date.parse(a.last_updated || "") || 0),
-    )[0];
+        (Date.parse(b.item.last_updated || "") || 0) -
+          (Date.parse(a.item.last_updated || "") || 0) ||
+        // Один extraction может сохранить несколько целей с одинаковым timestamp.
+        // Последняя в durable_facts обычно является новой темой, а не старой обновлённой целью.
+        b.index - a.index,
+    )[0]?.item;
   if (!step && latestMemory) {
     step = {
       state:
