@@ -211,6 +211,7 @@ function normalizeProfile(raw) {
   p.billing = objectOrEmpty(p.billing);
   p.access = objectOrEmpty(p.access);
   p.path = objectOrEmpty(p.path);
+  p.change_experiment = objectOrEmpty(p.change_experiment);
   p.ritual = objectOrEmpty(p.ritual);
   p.live_sync = objectOrEmpty(p.live_sync);
   p.referral = objectOrEmpty(p.referral);
@@ -834,6 +835,129 @@ function groupBlock(title, items, sub) {
 
 // --- блок «Сегодня» ---------------------------------------------------------
 
+const CHANGE_EXPERIMENT_STATUSES = new Set([
+  "planned",
+  "attempted",
+  "adjusted",
+  "completed",
+  "paused",
+]);
+
+function dateOnlyParts(value) {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== month - 1 ||
+    probe.getUTCDate() !== day
+  ) return null;
+  return { key: value, year, month, day };
+}
+
+function localDateKey(now) {
+  const date = now || new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
+}
+
+function fmtDateOnly(value) {
+  const parsed = dateOnlyParts(value);
+  if (!parsed) return null;
+  const months = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+  ];
+  return parsed.day + " " + months[parsed.month - 1];
+}
+
+function changeExperimentView(raw) {
+  const experiment = objectOrEmpty(raw);
+  const text = (value) => (typeof value === "string" ? value.trim() : "");
+  const action = text(experiment.action);
+  const trigger = text(experiment.trigger);
+  const fallback = text(experiment.fallback);
+  const successSignal = text(experiment.success_signal);
+  const outcome = text(experiment.outcome);
+  const learning = text(experiment.learning);
+  const status = CHANGE_EXPERIMENT_STATUSES.has(experiment.status)
+    ? experiment.status
+    : "";
+  if (!action || !status) return null;
+
+  const today = localDateKey();
+  const planned = dateOnlyParts(experiment.planned_for);
+  const checkIn = dateOnlyParts(experiment.check_in_on);
+  let state = "Шаг согласован";
+  let next = action;
+  let cta = "Вернуться к плану";
+
+  if (status === "attempted") {
+    state = "Опыт уже есть";
+    next = outcome
+      ? "Ты отметил: " + outcome + " Разберём, что из этого взять дальше."
+      : "Расскажи, что фактически получилось, а что оказалось трудным.";
+    cta = "Разобрать результат";
+  } else if (status === "adjusted") {
+    state = "План скорректирован";
+    next = action;
+    cta = "Продолжить с поправкой";
+  } else if (status === "completed") {
+    state = "Эксперимент завершён";
+    next = learning
+      ? "Ты заметил: " + learning
+      : "Выбери, что хочется сохранить или проверить следующим.";
+    cta = "Выбрать следующий шаг";
+  } else if (status === "paused") {
+    state = "Пауза тоже часть пути";
+    next = "Можно оставить этот шаг или уменьшить его без стыда и гонки.";
+    cta = "Пересобрать без давления";
+  } else if (checkIn && checkIn.key <= today) {
+    state = "Время сверить результат";
+    next = "Что фактически произошло с шагом: «" + action + "»?";
+    cta = "Отметить, что получилось";
+  } else if (planned && planned.key < today) {
+    state = "Шаг ждёт честной сверки";
+    next = "Получилось попробовать «" + action + "» или контекст оказался другим?";
+    cta = "Рассказать без оценки";
+  } else if (planned && planned.key === today) {
+    state = "Маленький шаг на сегодня";
+  } else if (planned) {
+    state = "Шаг на " + fmtDateOnly(planned.key);
+  }
+
+  const details = [];
+  if (trigger) details.push(["Когда", trigger]);
+  if (fallback) details.push(["Минимум", fallback]);
+  if (successSignal) details.push(["Признак", successSignal]);
+  if (checkIn) details.push(["Сверка", fmtDateOnly(checkIn.key)]);
+  if (status !== "attempted" && outcome) {
+    details.push(["Что произошло", outcome]);
+  }
+  if (status !== "completed" && learning) {
+    details.push(["Что берём дальше", learning]);
+  }
+  return { state, next, cta, details };
+}
+
+function experimentDetails(rows) {
+  if (!rows || !rows.length) return null;
+  const list = el("dl", "experiment-grid");
+  rows.forEach(([label, value]) => {
+    const row = el("div", "experiment-row");
+    row.appendChild(el("dt", "experiment-key", label));
+    row.appendChild(el("dd", "experiment-value", value));
+    list.appendChild(row);
+  });
+  return list;
+}
+
 // Один следующий шаг вместо двух слабых блоков «Сегодня» и «Мой путь».
 // Показываем состояние реального цикла изменения, а не общий вопрос ради ежедневности.
 function todayBlock(p) {
@@ -862,6 +986,12 @@ function todayBlock(p) {
   };
   let step = stages[stage];
   let ctaLabel = "Продолжить в чате";
+  const experiment = changeExperimentView(p.change_experiment);
+  let showExperiment = Boolean(experiment);
+  if (experiment) {
+    step = experiment;
+    ctaLabel = experiment.cta;
+  }
   const latestMemory = (p.memories || [])
     .map((item, index) => ({ item, index }))
     .filter(({ item }) =>
@@ -905,11 +1035,17 @@ function todayBlock(p) {
       next: "Я обновляю образ по новой теме. В чате можно продолжить с того же места.",
     };
     ctaLabel = "Вернуться к разговору";
+    showExperiment = false;
   }
   const sec = el("section", "today");
+  if (showExperiment) sec.classList.add("today--experiment");
   sec.appendChild(el("div", "today-label", "Следующий шаг"));
   sec.appendChild(el("strong", "today-state", step.state));
   sec.appendChild(el("p", "today-q", step.next));
+  if (showExperiment) {
+    const details = experimentDetails(experiment.details);
+    if (details) sec.appendChild(details);
+  }
   if (p.live_sync && p.live_sync.pending_profile_update) {
     sec.appendChild(
       el("p", "today-sync", "Последний разговор уже принят. Образ обновляется в фоне."),
