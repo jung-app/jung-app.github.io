@@ -20,60 +20,59 @@ const CONFIDENCE_MOON = {
   high: { shift: 15, cap: "ясно видно" },
 };
 
-// «Что это» — короткая человеческая расшифровка каждой грани по Юнгу. Обучающий
-// слой мини-аппа: человек понимает СВОИ грани, а не просто читает ярлыки.
-// Эпистемическая рамка: понятия — ориентиры, не диагнозы. Глиф — из алхимико-
-// астрономического словаря самого Юнга (◎ — его символ Самости).
+// «Что это» — короткая расшифровка юнгианской рабочей линзы. Это метафоры для
+// самонаблюдения, а не устройство психики, диагноз или причинное объяснение.
+// Пользователь решает, помогает ли линза заметить что-то в реальной ситуации.
 const FACET_GUIDE = {
   life_context: {
     glyph: "✦",
     guide:
-      "Где ты сейчас: обстоятельства, роли, переходы. Фон, на котором читается всё остальное.",
+      "Контекстная линза: обстоятельства, роли и переходы, на фоне которых можно проверять остальные гипотезы.",
   },
   patterns: {
     glyph: "∞",
     guide:
-      "Повторяющиеся сценарии в реакциях и выборах. Увидеть узор — уже половина свободы от него.",
+      "Рабочая линза для поиска сходства между реакциями и выборами. Повтор считается значимым только там, где ты узнаёшь его на конкретных примерах.",
   },
   fears: {
     glyph: "▲",
     guide:
-      "Страхи — не слабость, а указатели: за ними спрятано то, что для тебя по-настоящему важно.",
+      "Линза для исследования того, что страх защищает или ограничивает. Его смысл нельзя определить без твоего опыта и конкретной ситуации.",
   },
   childhood_wounds: {
     glyph: "✶",
     guide:
-      "Ранний опыт, который до сих пор задаёт тон. Не чтобы винить прошлое — чтобы вернуть себе выбор.",
+      "Линза для проверки возможной связи между ранним опытом и нынешней реакцией. Такая связь является гипотезой, а не установленной причиной.",
   },
   persona: {
     glyph: "◐",
     guide:
-      "Лицо, которое ты показываешь миру: роли, манеры, «как надо». Полезна — пока не путаешь её с собой.",
+      "Юнгианская метафора социальных ролей и ожиданий. Помогает заметить, где выбранная роль поддерживает тебя, а где расходится с твоими потребностями.",
   },
   shadow: {
     glyph: "●",
     guide:
-      "Стороны тебя, которые ты предпочитаешь не замечать. По Юнгу встреча с Тенью — первый шаг к целостности: в ней заперта и сила.",
+      "Юнгианская метафора качеств и чувств, которые трудно признавать своими. Она приглашает к проверке без стыда, но ничего не доказывает о тебе.",
   },
   anima_animus: {
     glyph: "☽",
     guide:
-      "Внутренний образ другого пола — как в тебе живёт женское и мужское. Незаметно влияет на то, кого и как ты любишь.",
+      "Историческая юнгианская метафора внутренних качеств, которые культура связывала с полом. Здесь мы используем её гендерно-нейтрально: как способ исследовать непривычные качества и ожидания в отношениях.",
   },
   self: {
     glyph: "◎",
     guide:
-      "Центр и целое психики, к которому ведёт индивидуация. Не «идеальный я» — весь я, включая тень.",
+      "Юнгианская метафора большей целостности: возможности удерживать разные стороны себя и выбирать направление без требования стать «идеальным».",
   },
   mother_complex: {
     glyph: "⊕",
     guide:
-      "След отношений с матерью и материнским: как он окрашивает близость, заботу, зависимость.",
+      "Рабочая линза для проверки того, как опыт заботы мог отразиться на близости, границах и зависимости. Это не диагноз и не обвинение матери.",
   },
   father_complex: {
     glyph: "⊙",
     guide:
-      "След отношений с отцом и отцовским: авторитет, правила, признание — и твой спор с ними.",
+      "Рабочая линза для проверки того, как опыт авторитета мог отразиться на правилах, признании и самостоятельности. Это не диагноз и не обвинение отца.",
   },
 };
 
@@ -124,10 +123,23 @@ function el(tag, className, text) {
   return node;
 }
 
+function labelSection(section, id, text, className) {
+  const heading = el("h2", className, text);
+  heading.id = id;
+  section.setAttribute("aria-labelledby", id);
+  section.appendChild(heading);
+  return heading;
+}
+
 function setView(node) {
-  document.getElementById("app").replaceChildren(node);
-  const heading = node.querySelector && node.querySelector(".state-title");
-  if (heading) queueMicrotask(() => heading.focus());
+  const app = document.getElementById("app");
+  const initialRender =
+    app.getAttribute("aria-busy") === "true" || Boolean(app.querySelector('[aria-busy="true"]'));
+  app.replaceChildren(node);
+  app.setAttribute("aria-busy", "false");
+  const heading = node.querySelector && node.querySelector("[data-view-heading]");
+  const focusState = node.classList && node.classList.contains("state");
+  if (heading && (initialRender || focusState)) queueMicrotask(() => heading.focus());
 }
 
 function stateView(title, sub, glyph, actions, kind) {
@@ -137,6 +149,7 @@ function stateView(title, sub, glyph, actions, kind) {
   wrap.appendChild(el("div", "glyph", glyph || "✦"));
   const heading = el("h1", "state-title serif", title);
   heading.tabIndex = -1;
+  heading.dataset.viewHeading = "true";
   wrap.appendChild(heading);
   if (sub) wrap.appendChild(el("p", "state-sub", sub));
   if (actions && actions.length) {
@@ -249,6 +262,37 @@ async function dismissSection(key) {
   if (!res.ok) throw new Error("http-" + res.status);
   await res.json();
   return fetchProfile(true);
+}
+
+function newRequestId() {
+  const cryptoApi = window.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+  return (
+    "topic_" +
+    Date.now().toString(36) +
+    "_" +
+    Math.random().toString(36).slice(2) +
+    Math.random().toString(36).slice(2)
+  ).slice(0, 80);
+}
+
+async function postChatIntent(topicKey, requestId) {
+  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/chat-intent", {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ topic_key: topicKey, request_id: requestId }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  const body = await res.json();
+  if (!body || body.status !== "ready") throw new Error("invalid-response");
+  return body;
 }
 
 // Подтверждение действия: нативное у Telegram, иначе обычный confirm.
@@ -442,7 +486,7 @@ function dismissRow(key, label) {
 function dynamicsBlock(d) {
   if (!d) return null;
   const sec = el("section", "dynamics");
-  sec.appendChild(el("div", "dynamics-label", "С прошлого визита"));
+  labelSection(sec, "dynamics-heading", "С прошлого визита", "dynamics-label");
 
   if (d.is_first_view) {
     sec.appendChild(
@@ -1039,7 +1083,7 @@ function todayBlock(p) {
   }
   const sec = el("section", "today");
   if (showExperiment) sec.classList.add("today--experiment");
-  sec.appendChild(el("div", "today-label", "Следующий шаг"));
+  labelSection(sec, "today-heading", "Следующий шаг", "today-label");
   sec.appendChild(el("strong", "today-state", step.state));
   sec.appendChild(el("p", "today-q", step.next));
   if (showExperiment) {
@@ -1069,10 +1113,103 @@ function topicSelectionFeedback() {
   }
 }
 
+function topicHandoffFeedback(kind) {
+  const haptic = tg && tg.HapticFeedback;
+  if (haptic && typeof haptic.notificationOccurred === "function") {
+    haptic.notificationOccurred(kind);
+  }
+}
+
+function topicHandoffKey(item) {
+  if (item && item.itemType === "facet" && FACET_GUIDE[item.key]) return item.key;
+  if (item && item.itemType === "archetype") return "archetypes";
+  return null;
+}
+
+function topicHandoffStatus(readout, text, kind) {
+  const current = readout.querySelector(".topic-handoff-status");
+  if (current) current.remove();
+  const status = el("div", "topic-handoff-status topic-handoff-status--" + kind);
+  status.setAttribute("role", kind === "error" ? "alert" : "status");
+  status.appendChild(el("p", null, text));
+  readout.appendChild(status);
+  return status;
+}
+
+async function handoffTopicToChat(item, cta, readout, requestId) {
+  if (cta.dataset.closeOnly === "true") {
+    closeToChat();
+    return;
+  }
+  const topicKey = topicHandoffKey(item);
+  if (!topicKey) {
+    topicHandoffStatus(
+      readout,
+      "Эту новую тему пока нельзя передать автоматически. Вернись в чат и назови её своими словами.",
+      "error",
+    );
+    cta.textContent = "Вернуться в чат без передачи";
+    cta.dataset.closeOnly = "true";
+    return;
+  }
+  if (cta.disabled) return;
+  cta.disabled = true;
+  cta.setAttribute("aria-busy", "true");
+  cta.textContent = "Передаю тему…";
+  const current = readout.querySelector(".topic-handoff-status");
+  if (current) current.remove();
+  try {
+    await postChatIntent(topicKey, requestId);
+    topicHandoffFeedback("success");
+    topicHandoffStatus(
+      readout,
+      "Готово. В чате уже появился вопрос по выбранной теме.",
+      "success",
+    );
+    cta.textContent = "Тема передана";
+    window.setTimeout(() => {
+      closeToChat();
+      cta.disabled = false;
+      cta.removeAttribute("aria-busy");
+      cta.dataset.closeOnly = "true";
+      cta.textContent = "Вернуться в чат";
+    }, 220);
+  } catch (error) {
+    topicHandoffFeedback("error");
+    const expired = error && (error.message === "unauthorized" || error.message === "no-init-data");
+    const status = topicHandoffStatus(
+      readout,
+      expired
+        ? "Сессия мини-аппа завершилась. Вернись в чат и открой «Мой образ» заново."
+        : "Тема осталась здесь. Проверь связь и повтори передачу, либо вернись в чат без неё.",
+      "error",
+    );
+    const back = el("button", "topic-handoff-back", "Вернуться без темы");
+    back.type = "button";
+    back.addEventListener("click", closeToChat);
+    status.appendChild(back);
+    cta.disabled = false;
+    cta.removeAttribute("aria-busy");
+    cta.textContent = expired ? "Открыть чат" : "Повторить передачу";
+    if (expired) cta.dataset.closeOnly = "true";
+  }
+}
+
+async function copyPlainText(text) {
+  const clipboard = window.navigator && window.navigator.clipboard;
+  if (!clipboard || typeof clipboard.writeText !== "function") return false;
+  try {
+    await clipboard.writeText(text);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function memoryBlock(items) {
   if (!items || !items.length) return null;
   const sec = el("section", "memory-card");
-  sec.appendChild(el("div", "memory-label", "Что я держу в уме"));
+  labelSection(sec, "memory-heading", "Что я держу в уме", "memory-label");
   sec.appendChild(
     el(
       "p",
@@ -1091,10 +1228,33 @@ function memoryBlock(items) {
   if (items.length > 6) {
     sec.appendChild(el("p", "memory-more", "Ещё " + (items.length - 6) + " — в /memory и /export."));
   }
-  const btn = el("button", "memory-cta", "Управлять памятью: /memory");
-  btn.type = "button";
-  btn.addEventListener("click", closeToChat);
-  sec.appendChild(btn);
+  const command = el("p", "memory-command");
+  command.id = "memory-command-help";
+  command.appendChild(document.createTextNode("Чтобы открыть, исправить или забыть запись, отправь боту "));
+  command.appendChild(el("code", null, "/memory"));
+  command.appendChild(document.createTextNode("."));
+  sec.appendChild(command);
+  const status = el("p", "memory-command-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  sec.appendChild(status);
+  const actions = el("div", "memory-actions");
+  const copy = el("button", "memory-cta", "Скопировать /memory");
+  copy.type = "button";
+  copy.setAttribute("aria-describedby", "memory-command-help");
+  copy.addEventListener("click", async () => {
+    const copied = await copyPlainText("/memory");
+    status.textContent = copied
+      ? "Команда скопирована. Вернись в чат и вставь её."
+      : "Не удалось скопировать автоматически. Команда /memory показана выше.";
+    if (copied) copy.textContent = "Скопировано";
+  });
+  actions.appendChild(copy);
+  const back = el("button", "memory-cta memory-cta--quiet", "Вернуться в чат");
+  back.type = "button";
+  back.addEventListener("click", closeToChat);
+  actions.appendChild(back);
+  sec.appendChild(actions);
   return sec;
 }
 
@@ -2118,12 +2278,14 @@ function psycheMap(sections, archetypes) {
   if (!items.length) return null;
 
   const sec = el("section", "sky topic-map-section");
-  sec.appendChild(el("div", "sky-label", "Карта тем"));
+  labelSection(sec, "topic-map-heading", "Карта тем", "sky-label");
   sec.appendChild(
     el(
       "p",
       "sky-sub",
-      "Здесь видны темы, которые уже возникли в разговорах. Нажми на любую: покажу смысл и связь.",
+      "Здесь видны рабочие темы из разговоров. Это метафорические линзы для проверки на " +
+        "реальных ситуациях, не диагнозы и не установленные механизмы. Нажми на любую: " +
+        "покажу смысл и возможную связь.",
     ),
   );
 
@@ -2185,7 +2347,8 @@ function psycheMap(sections, archetypes) {
     }
     const cta = el("button", "sky-readout-cta", "Продолжить эту тему в разговоре");
     cta.type = "button";
-    cta.addEventListener("click", closeToChat);
+    const requestId = newRequestId();
+    cta.addEventListener("click", () => handoffTopicToChat(item, cta, readout, requestId));
     readout.appendChild(cta);
   };
 
@@ -2246,8 +2409,12 @@ function renderProfile(p) {
   // верхняя строка: бренд + дата
   const top = el("header", "topbar");
   const brand = el("div", "brand");
-  brand.appendChild(el("div", "brand-kicker", "Мой образ"));
-  brand.appendChild(el("div", "brand-name", p.pseudonym || "Аноним"));
+  const brandHeading = el("h1", "brand-heading");
+  brandHeading.tabIndex = -1;
+  brandHeading.dataset.viewHeading = "true";
+  brandHeading.appendChild(el("span", "brand-kicker", "Мой образ"));
+  brandHeading.appendChild(el("span", "brand-name", p.pseudonym || "Аноним"));
+  brand.appendChild(brandHeading);
   top.appendChild(brand);
   const upd = fmtDate(p.updated_at);
   if (upd) top.appendChild(el("div", "datepill", "обновлён " + upd));
@@ -2266,7 +2433,7 @@ function renderProfile(p) {
   // герой: интро + кольцо глубины
   const hero = el("section", "hero");
   const left = el("div", "hero-text");
-  left.appendChild(el("h1", "hero-title", "Что я о тебе понял"));
+  left.appendChild(el("h2", "hero-title", "Что я о тебе понял"));
   left.appendChild(
     el(
       "p",
