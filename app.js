@@ -264,6 +264,24 @@ async function dismissSection(key) {
   return fetchProfile(true);
 }
 
+// Удалить один подтверждённый факт по opaque key, который бэкенд уже вернул владельцу.
+async function forgetMemory(key) {
+  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+
+  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/memory/forget", {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ key }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  await res.json();
+  return fetchProfile(true);
+}
+
 function newRequestId() {
   const cryptoApi = window.crypto;
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
@@ -303,6 +321,15 @@ function confirmAction(message) {
     } else {
       resolve(window.confirm(message));
     }
+  });
+}
+
+function announceAction(message) {
+  const region = document.getElementById("action-status");
+  if (!region) return;
+  region.textContent = "";
+  queueMicrotask(() => {
+    region.textContent = message;
   });
 }
 
@@ -1221,7 +1248,32 @@ function memoryBlock(items) {
   items.slice(0, 6).forEach((item) => {
     const row = el("li", "memory-item");
     row.appendChild(el("span", "memory-mark", "✓"));
-    row.appendChild(el("span", null, item.summary || ""));
+    const summary = item.summary || "";
+    row.appendChild(el("span", "memory-item-text", summary));
+    const forget = el("button", "memory-forget", "Забыть");
+    forget.type = "button";
+    forget.setAttribute("aria-label", "Забыть запись: " + summary);
+    forget.addEventListener("click", async () => {
+      const ok = await confirmAction(
+        "Забыть именно эту запись? Она исчезнет из памяти и не будет влиять на будущие ответы.",
+      );
+      if (!ok) return;
+      forget.disabled = true;
+      forget.setAttribute("aria-busy", "true");
+      forget.textContent = "Забываю…";
+      try {
+        const updated = await forgetMemory(item.key);
+        announceAction("Запись забыта.");
+        renderedProfileFingerprint = null;
+        renderFetchedProfile(updated);
+      } catch (_) {
+        forget.disabled = false;
+        forget.removeAttribute("aria-busy");
+        forget.textContent = "Повторить";
+        announceAction("Не удалось забыть запись. Проверь связь и повтори.");
+      }
+    });
+    row.appendChild(forget);
     list.appendChild(row);
   });
   sec.appendChild(list);
@@ -1230,7 +1282,7 @@ function memoryBlock(items) {
   }
   const command = el("p", "memory-command");
   command.id = "memory-command-help";
-  command.appendChild(document.createTextNode("Чтобы открыть, исправить или забыть запись, отправь боту "));
+  command.appendChild(document.createTextNode("Чтобы увидеть все записи или исправить формулировку, отправь боту "));
   command.appendChild(el("code", null, "/memory"));
   command.appendChild(document.createTextNode("."));
   sec.appendChild(command);
