@@ -1,3 +1,4 @@
 .claude/
 demo.html
 node_modules/
+*.bak
