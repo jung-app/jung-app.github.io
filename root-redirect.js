@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=" + Date.now();
+      boot.src = "./miniapp-boot.js?v=20260815-path-redesign-2";
       document.body.appendChild(boot);
     });
   }
