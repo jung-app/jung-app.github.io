@@ -1711,11 +1711,23 @@ a {
   font-size: 14px;
 }
 
-.stars-guide-text,
+.stars-guide-steps,
+.stars-guide-note,
 .upgrade-hint {
   margin: 5px 0 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.stars-guide-steps {
+  display: grid;
+  gap: 5px;
+  padding-left: 21px;
+  line-height: 1.45;
+}
+
+.stars-guide-note {
+  line-height: 1.45;
 }
 
 .premiumbot-btn {

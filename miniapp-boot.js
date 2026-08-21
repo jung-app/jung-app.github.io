@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260821-outcome-evidence-1";
+  var assetVersion = "20260822-price-v3-1";
   var timer;
   var failed = false;
 
