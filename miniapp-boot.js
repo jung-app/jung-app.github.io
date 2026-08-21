@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260822-editorial-path-1";
+  var assetVersion = "20260822-editorial-compact-2";
   var timer;
   var failed = false;
 

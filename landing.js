@@ -7,9 +7,6 @@
   var header = document.querySelector("[data-header]");
   var menuButton = document.querySelector(".menu-toggle");
   var navigation = document.querySelector(".site-nav");
-  var heroSection = document.querySelector(".hero");
-  var finalSection = document.querySelector(".final-cta");
-  var mobileCta = document.querySelector("[data-mobile-cta]");
   var journeySection = document.querySelector("[data-journey]");
   var journeySteps = document.querySelector(".journey-steps");
   var journeyItems = journeySteps
@@ -22,18 +19,7 @@
   var campaignSource = attribution
     ? attribution.sourceFromSearch(window.location.search)
     : "landing";
-  var mobileCtaState = { heroVisible: true, finalVisible: false };
   var scrollFrame = 0;
-
-  function updateMobileCta() {
-    if (!mobileCta) return;
-    var menuIsOpen = document.body.classList.contains("menu-open");
-    var shouldShow =
-      !mobileCtaState.heroVisible && !mobileCtaState.finalVisible && !menuIsOpen;
-    mobileCta.classList.toggle("is-visible", shouldShow);
-    mobileCta.setAttribute("aria-hidden", String(!shouldShow));
-    mobileCta.tabIndex = shouldShow ? 0 : -1;
-  }
 
   function track(eventName, details) {
     var payload = Object.assign({ event: eventName }, details || {});
@@ -46,13 +32,6 @@
 
   function setHeaderState() {
     if (header) header.classList.toggle("is-scrolled", window.scrollY > 12);
-    if (mobileCta && heroSection && finalSection) {
-      mobileCtaState.heroVisible =
-        heroSection.getBoundingClientRect().bottom > 0;
-      mobileCtaState.finalVisible =
-        finalSection.getBoundingClientRect().top <= window.innerHeight;
-      updateMobileCta();
-    }
   }
 
   function updateScrollMotion() {
@@ -115,7 +94,6 @@
     menuButton.setAttribute("aria-expanded", "false");
     navigation.classList.remove("is-open");
     document.body.classList.remove("menu-open");
-    updateMobileCta();
   }
 
   if (menuButton && navigation) {
@@ -128,7 +106,6 @@
       menuButton.setAttribute("aria-expanded", String(willOpen));
       navigation.classList.toggle("is-open", willOpen);
       document.body.classList.toggle("menu-open", willOpen);
-      updateMobileCta();
     });
     navigation.addEventListener("click", function (event) {
       if (event.target.closest("a")) closeMenu();
@@ -178,29 +155,7 @@
     document.querySelectorAll("[data-track-view]").forEach(function (section) {
       viewObserver.observe(section);
     });
-
-    if (mobileCta && heroSection && finalSection) {
-      var mobileCtaObserver = new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.target === heroSection) {
-              mobileCtaState.heroVisible = entry.isIntersecting;
-            }
-            if (entry.target === finalSection) {
-              mobileCtaState.finalVisible =
-                entry.isIntersecting || entry.boundingClientRect.top < 0;
-            }
-          });
-          updateMobileCta();
-        },
-        { threshold: 0.04 },
-      );
-      mobileCtaObserver.observe(heroSection);
-      mobileCtaObserver.observe(finalSection);
-    }
   }
-
-  updateMobileCta();
 
   track("hero_view");
 

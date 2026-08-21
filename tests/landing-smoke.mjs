@@ -58,7 +58,7 @@ assert.match(rootRedirectJs, /function waitForTelegramInit\(attempt\)/);
 assert.match(rootRedirectJs, /attempt < 30/);
 assert.match(rootRedirectJs, /waitForTelegramInit\(attempt \+ 1\)/);
 assert.match(rootRedirectJs, /miniapp-boot\.js\?v=/);
-assert.match(indexHtml, /root-redirect\.js\?v=20260822-editorial-path-1/);
+assert.match(indexHtml, /root-redirect\.js\?v=20260822-editorial-compact-2/);
 assert.doesNotMatch(indexHtml, /src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
 assert.match(indexHtml, /Content-Security-Policy/);
 assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);
@@ -81,23 +81,25 @@ assert.match(
 assert.match(html, /Ориентиры первого маршрута/);
 assert.match(html, /Как проходит первый цикл/);
 assert.doesNotMatch(html, /Пример диалога|пример разговора|dialog-window/);
-assert.match(html, /data-mobile-cta/);
+assert.match(html, /class="path-preview"/);
+assert.match(html, /class="footer-links"/);
+assert.doesNotMatch(html, /data-mobile-cta|class="mobile-cta"/);
 assert.match(html, /data-journey/);
 assert.equal(
   (html.match(/data-journey-step/g) || []).length,
   4,
   "Journey must keep four scroll-linked steps",
 );
-assert.match(js, /mobileCtaObserver/);
+assert.doesNotMatch(js, /mobileCtaObserver|updateMobileCta/);
 assert.match(js, /updateScrollMotion/);
-assert.match(html, /class="hero-scene"/);
+assert.doesNotMatch(html, /class="hero-scene"|psyche-core|class="orbit/);
 assert.doesNotMatch(html, /class="constellation"/);
 assert.doesNotMatch(css, /animation:\s*[^;]*infinite/);
 assert.doesNotMatch(js, /pointermove|drawConstellation|--journey-shift/);
 assert.match(html, /class="brand-mark"[\s\S]*?viewBox="0 0 48 36"/);
 assert.match(css, /--journey-progress/);
 assert.match(css, /\.journey-steps\.has-motion li\.is-active[\s\S]*?transform: none/);
-assert.match(css, /\.mobile-cta\.is-visible/);
+assert.match(css, /\.path-preview/);
 assert.match(html, /Пройти первый цикл бесплатно/);
 assert.match(html, /Начать бесплатно в Telegram/);
 assert.match(html, /После маршрута — один короткий ответ раз в 3 дня/);
@@ -107,7 +109,7 @@ assert.match(html, /не продаём разговоры рекламодат�
 assert.match(html, /Полные разговоры без трёхдневных пауз/);
 assert.match(html, /Новое оформление временно закрыто/);
 assert.match(html, /Не пополняйте Stars специально/);
-assert.match(html, /Когда оформление откроется: как купить Stars через @PremiumBot/);
+assert.match(html, /Как купить Stars, когда оформление откроется/);
 assert.match(html, /class="button button-primary"[\s\S]*?data-cta="pricing_free"/);
 assert.match(html, /class="button button-secondary"[\s\S]*?data-cta="pricing_month"/);
 assert.doesNotMatch(html, /target="_blank"/);
@@ -231,9 +233,9 @@ assert.equal(
 );
 assert.equal(
   new URL(
-    attribution.telegramUrl(telegramUrl, "yandex_launch_a", "mobile_sticky"),
+    attribution.telegramUrl(telegramUrl, "yandex_launch_a", "pricing_free"),
   ).searchParams.get("start"),
-  "src_yandex_launch_a__mobile_sticky",
+  "src_yandex_launch_a__pricing_free",
 );
 
 const ctaTags = [...html.matchAll(/<a\b[^>]*data-cta="([^"]+)"[^>]*>/g)];
