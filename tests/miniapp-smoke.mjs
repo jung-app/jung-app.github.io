@@ -10,12 +10,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260815-path-redesign-2/);
+assert.match(html, /styles\.css\?v=20260821-outcome-evidence-1/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260815-path-redesign-2"/);
+assert.match(boot, /assetVersion = "20260821-outcome-evidence-1"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -37,6 +37,13 @@ assert.match(app, /ArrowLeft/);
 assert.match(app, /BackButton/);
 assert.match(app, /function pathPanel\(p\)/);
 assert.match(app, /Твой цикл изменения/);
+assert.match(app, /\/api\/outcomes/);
+assert.match(app, /function outcomeQuestion\(/);
+assert.match(app, /без текста и темы/);
+assert.match(app, /Любой исход подходит/);
+assert.match(app, /deep_helpfulness/);
+assert.match(app, /deep_followup/);
+assert.doesNotMatch(app, /outcome_feedback.*intention|outcome_feedback.*user_words/);
 assert.match(app, /function deepSessionsPanel\(p\)/);
 assert.match(app, /Дословно из твоих сообщений/);
 assert.match(app, /Выдели 20–30 минут/);
@@ -72,6 +79,8 @@ assert.match(styles, /--tg-viewport-stable-height/);
 assert.match(styles, /prefers-reduced-motion: reduce/);
 assert.match(styles, /min-width: 320px/);
 assert.match(styles, /min-height: 44px/);
+assert.match(styles, /\.outcome-option[\s\S]*min-height: 48px/);
+assert.match(styles, /\.outcome-options[\s\S]*gap: 8px/);
 
 assert.match(app, /Сессия завершилась/);
 assert.match(app, /Обновить статус/);

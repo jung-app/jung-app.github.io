@@ -251,6 +251,7 @@ function normalizeDeepSessions(value) {
           uncertainty: cleanText(result.uncertainty),
           next_step: cleanText(result.next_step),
           follow_up_at: cleanText(result.follow_up_at),
+          check_in_days: Math.max(0, Number(result.check_in_days) || 0),
           check_in_on: cleanText(result.check_in_on),
           closing_question: cleanText(result.closing_question),
         },
@@ -291,6 +292,15 @@ function normalizeProfile(raw) {
   p.access = objectOrEmpty(p.access);
   p.path = objectOrEmpty(p.path);
   p.change_experiment = objectOrEmpty(p.change_experiment);
+  p.outcome_prompts = objectOrEmpty(p.outcome_prompts);
+  p.outcome_feedback = arrayOfObjects(p.outcome_feedback).map((item) => ({
+    event: typeof item.event === "string" ? item.event : "",
+    value: typeof item.value === "string" ? item.value : "",
+    measurement_point: typeof item.measurement_point === "string"
+      ? item.measurement_point
+      : "",
+    subject_key: typeof item.subject_key === "string" ? item.subject_key : "",
+  })).filter((item) => item.event && item.value && item.measurement_point && item.subject_key);
   p.ritual = objectOrEmpty(p.ritual);
   p.live_sync = objectOrEmpty(p.live_sync);
   p.referral = objectOrEmpty(p.referral);
@@ -364,6 +374,25 @@ async function deleteDeepSession(sessionId) {
   const body = await res.json();
   if (!body || body.deleted !== true) throw new Error("invalid-response");
   return fetchProfile(true);
+}
+
+async function submitOutcome(event, value, measurementPoint, subjectKey) {
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(freshApiUrl("/api/outcomes"), {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({
+      event,
+      value,
+      measurement_point: measurementPoint,
+      subject_key: subjectKey,
+    }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  return res.json();
 }
 
 function newRequestId() {
@@ -1024,6 +1053,7 @@ function changeExperimentView(raw) {
   const successSignal = text(experiment.success_signal);
   const outcome = text(experiment.outcome);
   const learning = text(experiment.learning);
+  const measurementKey = text(experiment.measurement_key);
   const status = CHANGE_EXPERIMENT_STATUSES.has(experiment.status)
     ? experiment.status
     : "";
@@ -1081,7 +1111,14 @@ function changeExperimentView(raw) {
   if (status !== "completed" && learning) {
     details.push(["Что берём дальше", learning]);
   }
-  return { state, next, cta, details };
+  const feedbackDue = Boolean(
+    measurementKey && (
+      ["attempted", "adjusted", "completed"].includes(status) ||
+      (checkIn && checkIn.key <= today) ||
+      (planned && planned.key < today)
+    )
+  );
+  return { state, next, cta, details, measurementKey, feedbackDue };
 }
 
 function experimentDetails(rows) {
@@ -1094,6 +1131,139 @@ function experimentDetails(rows) {
     list.appendChild(row);
   });
   return list;
+}
+
+function existingOutcome(feedback, event, point, subjectKey) {
+  return (feedback || []).find((item) =>
+    item.event === event &&
+    item.measurement_point === point &&
+    item.subject_key === subjectKey,
+  ) || null;
+}
+
+function hasOutcome(feedback, event) {
+  return (feedback || []).some((item) => item.event === event);
+}
+
+function outcomeQuestion({
+  label,
+  event,
+  point,
+  subjectKey,
+  options,
+  feedback,
+}) {
+  const group = el("fieldset", "outcome-question");
+  const legend = el("legend", "outcome-question-label", label);
+  group.appendChild(legend);
+  const status = el("p", "outcome-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const saved = existingOutcome(feedback, event, point, subjectKey);
+  if (saved) {
+    const selected = options.find(([value]) => value === saved.value);
+    status.textContent = selected
+      ? "Ответ сохранён: " + selected[1].toLocaleLowerCase("ru-RU") + "."
+      : "Ответ сохранён.";
+    group.appendChild(status);
+    return group;
+  }
+
+  const buttons = el("div", "outcome-options");
+  options.forEach(([value, text]) => {
+    const button = el("button", "outcome-option", text);
+    button.type = "button";
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", async () => {
+      const allButtons = Array.from(buttons.querySelectorAll("button"));
+      allButtons.forEach((item) => { item.disabled = true; });
+      button.setAttribute("aria-busy", "true");
+      status.textContent = "Сохраняю…";
+      try {
+        await submitOutcome(event, value, point, subjectKey);
+        button.removeAttribute("aria-busy");
+        button.setAttribute("aria-pressed", "true");
+        status.textContent = "Спасибо. Сохранился только этот вариант, без текста разговора.";
+        const haptic = tg && tg.HapticFeedback;
+        if (haptic && typeof haptic.notificationOccurred === "function") {
+          haptic.notificationOccurred("success");
+        }
+      } catch (_) {
+        allButtons.forEach((item) => { item.disabled = false; });
+        button.removeAttribute("aria-busy");
+        status.textContent = "Не удалось сохранить. Проверь связь и попробуй ещё раз.";
+      }
+    });
+    buttons.appendChild(button);
+  });
+  group.appendChild(buttons);
+  group.appendChild(status);
+  return group;
+}
+
+function conversationOutcomeBlock(p) {
+  const key = typeof p.outcome_prompts.conversation_key === "string"
+    ? p.outcome_prompts.conversation_key
+    : "";
+  const stage = p.path && p.path.activation ? p.path.activation.stage : "";
+  const eligible = ["pattern_named", "step_chosen", "outcome_shared", "loop_completed"]
+    .includes(stage);
+  if (
+    !key || !eligible ||
+    (p.live_sync && p.live_sync.pending_profile_update) ||
+    (hasOutcome(p.outcome_feedback, "conversation_insight") &&
+      hasOutcome(p.outcome_feedback, "next_step_clarity"))
+  ) return null;
+
+  const section = el("section", "outcome-card");
+  labelSection(section, "conversation-outcome-heading", "Короткая сверка", "section-eyebrow");
+  section.appendChild(el(
+    "p",
+    "outcome-intro",
+    "Помоги проверить пользу разговора. В аналитику уйдут только выбранные варианты, без текста и темы.",
+  ));
+  if (!hasOutcome(p.outcome_feedback, "conversation_insight")) {
+    section.appendChild(outcomeQuestion({
+      label: "Разговор помог увидеть что-то новое?",
+      event: "conversation_insight",
+      point: "first_result",
+      subjectKey: key,
+      options: [["yes", "Да"], ["partly", "Частично"], ["no", "Нет"]],
+      feedback: p.outcome_feedback,
+    }));
+  }
+  if (!hasOutcome(p.outcome_feedback, "next_step_clarity")) {
+    section.appendChild(outcomeQuestion({
+      label: "Следующий шаг стал понятнее?",
+      event: "next_step_clarity",
+      point: "first_result",
+      subjectKey: key,
+      options: [["clearer", "Понятнее"], ["same", "Так же"], ["less_clear", "Менее ясно"]],
+      feedback: p.outcome_feedback,
+    }));
+  }
+  return section;
+}
+
+function stepAttemptBlock(p) {
+  const experiment = changeExperimentView(p.change_experiment);
+  if (!experiment || !experiment.feedbackDue || !experiment.measurementKey) return null;
+  const section = el("section", "outcome-card outcome-card--step");
+  labelSection(section, "step-outcome-heading", "Фактический результат", "section-eyebrow");
+  section.appendChild(el(
+    "p",
+    "outcome-intro",
+    "Любой исход подходит. Это помогает скорректировать план, а не оценить тебя.",
+  ));
+  section.appendChild(outcomeQuestion({
+    label: "Удалось попробовать выбранный шаг?",
+    event: "step_attempt",
+    point: "change_checkin",
+    subjectKey: experiment.measurementKey,
+    options: [["done", "Да"], ["partly", "Частично"], ["not_yet", "Пока нет"]],
+    feedback: p.outcome_feedback,
+  }));
+  return section;
 }
 
 // Один следующий шаг вместо двух слабых блоков «Сегодня» и «Мой путь».
@@ -1777,7 +1947,7 @@ function fmtSessionDate(value) {
   }).format(date);
 }
 
-function deepSessionCard(session) {
+function deepSessionCard(session, feedback) {
   const card = el("article", "deep-session-card");
   card.dataset.status = session.status;
   const head = el("div", "deep-session-head");
@@ -1851,6 +2021,47 @@ function deepSessionCard(session) {
       session.follow_up_at || result.follow_up_at || result.check_in_on,
     );
     if (followUp) card.appendChild(el("p", "deep-session-followup", "Вернуться к этому: " + followUp));
+
+    const immediate = existingOutcome(
+      feedback,
+      "deep_helpfulness",
+      "session_close",
+      session.id,
+    );
+    if (!immediate) {
+      const measure = el("section", "deep-session-measure");
+      measure.appendChild(outcomeQuestion({
+        label: "Этот итог был полезен?",
+        event: "deep_helpfulness",
+        point: "session_close",
+        subjectKey: session.id,
+        options: [["yes", "Да"], ["partly", "Частично"], ["no", "Нет"]],
+        feedback,
+      }));
+      card.appendChild(measure);
+    } else {
+      const due = dateOnlyParts(session.follow_up_at || result.check_in_on);
+      const followupPoint = result.check_in_days > 4 ? "d7" : "d3";
+      if (
+        due && due.key <= localDateKey() &&
+        !existingOutcome(feedback, "deep_followup", followupPoint, session.id)
+      ) {
+        const measure = el("section", "deep-session-measure");
+        measure.appendChild(outcomeQuestion({
+          label: "Спустя несколько дней итог помог действовать иначе?",
+          event: "deep_followup",
+          point: followupPoint,
+          subjectKey: session.id,
+          options: [
+            ["helped", "Помог"],
+            ["not_sure", "Пока неясно"],
+            ["did_not_help", "Не помог"],
+          ],
+          feedback,
+        }));
+        card.appendChild(measure);
+      }
+    }
   }
 
   if (["completed", "aborted"].includes(session.status)) {
@@ -1922,7 +2133,7 @@ function deepSessionsPanel(p) {
   if (active.length) {
     const current = el("section", "session-group");
     current.appendChild(el("h3", "session-group-title", "Сейчас"));
-    active.forEach((session) => current.appendChild(deepSessionCard(session)));
+    active.forEach((session) => current.appendChild(deepSessionCard(session, p.outcome_feedback)));
     panel.appendChild(current);
   }
 
@@ -1931,7 +2142,7 @@ function deepSessionsPanel(p) {
   const past = el("section", "session-group");
   past.appendChild(el("h3", "session-group-title", "Последние сессии"));
   if (history.length) {
-    history.forEach((session) => past.appendChild(deepSessionCard(session)));
+    history.forEach((session) => past.appendChild(deepSessionCard(session, p.outcome_feedback)));
   } else {
     const empty = el("div", "session-empty");
     empty.appendChild(el("strong", null, "Здесь пока тихо"));
@@ -2055,7 +2266,11 @@ function pathPanel(p) {
   header.appendChild(el("p", "panel-intro", "Один следующий шаг важнее десятка метрик. Здесь видно, что проверить в жизни и к чему вернуться в разговоре."));
   panel.appendChild(header);
   panel.appendChild(todayBlock(p));
+  const stepOutcome = stepAttemptBlock(p);
+  if (stepOutcome) panel.appendChild(stepOutcome);
   panel.appendChild(changePathBlock(p));
+  const conversationOutcome = conversationOutcomeBlock(p);
+  if (conversationOutcome) panel.appendChild(conversationOutcome);
   const dynamics = dynamicsBlock(p.dynamics);
   if (dynamics) panel.appendChild(dynamics);
   panel.appendChild(profileInsightsBlock(p));
