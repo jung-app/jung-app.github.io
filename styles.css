@@ -2021,3 +2021,174 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Editorial compact refinement */
+:root {
+  --radius: 14px;
+  --shadow: none;
+}
+
+.aura {
+  display: none;
+}
+
+.app {
+  padding-top: calc(10px + var(--app-safe-top));
+  padding-bottom: calc(26px + var(--app-safe-bottom));
+}
+
+.topbar {
+  margin-bottom: 8px;
+}
+
+.jaguar-mark {
+  border-radius: 11px;
+}
+
+.profile-tabs {
+  top: var(--app-safe-top);
+  gap: 0;
+  margin: 0 0 19px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(12px);
+}
+
+.profile-tab {
+  min-height: 47px;
+  border-radius: 0;
+}
+
+.profile-tab[aria-selected="true"] {
+  background: transparent;
+  box-shadow: inset 0 -2px var(--action);
+  color: var(--text);
+}
+
+.today,
+.outcome-card,
+.session-prep,
+.deep-session-card,
+.session-empty,
+.memory-card,
+.memory-empty,
+.memory-controls,
+.upgrade,
+.subscription-active,
+.referral {
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.change-path,
+.dynamics,
+.profile-details {
+  padding-right: 0;
+  padding-left: 0;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.change-path {
+  padding-top: 18px;
+  padding-bottom: 7px;
+}
+
+.change-path-intro {
+  margin-bottom: 10px;
+}
+
+.change-path-step {
+  grid-template-columns: 27px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.change-path-step:not(:last-child)::after {
+  display: none;
+}
+
+.change-path-marker,
+.change-path-step[data-state="done"] .change-path-marker,
+.change-path-step[data-state="current"] .change-path-marker {
+  width: auto;
+  height: auto;
+  display: block;
+  padding-top: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.change-path-copy {
+  padding: 0;
+}
+
+.dynamics {
+  padding-top: 17px;
+  padding-bottom: 17px;
+}
+
+.profile-details {
+  margin-top: 14px;
+}
+
+.profile-details-toggle {
+  min-height: 58px;
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.today-cta,
+.session-start,
+.session-back,
+.deep-session-continue,
+.memory-chat,
+.subscription-chat,
+.share-btn,
+.upgrade-btn,
+.premiumbot-btn,
+.command-action,
+.memory-cta,
+.sky-readout-cta,
+.topic-handoff-back,
+.state-action {
+  border-radius: 10px;
+}
+
+.session-check-mark,
+.memory-mark,
+.perk-mark {
+  width: 21px;
+  height: auto;
+  display: block;
+  padding-top: 1px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.pill,
+.delta,
+.chip,
+.topic-map-progress-item {
+  border-radius: 8px;
+}
+
+@media (max-width: 359px) {
+  .change-path {
+    padding-right: 0;
+    padding-left: 0;
+  }
+}
