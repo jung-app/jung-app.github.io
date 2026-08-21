@@ -70,6 +70,14 @@ assert.match(
 assert.match(indexHtml, /<meta\s+[\s\S]*?name="description"/);
 assert.match(css, /prefers-reduced-motion: reduce/);
 assert.match(css, /:focus-visible/);
+assert.match(
+  css,
+  /@media \(max-width: 760px\)[\s\S]*?\.hero\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/,
+);
+assert.match(
+  css,
+  /\.hero \.eyebrow,[\s\S]*?\.risk-reducers\s*\{[\s\S]*?min-width: 0;[\s\S]*?max-width: 100%;/,
+);
 assert.match(html, /Ориентиры первого маршрута/);
 assert.match(html, /Как проходит первый цикл/);
 assert.doesNotMatch(html, /Пример диалога|пример разговора|dialog-window/);

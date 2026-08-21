@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  var version = Date.now();
+  var configVersion = Date.now();
+  var assetVersion = "20260815-path-redesign-2";
   var timer;
   var failed = false;
 
@@ -32,13 +33,13 @@
   }
 
   var config = document.createElement("script");
-  config.src = "./config.js?v=" + version;
+  config.src = "./config.js?v=" + configVersion;
   config.onload = function () {
     var today = document.createElement("script");
-    today.src = "./today-prompt.js?v=" + version;
+    today.src = "./today-prompt.js?v=" + assetVersion;
     today.onload = function () {
       var app = document.createElement("script");
-      app.src = "./app.js?v=" + version;
+      app.src = "./app.js?v=" + assetVersion;
       app.onload = function () { clearTimeout(timer); };
       app.onerror = showFailure;
       document.body.appendChild(app);

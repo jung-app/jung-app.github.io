@@ -1796,6 +1796,7 @@ canvas {
     display: none;
   }
   .hero {
+    grid-template-columns: minmax(0, 1fr);
     min-height: auto;
     padding-block: 54px 74px;
     gap: 0;
@@ -1811,9 +1812,12 @@ canvas {
   .risk-reducers {
     position: relative;
     z-index: 2;
+    min-width: 0;
+    max-width: 100%;
   }
   .hero .eyebrow {
     order: 1;
+    overflow-wrap: anywhere;
   }
   .hero h1 {
     order: 2;
@@ -1827,11 +1831,20 @@ canvas {
   }
   .hero-actions {
     order: 4;
+    width: 100%;
+    margin-inline: auto;
     flex-direction: column;
     gap: 14px;
   }
   .hero-actions .button {
     width: min(100%, 390px);
+    max-width: 100%;
+    padding-inline: 18px;
+    white-space: normal;
+    text-align: center;
+  }
+  .hero-actions .button svg {
+    flex: 0 0 auto;
   }
   .hero-actions .text-link {
     min-height: 44px;
@@ -2061,7 +2074,8 @@ canvas {
     padding-top: 42px;
   }
   .hero h1 {
-    font-size: clamp(38px, 11.4vw, 49px);
+    font-size: clamp(34px, 10.2vw, 44px);
+    line-height: 1.03;
   }
   .hero-lede {
     font-size: 16px;
