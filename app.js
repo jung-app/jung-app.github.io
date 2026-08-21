@@ -1,7 +1,8 @@
 "use strict";
 
-// Mini App личного пути. Получает профиль по подписанному Telegram initData.
-// Секретов на фронте нет: подпись проверяет бэкенд, он же владеет хранилищем.
+// Мини-апп «Глубинный профиль». Тянет профиль с бэкенда бота по подписанному
+// Telegram initData и рисует его. Секретов на фронте нет: initData — подписанный
+// токен, бэкенд проверяет подпись и сам ходит в Supabase.
 
 const tg = window.Telegram ? window.Telegram.WebApp : null;
 
@@ -11,8 +12,8 @@ const STATUS_LABELS = {
   confirmed_by_user: "подтверждено",
 };
 
-// Уверенность гипотезы показана и знаком, и человеческой подписью: цвет не является
-// единственным носителем смысла.
+// Уверенность как фаза луны: гипотеза «проявляется из тени на свет» — буквальный
+// язык индивидуации (и 🌑-бренда). Сдвиг тени в svg-луне + человеческая подпись.
 const CONFIDENCE_MOON = {
   low: { shift: 3.5, cap: "едва проявлено" },
   medium: { shift: 9, cap: "проявляется" },
@@ -91,7 +92,7 @@ const ARCHETYPE_GUIDE = [
   [/правитель|король|королев/i, "Держащий порядок и ответственность. Светлая сторона — опора; тёмная — контроль."],
 ];
 const ARCHETYPE_FALLBACK =
-  "Архетип здесь — метафорический образ для самонаблюдения. Его полезность определяешь ты по собственным ассоциациям.";
+  "Архетип — древний общечеловеческий образ, который сейчас отчётливо звучит в твоей жизни.";
 
 // Рамка работы с привычкой (/habit): привычка — не враг, а служение потребности.
 // Никаких стриков и стыда — срыв здесь материал, а не провал.
@@ -203,73 +204,6 @@ function arrayOfObjects(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
 }
 
-const DEEP_SESSION_STATUSES = new Set([
-  "preparing",
-  "active",
-  "integrating",
-  "completed",
-  "aborted",
-]);
-const DEEP_SESSION_STAGES = new Set([
-  "prepare",
-  "intention",
-  "explore",
-  "integrate",
-  "confirm",
-]);
-
-// Raw dialogue and safety flags stay on the backend. Any model interpretation that is
-// present in the result is rendered separately and explicitly labelled as a hypothesis.
-function normalizeDeepSessions(value) {
-  const block = objectOrEmpty(value);
-  const summary = objectOrEmpty(block.summary);
-  const cleanText = (text) => (typeof text === "string" ? text.trim() : "");
-  const exactContract = Array.isArray(value);
-  const source = (exactContract ? arrayOfObjects(value) : arrayOfObjects(block.recent)).slice(0, 5);
-  const recent = source
-    .map((item) => {
-      const result = objectOrEmpty(item.result);
-      return {
-        id: cleanText(item.id),
-        status: exactContract
-          ? "completed"
-          : (DEEP_SESSION_STATUSES.has(item.status) ? item.status : ""),
-        stage: exactContract
-          ? "confirm"
-          : (DEEP_SESSION_STAGES.has(item.stage) ? item.stage : ""),
-        intention: cleanText(item.intention),
-        started_at: cleanText(item.started_at),
-        ended_at: cleanText(item.ended_at),
-        follow_up_at: cleanText(item.follow_up_at),
-        result: {
-          takeaway: cleanText(result.takeaway),
-          title: cleanText(result.title),
-          user_words: Array.isArray(result.user_words)
-            ? result.user_words.map(cleanText).filter(Boolean).slice(0, 3)
-            : [],
-          model_hypothesis: cleanText(result.model_hypothesis),
-          uncertainty: cleanText(result.uncertainty),
-          next_step: cleanText(result.next_step),
-          follow_up_at: cleanText(result.follow_up_at),
-          check_in_on: cleanText(result.check_in_on),
-          closing_question: cleanText(result.closing_question),
-        },
-      };
-    })
-    .filter((item) => item.id && item.status);
-  const completed = recent.filter((item) => item.status === "completed").length;
-  const lastCompleted = recent.find((item) => item.status === "completed");
-  return {
-    summary: {
-      total: Math.max(0, Number(summary.total) || recent.length),
-      completed: Math.max(0, Number(summary.completed) || completed),
-      last_completed_at: cleanText(summary.last_completed_at) ||
-        (lastCompleted ? lastCompleted.ended_at : ""),
-    },
-    recent,
-  };
-}
-
 function normalizeProfile(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const p = { ...raw };
@@ -294,7 +228,6 @@ function normalizeProfile(raw) {
   p.ritual = objectOrEmpty(p.ritual);
   p.live_sync = objectOrEmpty(p.live_sync);
   p.referral = objectOrEmpty(p.referral);
-  p.deep_sessions = normalizeDeepSessions(p.deep_sessions);
   p.is_paid = Boolean(p.is_paid);
   p.show_upgrade = Boolean(p.show_upgrade);
   return p;
@@ -346,23 +279,6 @@ async function forgetMemory(key) {
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
   await res.json();
-  return fetchProfile(true);
-}
-
-async function deleteDeepSession(sessionId) {
-  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
-  const initData = tg && tg.initData ? tg.initData : "";
-  if (!initData) throw new Error("no-init-data");
-  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/deep-session/delete", {
-    method: "POST",
-    headers: apiHeaders(initData, true),
-    cache: "no-store",
-    body: JSON.stringify({ session_id: sessionId }),
-  });
-  if (res.status === 401) throw new Error("unauthorized");
-  if (!res.ok) throw new Error("http-" + res.status);
-  const body = await res.json();
-  if (!body || body.deleted !== true) throw new Error("invalid-response");
   return fetchProfile(true);
 }
 
@@ -439,9 +355,9 @@ function confidence(level) {
   moon.innerHTML = `
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <defs><clipPath id="${clipId}"><circle cx="10" cy="10" r="8.5" /></clipPath></defs>
-      <circle cx="10" cy="10" r="8.5" fill="currentColor" />
-      <circle cx="${(10 - shift).toFixed(1)}" cy="10" r="8.5" fill="var(--surface)" clip-path="url(#${clipId})" />
-      <circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1" />
+      <circle cx="10" cy="10" r="8.5" fill="#e8c074" />
+      <circle cx="${(10 - shift).toFixed(1)}" cy="10" r="8.5" fill="#161e30" clip-path="url(#${clipId})" />
+      <circle cx="10" cy="10" r="8.5" fill="none" stroke="rgba(232,192,116,0.4)" stroke-width="1" />
     </svg>`;
   wrap.appendChild(moon);
   wrap.appendChild(el("span", "conf-cap", m ? m.cap : "уверенность —"));
@@ -728,27 +644,13 @@ async function requestInvoice(period) {
 // Оплата прямо из мини-аппа: человек увидел свой образ → открывает нативный Stars invoice.
 // Telegram.WebApp.openInvoice даёт статус закрытия, после успешной оплаты перечитываем
 // профиль. Fallback открывает invoice link обычным способом на старых клиентах.
-function setPaymentFeedback(node, message, kind) {
-  if (!node) return;
-  node.textContent = message || "";
-  node.dataset.kind = kind || "info";
-  node.hidden = !message;
-}
-
-function lockUpgradeButtons(locked) {
-  document.querySelectorAll(".upgrade-btn").forEach((button) => {
-    button.disabled = locked;
-  });
-}
-
-function startUpgrade(btn, period, feedback) {
+function startUpgrade(btn, period) {
   const original = btn.textContent;
-  lockUpgradeButtons(true);
+  btn.disabled = true;
   btn.setAttribute("aria-busy", "true");
   btn.textContent = "Открываю оплату…";
-  setPaymentFeedback(feedback, "", "info");
   const restore = () => {
-    lockUpgradeButtons(false);
+    btn.disabled = false;
     btn.removeAttribute("aria-busy");
     btn.textContent = original;
   };
@@ -770,23 +672,6 @@ function startUpgrade(btn, period, feedback) {
             return;
           }
           restore();
-          if (status === "failed") {
-            setPaymentFeedback(
-              feedback,
-              "Платёж не прошёл. Stars не списаны. Проверь баланс и попробуй ещё раз.",
-              "error",
-            );
-          } else if (status === "pending") {
-            setPaymentFeedback(
-              feedback,
-              "Telegram ещё обрабатывает платёж. Подожди немного и обнови профиль из чата.",
-              "pending",
-            );
-          } else if (status === "cancelled") {
-            setPaymentFeedback(feedback, "Оплата отменена. Тариф можно выбрать позже.", "info");
-          } else {
-            setPaymentFeedback(feedback, "Статус оплаты не изменился. Можно повторить.", "info");
-          }
         });
       } else if (tg && typeof tg.openTelegramLink === "function") {
         tg.openTelegramLink(url);
@@ -798,12 +683,16 @@ function startUpgrade(btn, period, feedback) {
     })
     .catch(() => {
       restore();
-      setPaymentFeedback(
-        feedback,
-        "Не получилось открыть оплату. Проверь связь и повтори или отправь /upgrade в чате.",
-        "error",
-      );
+      if (tg && typeof tg.showAlert === "function")
+        tg.showAlert("Не получилось открыть оплату. Попробуй ещё раз или набери /upgrade в чате.");
     });
+}
+
+function scrollToUpgrade() {
+  const up = document.querySelector(".upgrade");
+  if (!up) return;
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  up.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
 }
 
 // После успешного Stars invoice слегка поллим профиль: successful_payment может прийти
@@ -858,78 +747,64 @@ function pollForActivation() {
 // 152-ФЗ «ты хозяин данных») — показываем, что открывает подписка, и кнопку оплаты.
 function upgradeSection(billing, access) {
   const sec = el("section", "upgrade");
-  sec.appendChild(el("div", "upgrade-label", "Полный доступ"));
-  sec.appendChild(el("h2", "upgrade-title serif", "Продолжать путь без пауз"));
+  sec.appendChild(el("div", "upgrade-label", "Дальше — вместе"));
+  sec.appendChild(el("h2", "upgrade-title serif", "Не только понять. Начать действовать иначе"));
   sec.appendChild(
     el(
       "p",
       "upgrade-text",
-      "Подписка сохраняет непрерывность: замечаем сценарий, выбираем шаг, проверяем его " +
-        "в жизни и спокойно корректируем. Твой уже собранный образ остаётся доступен и без оплаты.",
+      "Подписка продолжает работу без пауз: замечаем сценарий, выбираем шаг, проверяем " +
+        "его в жизни и корректируем путь. Без оплаты остаются твой портрет и один короткий " +
+        "ответ раз в 3 дня. Ты платишь за непрерывность и регулярные практики.",
     ),
   );
   const perks = el("ul", "upgrade-perks");
+  // Канон ценности — зеркало subscription_comparison() в app/handlers/payments.py.
+  // Держи в синхроне с ботом и лендингом.
   [
-    "Разговоры без дневного лимита после пробного маршрута",
-    "Память о согласованных шагах и о том, что уже помогло",
-    "Глубинные сессии с подготовкой и сохранённым тобой итогом",
-    "Разборы снов и работа с привычками",
-    "Бережные напоминания между разговорами",
+    "Полный цикл: сценарий → потребность → шаг → проверка → корректировка",
+    "Непрерывность между сессиями — помню твои шаги и что уже сработало",
+    "Разговоры без пауз после пробного маршрута",
+    "Растущая карта твоих тем, опор и изменений",
+    "Привычки 🌿 — триггер, потребность, замена и новый минимальный шаг",
+    "Глубинная сессия 🌀 — встреча с внутренней фигурой",
+    "Разборы снов 🌙 — личные ассоциации, образы и связь с твоим путём",
+    "Можно надиктовать голосовое — я пойму и отвечу текстом",
+    "Я сам бережно пишу первым между сессиями",
   ].forEach((t) => {
     const li = el("li", "upgrade-perk");
-    li.appendChild(el("span", "perk-mark", "✓"));
+    li.appendChild(el("span", "perk-mark", "🔓"));
     li.appendChild(el("span", "perk-text", t));
     perks.appendChild(li);
   });
   sec.appendChild(perks);
+  // Месяц — recurring Stars. Год показываем только если включён разовый Stars-инвойс.
   const b = billing || {};
-  if (b.payments_available === false) {
-    const closed = el("div", "checkout-closed");
-    closed.appendChild(el("strong", null, "Новое оформление временно закрыто"));
-    closed.appendChild(
-      el(
-        "p",
-        null,
-        "Если платёж уже был или нужен доступ, напиши /paysupport в чате. Новую оплату сейчас не открываем.",
-      ),
-    );
-    const status = el("p", "command-status");
-    status.setAttribute("role", "status");
-    status.setAttribute("aria-live", "polite");
-    closed.appendChild(commandAction("/paysupport", "Скопировать /paysupport", status));
-    closed.appendChild(status);
-    sec.appendChild(closed);
-    return sec;
-  }
-  const monthly = Number(b.monthly_xtr) || 250;
-  const annual = Number(b.annual_xtr) || 2500;
-  const annualAvailable = b.annual_available !== false;
-  const plans = el("div", "upgrade-plans");
-  const feedback = el("p", "payment-feedback");
-  feedback.hidden = true;
-  feedback.setAttribute("role", "status");
-  feedback.setAttribute("aria-live", "polite");
+  const monthly = b.monthly_xtr || 0;
   const btn = el(
     "button",
     "upgrade-btn",
-    "30 дней · " + monthly + " ⭐",
+    monthly ? "Продолжить путь · " + monthly + " ⭐ / 30 дней" : "Продолжить путь",
   );
   btn.type = "button";
-  btn.addEventListener("click", () => startUpgrade(btn, "monthly", feedback));
-  plans.appendChild(btn);
-  if (annualAvailable) {
+  btn.addEventListener("click", () => startUpgrade(btn, "monthly"));
+  sec.appendChild(btn);
+  if (b.annual_available && b.annual_xtr) {
+    const paidMonths = monthly ? b.annual_xtr / monthly : 0;
+    const derivedBonus = Number.isInteger(paidMonths) ? Math.max(0, 12 - paidMonths) : 0;
+    const bonusMonths = Number(b.annual_bonus_months || derivedBonus);
+    const bonusLabel = bonusMonths > 0
+      ? " (" + bonusMonths + " " + pluralRu(bonusMonths, "месяц", "месяца", "месяцев") + " в подарок)"
+      : "";
     const ybtn = el(
       "button",
       "upgrade-btn upgrade-btn-annual",
-      "365 дней · " + annual + " ⭐",
+      "Год — " + b.annual_xtr + " ⭐" + bonusLabel,
     );
     ybtn.type = "button";
-    ybtn.appendChild(el("span", "upgrade-saving", "цена десяти месяцев"));
-    ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual", feedback));
-    plans.appendChild(ybtn);
+    ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual"));
+    sec.appendChild(ybtn);
   }
-  sec.appendChild(plans);
-  sec.appendChild(feedback);
   const guide = el("div", "stars-guide");
   guide.appendChild(el("strong", "stars-guide-title", "Нет Stars?"));
   guide.appendChild(
@@ -938,7 +813,7 @@ function upgradeSection(billing, access) {
       "stars-guide-text",
       "Открой @PremiumBot → /start → «Звёзды Telegram». Для месяца понадобится " +
         monthly + " ⭐" +
-        (annualAvailable ? ", для года — " + annual + " ⭐" : "") +
+        (b.annual_available && b.annual_xtr ? ", для года — " + b.annual_xtr + " ⭐" : "") +
         ". Затем вернись и нажми нужный тариф.",
     ),
   );
@@ -955,11 +830,69 @@ function upgradeSection(billing, access) {
     el(
       "p",
       "upgrade-hint",
-      annualAvailable
+      b.annual_available
         ? "Месяц продлевается каждые 30 дней. Год оплачивается один раз на 365 дней."
         : "Месяц продлевается каждые 30 дней. Отменить можно в настройках Telegram.",
     ),
   );
+  return sec;
+}
+
+// Компактный апгрейд показываем сразу после карты, когда человек уже увидел личную
+// ценность. Полное сравнение остаётся ниже, поэтому карточка не перекрывает профиль.
+function upgradeNudge(p) {
+  const access = p.access || {};
+  const billing = p.billing || {};
+  const remaining = Number(access.free_remaining);
+  const exhausted = Boolean(access.demo_exhausted);
+  const sec = el("section", "upgrade-nudge");
+  const stageLabels = {
+    portrait_ready: "Портрет готов",
+    pattern_named: "Сценарий замечен",
+    step_chosen: "Маленький шаг выбран",
+    outcome_shared: "Результат принесён в разговор",
+    loop_completed: "Первый цикл завершён",
+  };
+  const stage = stageLabels[access.activation_stage] || "Маршрут начат";
+  const returnPassActive = Boolean(access.reactivation_pass_active);
+  sec.appendChild(el(
+    "div",
+    "upgrade-nudge-label",
+    returnPassActive ? "Доступ возвращён" : (exhausted ? "Маршрут завершён" : "7-дневный маршрут"),
+  ));
+  sec.appendChild(el("h2", "upgrade-nudge-title serif", returnPassActive ? "Продолжим нить" : stage));
+
+  let copy = "Твой портрет сохранён, и без оплаты остаётся один короткий ответ раз в 3 дня. Подписка продолжает работу без пауз: следующие шаги, проверка в жизни и корректировка пути.";
+  const trialRemaining = Number(access.trial_messages_remaining);
+  const trialDays = Number(access.trial_days_remaining);
+  const returnRemaining = Number(access.reactivation_pass_messages_remaining);
+  const returnDays = Number(access.reactivation_pass_days_remaining);
+  if (returnPassActive && Number.isFinite(returnRemaining)) {
+    copy = "На " + returnDays + " " + pluralRu(returnDays, "день", "дня", "дней") +
+      " открыт полный доступ: осталось " + returnRemaining + " " +
+      pluralRu(returnRemaining, "ответ", "ответа", "ответов") +
+      ". Можно продолжить прежнюю тему или принести то, что изменилось.";
+  } else if (access.trial_active && Number.isFinite(trialRemaining)) {
+    copy = "Осталось " + trialDays + " " + pluralRu(trialDays, "день", "дня", "дней") +
+      " и " + trialRemaining + " " + pluralRu(trialRemaining, "ответ", "ответа", "ответов") +
+      ". Цель маршрута: пройти один цикл от замеченного сценария до проверки шага в жизни.";
+  } else if (!access.trial_started && !exhausted && Number.isFinite(remaining) && remaining > 0) {
+    copy = "В бесплатном знакомстве осталось " + remaining + " " +
+      pluralRu(remaining, "сообщение", "сообщения", "сообщений") + ".";
+  }
+  sec.appendChild(el("p", "upgrade-nudge-text", copy));
+
+  const actions = el("div", "upgrade-nudge-actions");
+  const monthly = Number(billing.monthly_xtr || 0);
+  const pay = el("button", "upgrade-nudge-pay", monthly ? "Продолжить · " + monthly + " ⭐" : "Продолжить путь");
+  pay.type = "button";
+  pay.addEventListener("click", () => startUpgrade(pay, "monthly"));
+  actions.appendChild(pay);
+  const more = el("button", "upgrade-nudge-more", "Что входит");
+  more.type = "button";
+  more.addEventListener("click", scrollToUpgrade);
+  actions.appendChild(more);
+  sec.appendChild(actions);
   return sec;
 }
 
@@ -1318,46 +1251,1065 @@ function memoryBlock(items) {
     const summary = item.summary || "";
     row.appendChild(el("span", "memory-item-text", summary));
     const forget = el("button", "memory-forget", "Забыть");
-    const forgetStatus = el("span", "memory-forget-status");
-    forgetStatus.setAttribute("role", "status");
-    forgetStatus.setAttribute("aria-live", "polite");
     forget.type = "button";
     forget.setAttribute("aria-label", "Забыть запись: " + summary);
     forget.addEventListener("click", async () => {
       const ok = await confirmAction(
-        "Забыть именно эту запись? Она исчезнет из долговременной памяти и не восстановится автоматически. Исходный разговор останется в истории; полностью очистить его можно через /reset.",
+        "Забыть именно эту запись? Она исчезнет из памяти и не будет влиять на будущие ответы.",
       );
       if (!ok) return;
       forget.disabled = true;
       forget.setAttribute("aria-busy", "true");
       forget.textContent = "Забываю…";
-      forgetStatus.textContent = "";
       try {
         const updated = await forgetMemory(item.key);
         announceAction("Запись забыта.");
-        activeProfileTab = "memory";
         renderedProfileFingerprint = null;
         renderFetchedProfile(updated);
-        queueMicrotask(() => {
-          const tab = document.getElementById("tab-memory");
-          if (tab) tab.focus();
-        });
       } catch (_) {
         forget.disabled = false;
         forget.removeAttribute("aria-busy");
         forget.textContent = "Повторить";
-        forgetStatus.textContent = "Не удалось забыть запись. Проверь связь.";
         announceAction("Не удалось забыть запись. Проверь связь и повтори.");
       }
     });
     row.appendChild(forget);
-    row.appendChild(forgetStatus);
     list.appendChild(row);
   });
   sec.appendChild(list);
   if (items.length > 6) {
     sec.appendChild(el("p", "memory-more", "Ещё " + (items.length - 6) + " — в /memory и /export."));
   }
+  const command = el("p", "memory-command");
+  command.id = "memory-command-help";
+  command.appendChild(document.createTextNode("Чтобы увидеть все записи или исправить формулировку, отправь боту "));
+  command.appendChild(el("code", null, "/memory"));
+  command.appendChild(document.createTextNode("."));
+  sec.appendChild(command);
+  const status = el("p", "memory-command-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  sec.appendChild(status);
+  const actions = el("div", "memory-actions");
+  const copy = el("button", "memory-cta", "Скопировать /memory");
+  copy.type = "button";
+  copy.setAttribute("aria-describedby", "memory-command-help");
+  copy.addEventListener("click", async () => {
+    const copied = await copyPlainText("/memory");
+    status.textContent = copied
+      ? "Команда скопирована. Вернись в чат и вставь её."
+      : "Не удалось скопировать автоматически. Команда /memory показана выше.";
+    if (copied) copy.textContent = "Скопировано";
+  });
+  actions.appendChild(copy);
+  const back = el("button", "memory-cta memory-cta--quiet", "Вернуться в чат");
+  back.type = "button";
+  back.addEventListener("click", closeToChat);
+  actions.appendChild(back);
+  sec.appendChild(actions);
+  return sec;
+}
+
+// Статические Lucide-подобные SVG вместо системных emoji: одинаковы на iOS/Android,
+// наследуют тему и не меняют метрики строки от шрифта устройства.
+const PATH_ICON_SVG = {
+  route: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="m5.6 5.6 2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  dream: '<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/>',
+  journal: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+  imagination: '<path d="m12 3-1.4 3.6L7 8l3.6 1.4L12 13l1.4-3.6L17 8l-3.6-1.4Z"/><path d="m5 14-.8 2.2L2 17l2.2.8L5 20l.8-2.2L8 17l-2.2-.8Z"/>',
+  habit: '<path d="M20 7h-9a4 4 0 0 0-4 4v1"/><path d="m17 4 3 3-3 3"/><path d="M4 17h9a4 4 0 0 0 4-4v-1"/><path d="m7 20-3-3 3-3"/>',
+  grow: '<path d="M12 22V10"/><path d="M12 13C7 13 4 10 4 5c5 0 8 3 8 8Z"/><path d="M12 17c5 0 8-3 8-8-5 0-8 3-8 8Z"/>',
+  letter: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+};
+
+function pathIcon(kind) {
+  const icon = el("span", "product-path-icon");
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' + PATH_ICON_SVG[kind] + "</svg>";
+  return icon;
+}
+
+function pathBlock(path) {
+  const p = path || {};
+  const features = p.features || {};
+  const activation = p.activation || {};
+  const activationCopy = {
+    portrait_ready: {
+      state: "Портрет готов",
+      next: "Назови один повторяющийся сценарий, который хочется изменить.",
+    },
+    pattern_named: {
+      state: "Сценарий замечен",
+      next: "Выбери минимальный шаг, которым можно проверить новое действие.",
+    },
+    step_chosen: {
+      state: "Маленький шаг выбран",
+      next: "Попробуй его и вернись отметить, что получилось или помешало.",
+    },
+    outcome_shared: {
+      state: "Результат отмечен",
+      next: "Разбери трудный момент без стыда и скорректируй следующий шаг.",
+    },
+    loop_completed: {
+      state: "Первый цикл завершён",
+      next: "Выбери следующую тему, где память проводника поможет увидеть повтор.",
+    },
+  };
+  const specs = [
+    {
+      key: "dream", label: "Разборы снов", forms: ["разбор", "разбора", "разборов"],
+      next: "Продолжи в чате с образом, который всё ещё цепляет.",
+    },
+    {
+      key: "journal", label: "Вопрос дня", forms: ["раз", "раза", "раз"],
+      next: "Ответь в чате на то, что хочется не потерять.",
+    },
+    {
+      key: "imagination", label: "Глубинные сессии", forms: ["сессия", "сессии", "сессий"],
+      next: "Вернись к образу, когда есть спокойное время.",
+    },
+    {
+      key: "habit", label: "Изменение привычки", forms: ["раз", "раза", "раз"],
+      next: "Повтори выбранную замену при знакомом триггере.",
+    },
+    {
+      key: "grow", label: "Полезная привычка", forms: ["раз", "раза", "раз"],
+      next: "Сделай минимальную версию сегодня. Пропуск ничего не обнуляет.",
+    },
+  ];
+  const rows = specs
+    .map((spec) => {
+      const key = spec.key;
+      const usage = features[key] || {};
+      const started = Number(usage.started || 0);
+      let completed = Number(usage.completed || 0);
+      if (key === "habit") completed = Math.max(completed, Number(p.ritual_done_count || 0));
+      if (key === "grow") completed = Math.max(completed, Number(p.growth_done_count || 0));
+      if (!started && !completed) return null;
+      const value = completed || started;
+      let state;
+      if (completed) {
+        const suffix = pluralRu(value, spec.forms[0], spec.forms[1], spec.forms[2]);
+        state = key === "habit" || key === "grow"
+          ? "Получилось " + value + " " + suffix
+          : value + " " + suffix;
+      } else if (key === "journal") {
+        state = "Открывал " + value + " " + pluralRu(value, "раз", "раза", "раз");
+      } else {
+        state = key === "dream" ? "Разбор начат" : key === "imagination"
+          ? "Сессия начата" : "Практика начата";
+      }
+      const fallbackAt = key === "habit" ? p.ritual_done_at : key === "grow" ? p.growth_done_at : null;
+      const lastAt = completed
+        ? usage.last_completed_at || fallbackAt || usage.last_started_at
+        : usage.last_started_at;
+      return { kind: key, label: spec.label, state, next: spec.next, lastAt };
+    })
+    .filter(Boolean);
+  const route = activationCopy[activation.stage];
+  if (route) {
+    rows.push({
+      kind: "route",
+      label: "Первый цикл изменений",
+      state: route.state,
+      next: route.next,
+      lastAt: activation.updated_at,
+      forceNext: true,
+    });
+  }
+  if (p.weekly_letter_at) {
+    rows.push({
+      kind: "letter",
+      label: "Письмо недели",
+      state: "Пришло в чат " + fmtDate(p.weekly_letter_at),
+      next: "Ответь на вопрос из письма: так наблюдение станет следующим шагом.",
+      lastAt: p.weekly_letter_at,
+    });
+  }
+  if (!rows.length && !p.weekly_letter_at) return null;
+  rows.sort((a, b) => (Date.parse(b.lastAt || "") || 0) - (Date.parse(a.lastAt || "") || 0));
+
+  const sec = el("section", "product-path");
+  sec.appendChild(el("div", "product-path-label", "Мой путь"));
+  sec.appendChild(
+    el(
+      "p",
+      "product-path-sub",
+      "Здесь разговор превращается в действие. Продолжай один маленький шаг, без гонки и стриков.",
+    ),
+  );
+  const list = el("div", "product-path-list");
+  rows.forEach((row, index) => {
+    const item = el("div", "product-path-row");
+    item.appendChild(pathIcon(row.kind));
+    const copy = el("div", "product-path-text");
+    copy.appendChild(el("strong", null, row.label));
+    const date = fmtDate(row.lastAt);
+    const state = row.kind === "letter" ? row.state : row.state + (date ? " · " + date : "");
+    copy.appendChild(el("span", "product-path-state", state));
+    const lastTimestamp = Date.parse(row.lastAt || "");
+    const recent = Number.isFinite(lastTimestamp) &&
+      lastTimestamp <= Date.now() && Date.now() - lastTimestamp <= 14 * 86400000;
+    if (row.forceNext || (index === 0 && recent)) {
+      copy.appendChild(el("span", "product-path-next", "Можно продолжить: " + row.next));
+    }
+    item.appendChild(copy);
+    list.appendChild(item);
+  });
+  sec.appendChild(list);
+  return sec;
+}
+
+// --- карта психики ----------------------------------------------------------
+
+// Символы трёх великих фигур + Самости. Ключи совпадают со схемой профиля.
+const FIGURE_GLYPH = { self: "✦", persona: "◐", shadow: "●", anima_animus: "☽" };
+// Короткие подписи фигур на карте (полное имя — в раскрытии по тапу; длинное налезало бы).
+const FIGURE_SHORT = { self: "Самость", persona: "Персона", shadow: "Тень", anima_animus: "Анима" };
+const GREAT_KEYS = ["persona", "shadow", "anima_animus"]; // великие фигуры (подписываем)
+const MAP_ITEM_LIMIT = 18; // Самость не входит: защищаем обзор от бесконечного роста архетипов
+const CX = 150;
+const CY = 146; // центр мандалы (Самость)
+// Три кольца глубины: ближе к центру — то, что уже узнано и принято; на краю — что едва
+// проявляется. Мандала — центральный символ Самости у Юнга: небо, собранное вокруг центра.
+const R_BAND = [52, 82, 110]; // узнано / в работе / едва проявляется
+
+// Декоративные фоновые звёзды (статичные) — ночное небо за фигурами.
+const AMBIENT_STARS = [
+  [28, 44, 0.9], [95, 26, 0.6], [214, 34, 0.7], [286, 70, 0.9], [22, 116, 0.6],
+  [120, 22, 0.5], [190, 20, 0.6], [284, 168, 0.7], [30, 214, 0.8], [104, 262, 0.6],
+  [214, 258, 0.7], [272, 224, 0.5], [14, 88, 0.4], [294, 130, 0.5], [150, 272, 0.5],
+  [60, 250, 0.5], [244, 46, 0.5], [10, 168, 0.5], [292, 200, 0.6], [176, 274, 0.4],
+];
+
+// Глубина грани → кольцо. 0 узнано (подтверждено/high), 1 в работе (medium/working),
+// 2 едва проявляется (всё прочее). Радиус кодирует близость к центру-Самости.
+function depthBand(item) {
+  if (!item) return 2;
+  if (item.user_confirmed || item.confidence === "high") return 0;
+  if (item.confidence === "medium" || item.status === "working") return 1;
+  return 2;
+}
+const BAND_TONE = ["clear", "working", "emerging"];
+// Размер звезды = как глубоко грань узнана (число опор evidence). Крупнее = увереннее.
+function starR(ev) {
+  const n = Math.max(0, Math.min(6, ev || 0));
+  return 3.2 + n * 0.85; // 3.2 .. 8.3
+}
+function polar(cx, cy, r, deg) {
+  const a = (deg * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+// Ярлыки граней и имена архетипов приходят из extraction (LLM) — в SVG-разметку только
+// через экранирование, чтобы случайные <, & или кавычки не ломали (и не инжектили) DOM.
+function escXml(s) {
+  return String(s == null ? "" : s).replace(/[<>&"]/g, (c) =>
+    c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : "&quot;");
+}
+
+// Карта психики как живой граф (референс — graph view Obsidian, 08.07): Самость в центре,
+// грани/комплексы/архетипы — звёзды на пружинах. Физика: звёзды отталкиваются, нити мотива
+// стягивают своих, радиальная гравитация держит кольца глубины (семантика мандалы жива:
+// ближе к центру = узнано и принято). Звёзды можно таскать, карту — панорамировать и
+// зумить (щипок/колесо, двойной тап — сброс). Тап по звезде подсвечивает её созвездие
+// и гасит остальное; подписи проявляются при зуме. Рисуем, когда есть хоть одна грань.
+function psycheMapLegacy(sections, archetypes) {
+  if (!sections.length && !(archetypes && archetypes.length)) return null;
+  const byKey = {};
+  sections.forEach((s) => {
+    if (s.key) byKey[s.key] = s;
+  });
+
+  // собираем все грани в единый список звёзд (кроме Самости — она центр)
+  const allItems = [];
+  sections.forEach((s) => {
+    if (s.key === "self") return;
+    const great = GREAT_KEYS.indexOf(s.key) !== -1;
+    allItems.push({
+      label: s.label,
+      mapLabel: great ? FIGURE_SHORT[s.key] : null,
+      glyph: great ? FIGURE_GLYPH[s.key] : null,
+      summary: s.summary,
+      band: depthBand(s),
+      r: great ? 7.5 : starR(s.evidence_count),
+      theme: s.theme,
+      anchor: great,
+      evidenceCount: Number(s.evidence_count || 0),
+      key: s.label,
+    });
+  });
+  (archetypes || []).forEach((a) => {
+    allItems.push({
+      label: a.name, mapLabel: null, glyph: null, summary: a.summary,
+      band: depthBand(a), r: starR(a.evidence_count), theme: a.theme, arch: true, key: a.name,
+      evidenceCount: Number(a.evidence_count || 0),
+    });
+  });
+
+  // Все фиксированные грани остаются на карте. Если архетипов со временем станет много,
+  // показываем самые проявленные; полный список всё равно остаётся карточками ниже.
+  const fixedItems = allItems.filter((it) => !it.arch);
+  const archetypeItems = allItems
+    .filter((it) => it.arch)
+    .sort((a, z) => a.band - z.band || z.evidenceCount - a.evidenceCount || hashStr(a.key) - hashStr(z.key));
+  const items = fixedItems
+    .concat(archetypeItems.slice(0, Math.max(0, MAP_ITEM_LIMIT - fixedItems.length)))
+    .slice(0, MAP_ITEM_LIMIT);
+  const hiddenMapItems = Math.max(0, allItems.length - items.length);
+
+  // Самость — центр (или призрачный центр, если ещё не проявилась)
+  const selfSec = byKey.self;
+  const stars = [{
+    glyph: "✦", label: "Самость", mapLabel: "Самость",
+    summary: selfSec
+      ? selfSec.summary
+      : "Центр, к которому ведёт путь. По Юнгу он проявляется последним и всю жизнь.",
+    tone: selfSec ? (depthBand(selfSec) === 0 ? "clear" : "working") : "ghost",
+    r: 10, x: CX, y: CY, anchor: true, self: true, theme: selfSec ? selfSec.theme : null,
+  }];
+
+  // Плотностный масштаб: поле карты фиксированное (300×300), поэтому с ростом числа
+  // граней сами звёзды компактнеют (с полом — не исчезают). Небо становится населённее,
+  // а не тесней. Якоря (великие фигуры) держат минимум под глифом.
+  const crowd = Math.max(0.62, Math.min(1, Math.sqrt(18 / Math.max(1, items.length))));
+  items.forEach((it) => {
+    it.r = Math.max(it.anchor ? 6.5 : 2.6, it.r * crowd);
+  });
+
+  // раскладываем по кольцам: в каждом кольце звёзды равномерно по кругу, кольца смещены
+  // друг относительно друга, чтобы не выстраивались в радиусы. Больше опор → чуть ближе
+  // к центру внутри кольца (глубже узнана = ближе к себе).
+  const bands = [[], [], []];
+  items.forEach((it) => bands[it.band].push(it));
+  bands.forEach((grp, b) => {
+    // стабильный порядок, чтобы раскладка не прыгала между визитами
+    grp.sort((a, z) => hashStr(a.key) - hashStr(z.key));
+    const n = grp.length;
+    if (!n) return;
+    // Ёмкость кольца конечна (окружность / диаметр звезды с зазором). Переполненное
+    // кольцо расщепляется на подкольца (до трёх), звёзды идут зигзагом-ожерельем:
+    // плотность растёт в разы, а три глубины мандалы по-прежнему читаются.
+    const maxD = 2 * Math.max(...grp.map((it) => it.r)) + 6;
+    const rows = Math.min(3, Math.max(1, Math.ceil((n * maxD) / (2 * Math.PI * R_BAND[b]))));
+    const rowGap = b === 0 ? 10 : 12; // внутреннее кольцо не лезет в ореол Самости
+    grp.forEach((it, i) => {
+      const spread = n > 1 ? (360 / n) * i : 0;
+      // в ожерелье без углового дрожания — зигзаг сам разбивает «радиусы»
+      const jitter = rows > 1 ? 0 : (hashStr(it.key) % 11) - 5;
+      const deg = -90 + b * 29 + spread + jitter;
+      const rowOff = rows > 1 ? ((i % rows) - (rows - 1) / 2) * rowGap : 0;
+      const pull =
+        rows > 1 ? 0 : Math.min(6, Math.max(0, it.r - 3.2) / 0.85) * 1.4; // до -8.4 внутрь
+      const [x, y] = polar(CX, CY, R_BAND[b] + rowOff - pull, deg);
+      stars.push({ ...it, tone: BAND_TONE[b], x, y });
+    });
+  });
+
+  // Страховка от каши: детерминированный пасс растаскивает пересёкшиеся звёзды
+  // (вход и порядок стабильны → раскладка та же между визитами). Самость неподвижна.
+  for (let pass = 0; pass < 24; pass++) {
+    let moved = false;
+    for (let i = 0; i < stars.length; i++) {
+      for (let j = i + 1; j < stars.length; j++) {
+        const a = stars[i];
+        const z = stars[j];
+        const min = a.r + z.r + 4;
+        let dx = z.x - a.x;
+        let dy = z.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 0.01) {
+          dx = 1; dy = 0; d = 1; // совпали точь-в-точь — толкаем в фиксированную сторону
+        }
+        const push = (min - d) / 2 + 0.3;
+        const ux = dx / d;
+        const uy = dy / d;
+        if (!a.self) {
+          a.x -= ux * push;
+          a.y -= uy * push;
+        }
+        z.x += ux * push * (a.self ? 2 : 1);
+        z.y += uy * push * (a.self ? 2 : 1);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  stars.forEach((st) => {
+    if (st.self) return;
+    st.x = Math.max(10, Math.min(290, st.x));
+    st.y = Math.max(10, Math.min(290, st.y));
+  });
+
+  // Нити мотива: цепочка по углу (N-1 линий, не полный граф) — они же пружины физики.
+  // Индексная адресация: физика и DOM-линии живут на одних индексах массива stars.
+  const byTheme = {};
+  stars.forEach((st, i) => {
+    if (st.theme) (byTheme[st.theme] = byTheme[st.theme] || []).push(i);
+  });
+  const themeLinks = []; // {a, b, th} — индексы звёзд
+  Object.keys(byTheme).forEach((th) => {
+    const g = byTheme[th]
+      .slice()
+      .sort((a, z) =>
+        Math.atan2(stars[a].y - CY, stars[a].x - CX) - Math.atan2(stars[z].y - CY, stars[z].x - CX));
+    for (let i = 0; i + 1 < g.length; i++) themeLinks.push({ a: g[i], b: g[i + 1], th });
+  });
+  // Оси мандалы: Самость ↔ великие фигуры, едва заметные — каркас, как хаб в графе Obsidian.
+  const axisLinks = [];
+  stars.forEach((st, i) => {
+    if (st.anchor && !st.self) axisLinks.push({ a: 0, b: i });
+  });
+
+  // --- разметка: звезда = <g translate> (физика двигает одну трансформацию на звезду) ---
+  const relGlint = (len) =>
+    `<line x1="${(-len).toFixed(1)}" y1="0" x2="${len.toFixed(1)}" y2="0" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>` +
+    `<line x1="0" y1="${(-len).toFixed(1)}" x2="0" y2="${len.toFixed(1)}" stroke="#e8c074" stroke-width="0.9" opacity="0.5" stroke-linecap="round"/>`;
+
+  const starMarkup = (st, i) => {
+    const parts = [];
+    const r = st.r;
+    const tw = ` class="twinkle" style="animation-delay:${(i % 6) * 0.6}s"`;
+    if (st.self) {
+      // Самость — центр: гало + кольцо + ядро. Прикована к центру — якорь всего графа.
+      const on = st.tone === "clear";
+      parts.push(`<circle r="${(r + 12).toFixed(1)}" fill="#e8c074" opacity="0.14"/>`);
+      parts.push(relGlint(r + 9));
+      parts.push(`<circle r="${(r + 4).toFixed(1)}" fill="none" stroke="#e8c074" stroke-width="0.9" opacity="${on ? 0.6 : 0.4}"/>`);
+      if (st.tone === "ghost") {
+        parts.push(`<circle r="${r.toFixed(1)}" fill="#131a2b" stroke="#e8c074" stroke-width="1" stroke-dasharray="2 3" opacity="0.85"/>`);
+        parts.push(`<text class="star-glyph star-glyph--off">${st.glyph}</text>`);
+      } else {
+        parts.push(`<circle r="${r.toFixed(1)}" fill="#e8c074"/>`);
+        parts.push(`<text class="star-glyph star-glyph--on">${st.glyph}</text>`);
+      }
+    } else if (st.tone === "clear") {
+      parts.push(`<circle r="${(r + 7).toFixed(1)}" fill="#e8c074" opacity="0.16"/>`);
+      parts.push(relGlint(r + 5));
+      parts.push(`<circle r="${r.toFixed(1)}" fill="#e8c074"/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--on">${st.glyph}</text>`);
+    } else if (st.tone === "ghost") {
+      parts.push(`<circle r="${r.toFixed(1)}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="2 3"/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--off">${st.glyph}</text>`);
+    } else if (st.tone === "working") {
+      parts.push(`<circle r="${(r + 3).toFixed(1)}" fill="#e8c074" opacity="0.10"/>`);
+      parts.push(`<circle r="${r.toFixed(1)}" fill="rgba(232,192,116,0.5)" stroke="#e8c074" stroke-width="1"/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--mid">${st.glyph}</text>`);
+    } else {
+      parts.push(`<circle r="${r.toFixed(1)}"${tw} fill="rgba(232,192,116,0.34)"${st.arch ? ' stroke="#e8c074" stroke-width="0.7"' : ""}/>`);
+      if (st.glyph) parts.push(`<text class="star-glyph star-glyph--off">${st.glyph}</text>`);
+    }
+    // Подпись под звездой: якоря видны всегда, остальные проявляются при зуме или подсветке
+    // (как в Obsidian). Тёмный ореол (paint-order в CSS) — читаемость поверх линий.
+    const toneCls = st.tone === "ghost" ? "ghost" : st.tone === "clear" ? "clear" : "emerging";
+    const labelCls = st.anchor
+      ? `star-label star-label--anchor star-label--${toneCls}`
+      : "star-label";
+    parts.push(
+      `<text y="${(r + (st.self ? 16 : 10)).toFixed(1)}" class="${labelCls}">${escXml(st.mapLabel || st.label)}</text>`,
+    );
+    const accessible = escXml(
+      st.label + (st.summary ? ". " + st.summary : ". Нажми, чтобы раскрыть тему"),
+    );
+    return `<g class="star" data-i="${i}" role="button" tabindex="0" aria-label="${accessible}" aria-pressed="false" transform="translate(${st.x.toFixed(1)},${st.y.toFixed(1)})">${parts.join("")}</g>`;
+  };
+
+  const linkMarkup = (lk) => {
+    const a = stars[lk.a];
+    const b = stars[lk.b];
+    const c = `x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"`;
+    const d = `data-a="${lk.a}" data-b="${lk.b}" data-th="${escXml(lk.th || "")}"`;
+    if (!lk.th) {
+      return `<line ${c} ${d} class="axis-line" stroke="#e8c074" stroke-width="0.7" opacity="0.10"/>`;
+    }
+    return (
+      `<line ${c} ${d} class="thread-glow" stroke="#e8c074" stroke-width="5" opacity="0.09" stroke-linecap="round"/>` +
+      `<line ${c} ${d} class="thread-line" stroke="#e8c074" stroke-width="1.1" opacity="0.65" stroke-linecap="round"/>`
+    );
+  };
+
+  const svg = [];
+  svg.push(
+    '<defs><radialGradient id="selfGlow" cx="50%" cy="50%" r="50%">' +
+      '<stop offset="0%" stop-color="#e8c074" stop-opacity="0.22"/>' +
+      '<stop offset="100%" stop-color="#e8c074" stop-opacity="0"/></radialGradient></defs>',
+  );
+  // фоновые звёзды — неподвижное дальнее небо ВНЕ камеры (лёгкий параллакс при панораме)
+  svg.push('<g class="sky-ambient">');
+  AMBIENT_STARS.forEach(([x, y, o], i) => {
+    const tw = i % 3 === 0 ? ` class="twinkle" style="animation-delay:${(i % 5) * 0.7}s"` : "";
+    svg.push(`<circle cx="${x}" cy="${y}" r="1"${tw} fill="#e8c074" opacity="${(o * 0.22).toFixed(2)}"/>`);
+  });
+  svg.push("</g>");
+  // камера: панорама/зум двигают этот слой целиком
+  svg.push('<g class="sky-cam">');
+  svg.push(`<circle cx="${CX}" cy="${CY}" r="${R_BAND[2] + 6}" fill="url(#selfGlow)"/>`);
+  R_BAND.forEach((r) =>
+    svg.push(
+      `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="#e8c074" ` +
+        `stroke-width="0.6" stroke-dasharray="1 6" opacity="0.16"/>`,
+    ),
+  );
+  svg.push('<g class="sky-links">');
+  axisLinks.forEach((lk) => svg.push(linkMarkup(lk)));
+  themeLinks.forEach((lk) => svg.push(linkMarkup(lk)));
+  svg.push("</g>");
+  svg.push('<g class="sky-stars">');
+  stars.forEach((st, i) => svg.push(starMarkup(st, i)));
+  svg.push("</g>");
+  svg.push('<circle id="starHalo" class="star-halo" cx="0" cy="0" r="0" fill="#e8c074" opacity="0"/>');
+  svg.push('<circle id="starFocus" class="star-focus" cx="0" cy="0" r="0" fill="none" stroke="#e8c074" stroke-width="1.4" opacity="0"/>');
+  svg.push("</g>"); // /sky-cam
+
+  const sec = el("section", "sky");
+  sec.appendChild(el("div", "sky-label", "Карта твоей психики"));
+  sec.appendChild(
+    el(
+      "p",
+      "sky-sub",
+      "Каждая звезда — тема, которую мы заметили. Ярче и ближе к центру значит больше " +
+        "подтверждений, золотая нить показывает возможную общую потребность. Карта будет " +
+        "дополняться, но лишние подписи скрываются, чтобы оставалось место.",
+    ),
+  );
+  const legend = el("div", "sky-legend");
+  [
+    ["sky-legend-dot sky-legend-dot--clear", "узнано и подтверждается"],
+    ["sky-legend-dot sky-legend-dot--emerging", "пока рабочая гипотеза"],
+    ["sky-legend-line", "темы могут расти из одного корня"],
+  ].forEach(([cls, text]) => {
+    const item = el("span", "sky-legend-item");
+    item.appendChild(el("i", cls));
+    item.appendChild(document.createTextNode(text));
+    legend.appendChild(item);
+  });
+  sec.appendChild(legend);
+  const wrap = el("div", "sky-canvas");
+  wrap.innerHTML =
+    `<svg viewBox="0 0 300 300" class="sky-svg" role="group" aria-label="Интерактивная карта психики. Выбирай звёзды клавишей Enter или нажатием.">${svg.join("")}</svg>`;
+  sec.appendChild(wrap);
+
+  const readout = el("div", "sky-readout");
+  readout.setAttribute("aria-live", "polite");
+  readout.setAttribute("aria-atomic", "true");
+  const HINT = "Нажми на звезду: покажу, что она значит и с чем связана";
+  const renderReadoutHint = () => {
+    readout.innerHTML = "";
+    readout.classList.remove("is-active");
+    readout.appendChild(el("span", "sky-readout-kicker", "Живая карта"));
+    readout.appendChild(el("span", "sky-readout-hint", HINT));
+  };
+  renderReadoutHint();
+  sec.appendChild(readout);
+
+  const nFacets = sections.length + (archetypes ? archetypes.length : 0);
+  const nLinks = Object.keys(byTheme).filter((th) => byTheme[th].length >= 2).length;
+  const meta = el("div", "sky-meta");
+  meta.textContent =
+    (hiddenMapItems
+      ? "На карте " + (nFacets - hiddenMapItems) + " из " + nFacets + " тем"
+      : nFacets + " " + pluralRu(nFacets, "тема", "темы", "тем")) +
+    (nLinks ? " · " + nLinks + " " + pluralRu(nLinks, "нить", "нити", "нитей") : "");
+  sec.appendChild(meta);
+
+  const svgEl = wrap.querySelector("svg");
+  if (!svgEl) return sec;
+  const camG = svgEl.querySelector(".sky-cam");
+  const starGs = Array.prototype.slice.call(svgEl.querySelectorAll(".sky-stars .star"));
+  const linkEls = Array.prototype.slice.call(svgEl.querySelectorAll(".sky-links line"));
+  const themeLineEls = linkEls.filter((l) => l.getAttribute("data-th"));
+  const halo = svgEl.querySelector("#starHalo");
+  const focus = svgEl.querySelector("#starFocus");
+
+  // --- физика (пружинный граф в духе Obsidian, без библиотек) ---
+  // Отталкивание всех от всех + пружины нитей + радиальная гравитация к кольцу своей
+  // глубины (семантика мандалы: ближе к центру = узнано). Самость прикована. Симуляция
+  // остывает (alpha → 0) и останавливает rAF — батарею не жжём; взаимодействия греют заново.
+  stars.forEach((st) => {
+    st.vx = 0;
+    st.vy = 0;
+  });
+  const N = stars.length;
+  let alpha = 0;
+  let raf = 0;
+  let dragIdx = -1;
+
+  const physTick = () => {
+    const fx = new Array(N).fill(0);
+    const fy = new Array(N).fill(0);
+    // отталкивание (обрезка по дистанции — локальная структура, O(N²) при наших N дёшев)
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        let dx = stars[j].x - stars[i].x;
+        let dy = stars[j].y - stars[i].y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 > 8100) continue; // дальше 90 — не влияем
+        if (d2 < 0.01) { dx = (i + 1) * 0.03; dy = 0.05; d2 = 0.01; }
+        const d = Math.sqrt(d2);
+        const rep = 260 / d2;
+        fx[i] -= (dx / d) * rep; fy[i] -= (dy / d) * rep;
+        fx[j] += (dx / d) * rep; fy[j] += (dy / d) * rep;
+      }
+    }
+    // пружины нитей мотива: свои стягиваются в созвездие
+    themeLinks.forEach((lk) => {
+      const a = stars[lk.a];
+      const b = stars[lk.b];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const f = (d - 34) * 0.05;
+      fx[lk.a] += (dx / d) * f; fy[lk.a] += (dy / d) * f;
+      fx[lk.b] -= (dx / d) * f; fy[lk.b] -= (dy / d) * f;
+    });
+    // радиальная гравитация к кольцу глубины
+    for (let i = 1; i < N; i++) {
+      const st = stars[i];
+      const dx = st.x - CX;
+      const dy = st.y - CY;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const f = (R_BAND[st.band] - d) * 0.06;
+      fx[i] += (dx / d) * f; fy[i] += (dy / d) * f;
+    }
+    // интеграция (Самость прикована; перетаскиваемая звезда следует за пальцем)
+    for (let i = 1; i < N; i++) {
+      if (i === dragIdx) continue;
+      const st = stars[i];
+      st.vx = (st.vx + fx[i] * alpha) * 0.82;
+      st.vy = (st.vy + fy[i] * alpha) * 0.82;
+      const sp = Math.hypot(st.vx, st.vy);
+      if (sp > 4) { st.vx = (st.vx / sp) * 4; st.vy = (st.vy / sp) * 4; }
+      // мир конечен (камера клэмпится к 300×300) — звезда не может улететь за карту
+      st.x = Math.max(6, Math.min(294, st.x + st.vx));
+      st.y = Math.max(6, Math.min(294, st.y + st.vy));
+    }
+    // жёсткое разведение оставшихся перекрытий (один быстрый проход)
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const a = stars[i];
+        const b = stars[j];
+        const min = a.r + b.r + 4;
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 0.01) { dx = 1; dy = 0; d = 1; }
+        const push = (min - d) / 2;
+        const ux = dx / d;
+        const uy = dy / d;
+        if (i !== 0 && i !== dragIdx) { a.x -= ux * push; a.y -= uy * push; }
+        if (j !== 0 && j !== dragIdx) { b.x += ux * push; b.y += uy * push; }
+      }
+    }
+  };
+
+  const renderFrame = () => {
+    for (let i = 0; i < N; i++) {
+      starGs[i].setAttribute(
+        "transform", `translate(${stars[i].x.toFixed(2)},${stars[i].y.toFixed(2)})`,
+      );
+    }
+    linkEls.forEach((l) => {
+      const a = stars[+l.getAttribute("data-a")];
+      const b = stars[+l.getAttribute("data-b")];
+      l.setAttribute("x1", a.x.toFixed(1));
+      l.setAttribute("y1", a.y.toFixed(1));
+      l.setAttribute("x2", b.x.toFixed(1));
+      l.setAttribute("y2", b.y.toFixed(1));
+    });
+    if (active >= 0 && focus) {
+      focus.setAttribute("cx", stars[active].x.toFixed(1));
+      focus.setAttribute("cy", stars[active].y.toFixed(1));
+    }
+    updateLabels(); // звёзды сдвинулись — пере-решить, чьи подписи помещаются
+  };
+
+  const loop = () => {
+    if (!svgEl.isConnected) { raf = 0; return; } // страницу перерисовали — старое небо умерло
+    physTick();
+    renderFrame();
+    alpha *= 0.986;
+    if (alpha > 0.02 || dragIdx >= 0) {
+      raf = requestAnimationFrame(loop);
+    } else {
+      raf = 0;
+    }
+  };
+  const heat = (a) => {
+    alpha = Math.max(alpha, a);
+    if (!raf) raf = requestAnimationFrame(loop);
+  };
+
+  // --- камера: панорама пальцем, зум щипком/колесом, двойной тап — сброс ---
+  const cam = { k: 1, tx: 0, ty: 0 };
+  const K_MIN = 1; // мельче «всё небо целиком» не отдаляем
+  const K_MAX = 3.2;
+
+  // Подписи как в Obsidian: живут в мире (двигаются со звёздами), но контр-масштабируются
+  // 1/k — на любом зуме один экранный размер, никаких огромных надписей. Наложения решает
+  // приоритетный отбор: выбранная → якоря → подсвеченные → крупные; проигравшие прячутся
+  // (class clash), пока зум не освободит место. Ширину текста оцениваем по числу знаков:
+  // DOM-замер (getComputedTextLength) невозможен — svg ещё не в документе.
+  const labelEls = starGs.map((g) => g.querySelector(".star-label"));
+  const labelBase = stars.map((st) => (st.anchor ? 11 : 8));
+  const labelLen = stars.map((st) => String(st.mapLabel || st.label || "").length);
+  const updateLabels = () => {
+    const k = cam.k;
+    const zoomed = k >= 1.35;
+    const candidates = [];
+    for (let i = 0; i < N; i++) {
+      const t = labelEls[i];
+      if (!t) continue;
+      const fs = labelBase[i] / k;
+      t.style.fontSize = fs.toFixed(2) + "px";
+      t.style.strokeWidth = (2 / k).toFixed(2) + "px";
+      // базлайн так, чтобы зазор под краем звезды был постоянным на экране
+      t.setAttribute("y", (stars[i].r + 3 / k + fs).toFixed(2));
+      const lit = starGs[i].classList.contains("lit");
+      if (stars[i].anchor || lit || zoomed) {
+        candidates.push({
+          i, prio: (i === active ? 8 : 0) + (stars[i].anchor ? 4 : 0) + (lit ? 2 : 0),
+        });
+      } else {
+        t.classList.remove("label-visible");
+        t.classList.remove("clash");
+      }
+    }
+    candidates.sort((a, b) => b.prio - a.prio || stars[b.i].r - stars[a.i].r);
+    const taken = [];
+    const maxVisible = k < 1.35 ? 4 : k < 2 ? 7 : 11;
+    const nodeBoxes = stars.map((st) => {
+      const rr = (st.r + 3) * k;
+      const x = st.x * k + cam.tx;
+      const y = st.y * k + cam.ty;
+      return { x0: x - rr, x1: x + rr, y0: y - rr, y1: y + rr };
+    });
+    let visible = 0;
+    candidates.forEach(({ i }) => {
+      const st = stars[i];
+      const w = labelLen[i] * labelBase[i] * 0.58; // экранные (вью-)единицы
+      const h = labelBase[i];
+      const cx = st.x * k + cam.tx;
+      const y0 = (st.y + st.r) * k + cam.ty + 3;
+      const box = { x0: cx - w / 2, x1: cx + w / 2, y0, y1: y0 + h };
+      const hitsLabel = taken.some(
+        (b) => box.x0 < b.x1 + 2 && b.x0 < box.x1 + 2 && box.y0 < b.y1 + 1 && b.y0 < box.y1 + 1,
+      );
+      const hitsNode = nodeBoxes.some(
+        (b, j) => j !== i && box.x0 < b.x1 + 1 && b.x0 < box.x1 + 1 && box.y0 < b.y1 + 1 && b.y0 < box.y1 + 1,
+      );
+      const clipped = box.x0 < 2 || box.x1 > 298 || box.y0 < 2 || box.y1 > 298;
+      const overLimit = visible >= maxVisible && i !== active;
+      const hidden = hitsLabel || hitsNode || clipped || overLimit;
+      labelEls[i].classList.toggle("clash", hidden);
+      labelEls[i].classList.toggle("label-visible", !hidden);
+      if (!hidden) {
+        taken.push(box);
+        visible += 1;
+      }
+    });
+  };
+
+  const applyCam = () => {
+    cam.k = Math.max(K_MIN, Math.min(K_MAX, cam.k));
+    // Вью всегда целиком внутри мира: карту нельзя сдвинуть в угол и «потерять»
+    // (при k=1 пан — no-op: небо и так видно целиком).
+    const over = 300 * (cam.k - 1);
+    cam.tx = Math.min(0, Math.max(-over, cam.tx));
+    cam.ty = Math.min(0, Math.max(-over, cam.ty));
+    camG.setAttribute(
+      "transform", `translate(${cam.tx.toFixed(2)} ${cam.ty.toFixed(2)}) scale(${cam.k.toFixed(3)})`,
+    );
+    svgEl.classList.toggle("zoomed", cam.k >= 1.35); // подписи всех звёзд проявляются
+    updateLabels();
+  };
+  const toView = (e) => {
+    const rect = svgEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return [0, 0];
+    return [
+      ((e.clientX - rect.left) / rect.width) * 300,
+      ((e.clientY - rect.top) / rect.height) * 300,
+    ];
+  };
+  const toWorld = (vx, vy) => [(vx - cam.tx) / cam.k, (vy - cam.ty) / cam.k];
+  const zoomAt = (vx, vy, factor) => {
+    const [wx, wy] = toWorld(vx, vy);
+    cam.k *= factor;
+    cam.k = Math.max(K_MIN, Math.min(K_MAX, cam.k));
+    cam.tx = vx - wx * cam.k;
+    cam.ty = vy - wy * cam.k;
+    applyCam();
+  };
+  const resetCam = () => {
+    cam.k = 1; cam.tx = 0; cam.ty = 0;
+    applyCam();
+  };
+
+  // --- подсветка выбора: звезда + её созвездие горят, остальное гаснет (как в Obsidian) ---
+  let active = -1;
+  const applyFocus = () => {
+    const focused = active >= 0;
+    svgEl.classList.toggle("focused", focused);
+    const th = focused ? stars[active].theme : null;
+    const lit = {};
+    if (focused) {
+      lit[active] = true;
+      if (th && byTheme[th]) byTheme[th].forEach((k) => { lit[k] = true; });
+    }
+    starGs.forEach((g, k) => {
+      g.classList.toggle("lit", !!lit[k]);
+      g.setAttribute("aria-pressed", k === active ? "true" : "false");
+    });
+    themeLineEls.forEach((l) =>
+      l.classList.toggle("on", !!th && l.getAttribute("data-th") === th));
+    if (focus) {
+      if (focused) {
+        focus.setAttribute("cx", stars[active].x.toFixed(1));
+        focus.setAttribute("cy", stars[active].y.toFixed(1));
+        focus.setAttribute("r", (stars[active].r + 6).toFixed(1));
+        focus.setAttribute("opacity", "0.9");
+      } else {
+        focus.setAttribute("opacity", "0");
+      }
+    }
+    if (halo) {
+      halo.classList.toggle("on", focused);
+      if (focused) {
+        halo.setAttribute("cx", stars[active].x.toFixed(1));
+        halo.setAttribute("cy", stars[active].y.toFixed(1));
+        halo.setAttribute("r", (stars[active].r + 12).toFixed(1));
+      } else {
+        halo.setAttribute("opacity", "0");
+      }
+    }
+    updateLabels(); // состав lit изменился — пере-решить видимость подписей
+    readout.innerHTML = "";
+    readout.classList.toggle("is-active", focused);
+    if (focused) {
+      const st = stars[active];
+      const head = el("div", "sky-readout-head");
+      const heading = el("div", "sky-readout-heading");
+      const toneLabel = st.tone === "clear"
+        ? "Узнано и подтверждается"
+        : st.tone === "working"
+          ? "Сейчас в работе"
+          : st.tone === "ghost"
+            ? "Пока в тени"
+            : "Только проявляется";
+      heading.appendChild(el("span", "sky-readout-kicker", toneLabel));
+      heading.appendChild(el("span", "sky-readout-name", st.label));
+      head.appendChild(heading);
+      const close = el("button", "sky-readout-close", "×");
+      close.type = "button";
+      close.setAttribute("aria-label", "Снять выбор темы");
+      close.addEventListener("click", () => {
+        active = -1;
+        applyFocus();
+      });
+      head.appendChild(close);
+      readout.appendChild(head);
+      if (stars[active].summary)
+        readout.appendChild(el("span", "sky-readout-text", stars[active].summary));
+      const related = th && byTheme[th] ? Math.max(0, byTheme[th].length - 1) : 0;
+      if (related) {
+        readout.appendChild(
+          el(
+            "span",
+            "sky-readout-meta",
+            "Связано ещё с " + related + " " + pluralRu(related, "темой", "темами", "темами"),
+          ),
+        );
+      }
+      const discuss = el("button", "sky-readout-cta", "Продолжить в разговоре");
+      discuss.type = "button";
+      discuss.addEventListener("click", closeToChat);
+      readout.appendChild(discuss);
+    } else {
+      renderReadoutHint();
+    }
+  };
+
+  const selectionFeedback = () => {
+    const haptics = tg && tg.HapticFeedback;
+    if (!haptics) return;
+    try {
+      if (typeof haptics.selectionChanged === "function") haptics.selectionChanged();
+      else if (typeof haptics.impactOccurred === "function") haptics.impactOccurred("light");
+    } catch (_) { /* старый Telegram-клиент */ }
+  };
+
+  const revealReadout = () => {
+    if (active < 0) return;
+    requestAnimationFrame(() => {
+      const rect = readout.getBoundingClientRect();
+      const viewportBottom = window.innerHeight - 12;
+      if (rect.bottom > viewportBottom) {
+        readout.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+      }
+    });
+  };
+
+  starGs.forEach((g, i) => {
+    g.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      active = active === i ? -1 : i;
+      applyFocus();
+      if (active >= 0) selectionFeedback();
+    });
+    g.addEventListener("focus", () => {
+      // Тап сам переводит SVG-элемент в focus до pointerup. Не выбираем звезду здесь,
+      // иначе pointerup увидит её уже активной и тут же снимет выбор. Для Tab-фокуса
+      // pointers пуст, поэтому клавиатурная навигация по-прежнему раскрывает тему.
+      if (pointers.size) return;
+      active = i;
+      applyFocus();
+    });
+  });
+
+  // Тап = ближайшая звезда к касанию (хит-круги при плотном небе перекрывались бы).
+  const starAt = (wx, wy, slack) => {
+    let best = -1;
+    let bestD = Infinity;
+    stars.forEach((st, k) => {
+      const d = Math.hypot(st.x - wx, st.y - wy) - st.r;
+      if (d < bestD) { bestD = d; best = k; }
+    });
+    return best >= 0 && bestD <= slack ? best : -1;
+  };
+
+  // --- жесты: pointer events покрывают палец и мышь одним кодом ---
+  const pointers = new Map(); // pointerId → {vx, vy}
+  let gesture = null; // {type:"drag"|"pan"|"pinch", ...}
+  let tapStart = null; // {vx, vy, t, moved}
+  let lastTap = { t: 0, vx: 0, vy: 0 };
+
+  svgEl.style.cursor = "grab";
+  // Один палец по карте прокручивает страницу. Zoom остаётся доступен щипком, колесом
+  // и двойным тапом, поэтому карта не превращается в ловушку на маленьком экране.
+  svgEl.style.touchAction = "pan-y";
+
+  svgEl.addEventListener("pointerdown", (e) => {
+    // capture не критичен (жест доводим и без него), а на нестандартных pointerId кидает
+    try { svgEl.setPointerCapture && svgEl.setPointerCapture(e.pointerId); } catch (err) { /* ок */ }
+    const [vx, vy] = toView(e);
+    pointers.set(e.pointerId, { vx, vy });
+    if (pointers.size === 2) {
+      // второй палец: что бы ни шло — теперь это щипок
+      const pts = Array.from(pointers.values());
+      gesture = {
+        type: "pinch",
+        d0: Math.max(1, Math.hypot(pts[0].vx - pts[1].vx, pts[0].vy - pts[1].vy)),
+        k0: cam.k,
+      };
+      tapStart = null;
+      if (dragIdx >= 0) { dragIdx = -1; }
+      return;
+    }
+    tapStart = { vx, vy, t: Date.now(), moved: false };
+    const [wx, wy] = toWorld(vx, vy);
+    const hit = starAt(wx, wy, 14 / cam.k);
+    if (hit > 0) {
+      // Самость (0) не таскаем — она ось карты; тап по ней работает как выбор
+      gesture = { type: "drag" };
+      dragIdx = hit;
+      svgEl.style.cursor = "grabbing";
+      heat(0.5);
+    } else {
+      gesture = { type: "pan", vx, vy, tx0: cam.tx, ty0: cam.ty };
+      svgEl.style.cursor = "grabbing";
+    }
+  });
+
+  svgEl.addEventListener("pointermove", (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const [vx, vy] = toView(e);
+    pointers.set(e.pointerId, { vx, vy });
+    if (tapStart && Math.hypot(vx - tapStart.vx, vy - tapStart.vy) > 5) tapStart.moved = true;
+    if (gesture && gesture.type === "pinch" && pointers.size >= 2) {
+      const pts = Array.from(pointers.values());
+      const d = Math.max(1, Math.hypot(pts[0].vx - pts[1].vx, pts[0].vy - pts[1].vy));
+      const cx = (pts[0].vx + pts[1].vx) / 2;
+      const cy = (pts[0].vy + pts[1].vy) / 2;
+      const target = gesture.k0 * (d / gesture.d0);
+      const factor = target / cam.k;
+      zoomAt(cx, cy, factor);
+      return;
+    }
+    if (gesture && gesture.type === "drag" && dragIdx >= 0) {
+      const [wx, wy] = toWorld(vx, vy);
+      stars[dragIdx].x = Math.max(8, Math.min(292, wx));
+      stars[dragIdx].y = Math.max(8, Math.min(292, wy));
+      stars[dragIdx].vx = 0;
+      stars[dragIdx].vy = 0;
+      heat(0.45);
+      return;
+    }
+    if (gesture && gesture.type === "pan") {
+      cam.tx = gesture.tx0 + (vx - gesture.vx);
+      cam.ty = gesture.ty0 + (vy - gesture.vy);
+      applyCam();
+    }
+  });
+
+  const endPointer = (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (gesture && gesture.type === "pinch") {
+      if (pointers.size < 2) gesture = null;
+      return;
+    }
+    gesture = null;
+    if (dragIdx >= 0) { dragIdx = -1; heat(0.3); }
+    svgEl.style.cursor = "grab";
+    // тап: короткий, почти без движения — выбор звезды или двойной тап (сброс камеры)
+    if (tapStart && !tapStart.moved && Date.now() - tapStart.t < 400) {
+      const { vx, vy } = tapStart;
+      const now = Date.now();
+      if (now - lastTap.t < 320 && Math.hypot(vx - lastTap.vx, vy - lastTap.vy) < 24) {
+        lastTap = { t: 0, vx: 0, vy: 0 };
+        resetCam();
+        active = -1;
+        applyFocus();
+        tapStart = null;
+        return;
+      }
+      lastTap = { t: now, vx, vy };
+      const [wx, wy] = toWorld(vx, vy);
+      const hit = starAt(wx, wy, 18 / cam.k);
+      active = hit === active ? -1 : hit >= 0 ? hit : -1;
+      applyFocus();
+      if (active >= 0) {
+        selectionFeedback();
+        revealReadout();
+      }
+    }
+    tapStart = null;
+  };
+  svgEl.addEventListener("pointerup", endPointer);
+  svgEl.addEventListener("pointercancel", endPointer);
+
+  svgEl.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const [vx, vy] = toView(e);
+      zoomAt(vx, vy, Math.pow(1.0015, -e.deltaY));
+    },
+    { passive: false },
+  );
+
+  applyCam();
+  // Initial layout is already deterministic and overlap-free. Do not start physics on
+  // mount: a real profile update may rebuild the map, but it must not visibly collapse
+  // toward the default rings. Physics wakes only when the user drags a star.
   return sec;
 }
 
@@ -1500,599 +2452,212 @@ function psycheMap(sections, archetypes) {
   return sec;
 }
 
-// --- Mini App IA: путь, сессии, память, ещё -------------------------------
-
-const PROFILE_TABS = [
-  { key: "path", label: "Путь" },
-  { key: "sessions", label: "Сессии" },
-  { key: "memory", label: "Память" },
-  { key: "more", label: "Ещё" },
-];
-
-let activeProfileTab = "path";
-let switchProfileTab = null;
-let nativeBackBound = false;
-
-function jaguarMark() {
-  const mark = el("span", "jaguar-mark");
-  mark.setAttribute("aria-hidden", "true");
-  mark.innerHTML =
-    '<svg viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M8 13 5 5l10 5c2.7-1.3 5.7-2 9-2s6.3.7 9 2L43 5l-3 8c1.9 2.4 3 5.2 3 8.1C43 28.2 34.5 33 24 33S5 28.2 5 21.1C5 18.2 6.1 15.4 8 13Z"/>' +
-    '<path d="M13 20c2.3-1.7 5.1-1.7 7.5 0M27.5 20c2.4-1.7 5.2-1.7 7.5 0M20 25h8l-4 3-4-3Z"/>' +
-    '<circle cx="15" cy="15" r="1"/><circle cx="33" cy="15" r="1"/>' +
-    '</svg>';
-  return mark;
-}
-
-function syncNativeBackButton(tabKey) {
-  const back = tg && tg.BackButton;
-  if (!back) return;
-  if (!nativeBackBound && typeof back.onClick === "function") {
-    back.onClick(() => {
-      if (typeof switchProfileTab === "function" && activeProfileTab !== "path") {
-        switchProfileTab("path", true);
-      }
-    });
-    nativeBackBound = true;
-  }
-  if (tabKey === "path") {
-    if (typeof back.hide === "function") back.hide();
-  } else if (typeof back.show === "function") {
-    back.show();
-  }
-}
-
-function profileTabShell(panels) {
-  const shell = el("div", "profile-shell");
-  const nav = el("nav", "profile-tabs");
-  nav.setAttribute("aria-label", "Разделы личного пути");
-  nav.setAttribute("role", "tablist");
-  const buttons = [];
-
-  const select = (key, moveFocus) => {
-    if (!panels[key]) key = "path";
-    activeProfileTab = key;
-    PROFILE_TABS.forEach((item) => {
-      const selected = item.key === key;
-      const button = buttons.find((candidate) => candidate.dataset.tabKey === item.key);
-      const panel = panels[item.key];
-      if (button) {
-        button.setAttribute("aria-selected", selected ? "true" : "false");
-        button.tabIndex = selected ? 0 : -1;
-        if (selected && moveFocus) button.focus();
-      }
-      if (panel) panel.hidden = !selected;
-    });
-    syncNativeBackButton(key);
-    window.scrollTo({ top: 0, behavior: "auto" });
-  };
-  switchProfileTab = select;
-
-  PROFILE_TABS.forEach((item, index) => {
-    const button = el("button", "profile-tab", item.label);
-    button.type = "button";
-    button.id = "tab-" + item.key;
-    button.dataset.tabKey = item.key;
-    button.setAttribute("role", "tab");
-    button.setAttribute("aria-controls", "panel-" + item.key);
-    button.addEventListener("click", () => select(item.key, false));
-    button.addEventListener("keydown", (event) => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      let next = index;
-      if (event.key === "ArrowLeft") next = (index - 1 + PROFILE_TABS.length) % PROFILE_TABS.length;
-      if (event.key === "ArrowRight") next = (index + 1) % PROFILE_TABS.length;
-      if (event.key === "Home") next = 0;
-      if (event.key === "End") next = PROFILE_TABS.length - 1;
-      select(PROFILE_TABS[next].key, true);
-    });
-    buttons.push(button);
-    nav.appendChild(button);
-  });
-  shell.appendChild(nav);
-
-  PROFILE_TABS.forEach((item) => {
-    const panel = panels[item.key];
-    panel.id = "panel-" + item.key;
-    panel.classList.add("profile-panel");
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", "tab-" + item.key);
-    panel.querySelectorAll("[data-open-tab]").forEach((button) => {
-      button.addEventListener("click", () => select(button.dataset.openTab, true));
-    });
-    shell.appendChild(panel);
-  });
-
-  select(PROFILE_TABS.some((item) => item.key === activeProfileTab) ? activeProfileTab : "path", false);
-  return shell;
-}
-
-function changePathBlock(p) {
-  const sec = el("section", "change-path");
-  labelSection(sec, "change-path-heading", "Твой цикл изменения", "section-eyebrow");
-  sec.appendChild(
-    el(
-      "p",
-      "change-path-intro",
-      "Не отчёт и не серия достижений. Это место, где понимание превращается в проверяемый шаг.",
-    ),
-  );
-  const stage = (p.path && p.path.activation && p.path.activation.stage) ||
-    (p.access && p.access.activation_stage) || "portrait_ready";
-  const stages = [
-    ["portrait_ready", "Замечаю", "Называю повторяющийся сценарий"],
-    ["pattern_named", "Выбираю", "Нахожу маленькое действие"],
-    ["step_chosen", "Пробую", "Проверяю его в реальной ситуации"],
-    ["outcome_shared", "Сверяю", "Приношу результат без оценки себя"],
-    ["loop_completed", "Продолжаю", "Сохраняю полезное и уточняю путь"],
-  ];
-  const currentIndex = Math.max(0, stages.findIndex(([key]) => key === stage));
-  const list = el("ol", "change-path-list");
-  stages.forEach(([key, title, text], index) => {
-    const item = el("li", "change-path-step");
-    if (index < currentIndex || stage === "loop_completed") item.dataset.state = "done";
-    else if (index === currentIndex) {
-      item.dataset.state = "current";
-      item.setAttribute("aria-current", "step");
-    } else item.dataset.state = "next";
-    item.appendChild(el("span", "change-path-marker", index < currentIndex || stage === "loop_completed" ? "✓" : String(index + 1)));
-    const copy = el("span", "change-path-copy");
-    copy.appendChild(el("strong", null, title));
-    copy.appendChild(el("small", null, text));
-    item.appendChild(copy);
-    list.appendChild(item);
-  });
-  sec.appendChild(list);
-  return sec;
-}
-
-function profileInsightsBlock(p) {
-  const wrap = el("details", "profile-details");
-  wrap.appendChild(el("summary", "profile-details-toggle", "Темы и рабочие гипотезы"));
-  const body = el("div", "profile-details-body");
-  body.appendChild(
-    el(
-      "p",
-      "profile-details-intro",
-      "Это линзы для самонаблюдения, не диагнозы и не окончательные выводы. Ты можешь подтвердить, уточнить или отклонить каждую тему.",
-    ),
-  );
-  const map = psycheMap(p.sections, p.archetypes);
-  if (map) body.appendChild(map);
-
-  const core = p.sections.filter((section) => section.group === "core");
-  const enrichment = p.sections.filter((section) => section.group === "enrichment");
-  if (core.length) body.appendChild(groupBlock("Основные темы", core));
-  if (enrichment.length) body.appendChild(groupBlock("Глубинные темы", enrichment));
-  if (p.archetypes.length) {
-    body.appendChild(
-      groupBlock(
-        "Архетипические образы",
-        p.archetypes,
-        "Метафорические образы, которые можно проверить на собственных ассоциациях.",
-      ),
-    );
-  }
-  if (p.habits.length) {
-    const habits = el("section", "group");
-    habits.appendChild(el("h2", "group-title", "Работа с привычкой"));
-    habits.appendChild(el("p", "group-sub", "Триггер, потребность, замена и минимальная версия на трудный день."));
-    p.habits.forEach((habit) => habits.appendChild(habitCard(habit)));
-    body.appendChild(habits);
-  }
-  if (!body.querySelector(".sky, .group")) {
-    body.appendChild(el("p", "empty-note", "Темы появятся после нескольких содержательных разговоров."));
-  }
-  wrap.appendChild(body);
-  return wrap;
-}
-
-function commandAction(command, label, statusNode) {
-  const button = el("button", "command-action", label);
-  button.type = "button";
-  button.addEventListener("click", async () => {
-    const copied = await copyPlainText(command);
-    statusNode.textContent = copied
-      ? "Команда " + command + " скопирована. Вернись в чат и вставь её."
-      : "Не удалось скопировать автоматически. Отправь в чат команду " + command + ".";
-    if (copied) button.textContent = "Скопировано";
-  });
-  return button;
-}
-
-function deepSessionPreparation(showUpgrade) {
-  const sec = el("section", "session-prep");
-  sec.appendChild(el("span", "section-eyebrow", "Перед началом"));
-  sec.appendChild(el("h2", "session-prep-title serif", "Освободи место для разговора"));
-  sec.appendChild(
-    el(
-      "p",
-      "session-prep-intro",
-      "Глубинная сессия помогает спокойно разобрать один актуальный вопрос: заметить триггер, проверить возможную связь и выбрать маленький шаг. Это не терапия и не диагностика.",
-    ),
-  );
-  const list = el("ul", "session-checklist");
-  [
-    "Выдели 20–30 минут без срочных дел и отвлечений.",
-    "Начинай трезвым, в безопасном спокойном месте, не за рулём и не на работе.",
-    "Держи рядом воду и назови намерение одним предложением.",
-    "Ты можешь замедлить или прекратить сессию в любой момент.",
-  ].forEach((text) => {
-    const item = el("li", "session-check");
-    item.appendChild(el("span", "session-check-mark", "✓"));
-    item.appendChild(el("span", null, text));
-    list.appendChild(item);
-  });
-  sec.appendChild(list);
-  sec.appendChild(
-    el(
-      "p",
-      "session-safety",
-      "Если сейчас небезопасно или нужна срочная помощь, не начинай сессию. Обратись к экстренной службе или к человеку рядом.",
-    ),
-  );
-  const status = el("p", "command-status");
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  if (showUpgrade) {
-    const upgrade = el("button", "session-start", "Открыть глубинные сессии");
-    upgrade.type = "button";
-    upgrade.dataset.openTab = "more";
-    sec.appendChild(upgrade);
-  } else {
-    sec.appendChild(commandAction("/imagine", "Скопировать /imagine", status));
-    const back = el("button", "session-back", "Вернуться в чат");
-    back.type = "button";
-    back.addEventListener("click", closeToChat);
-    sec.appendChild(back);
-  }
-  sec.appendChild(status);
-  return sec;
-}
-
-const DEEP_SESSION_STATUS_LABELS = {
-  preparing: "Подготовка",
-  active: "Сессия идёт",
-  integrating: "Интеграция",
-  completed: "Завершена",
-  aborted: "Остановлена",
-};
-const DEEP_SESSION_STAGE_LABELS = {
-  prepare: "Подготовка",
-  intention: "Намерение",
-  explore: "Исследование",
-  integrate: "Интеграция",
-  confirm: "Подтверждение итога",
-};
-
-function fmtSessionDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
-  }).format(date);
-}
-
-function deepSessionCard(session) {
-  const card = el("article", "deep-session-card");
-  card.dataset.status = session.status;
-  const head = el("div", "deep-session-head");
-  const heading = el("div", "deep-session-heading");
-  heading.appendChild(el("span", "deep-session-status", DEEP_SESSION_STATUS_LABELS[session.status]));
-  const date = fmtSessionDate(session.ended_at || session.started_at);
-  if (date) heading.appendChild(el("span", "deep-session-date", date));
-  head.appendChild(heading);
-  if (session.stage && session.status !== "completed") {
-    head.appendChild(el("span", "deep-session-stage", DEEP_SESSION_STAGE_LABELS[session.stage]));
-  }
-  card.appendChild(head);
-  const result = session.result || {};
-  if (result.title) card.appendChild(el("h4", "deep-session-title serif", result.title));
-  if (session.intention) {
-    const intention = el("div", "deep-session-intention");
-    intention.appendChild(el("span", "deep-session-result-label", "Намерение"));
-    intention.appendChild(el("p", null, session.intention));
-    card.appendChild(intention);
-  }
-
-  if (["preparing", "active", "integrating"].includes(session.status)) {
-    const copy = session.status === "integrating"
-      ? "Собери словами то, что действительно откликается. В итог попадёт только подтверждённая тобой формулировка."
-      : "Сессия продолжается в чате. Можно остановиться, попросить паузу или изменить темп.";
-    card.appendChild(el("p", "deep-session-progress", copy));
-    const back = el("button", "deep-session-continue", "Вернуться в чат");
-    back.type = "button";
-    back.addEventListener("click", closeToChat);
-    card.appendChild(back);
-  } else if (session.status === "aborted") {
-    card.appendChild(el("p", "deep-session-progress", "Сессию остановили. Возвращаться к ней или начинать новую не обязательно."));
-  } else {
-    if (result.user_words && result.user_words.length) {
-      const outcome = el("div", "deep-session-outcome");
-      outcome.appendChild(el("span", "deep-session-result-label", "Дословно из твоих сообщений"));
-      const words = el("ul", "deep-session-words");
-      result.user_words.forEach((word) => words.appendChild(el("li", null, word)));
-      outcome.appendChild(words);
-      card.appendChild(outcome);
-    } else if (result.takeaway) {
-      const outcome = el("div", "deep-session-outcome");
-      outcome.appendChild(el("span", "deep-session-result-label", "Итог, который ты подтвердил"));
-      outcome.appendChild(el("p", "deep-session-takeaway", result.takeaway));
-      card.appendChild(outcome);
-    } else {
-      card.appendChild(el("p", "deep-session-progress", "Подтверждённый итог пока не сохранён."));
-    }
-    if (result.model_hypothesis) {
-      const hypothesis = el("details", "deep-session-hypothesis");
-      hypothesis.appendChild(el("summary", null, "Гипотеза проводника, не факт"));
-      hypothesis.appendChild(el("p", null, result.model_hypothesis));
-      if (result.uncertainty) {
-        hypothesis.appendChild(el("p", "deep-session-uncertainty", "Граница уверенности: " + result.uncertainty));
-      }
-      card.appendChild(hypothesis);
-    }
-    if (result.next_step) {
-      const next = el("div", "deep-session-next");
-      next.appendChild(el("span", "deep-session-result-label", "Следующий шаг"));
-      next.appendChild(el("p", null, result.next_step));
-      card.appendChild(next);
-    }
-    if (result.closing_question) {
-      const question = el("div", "deep-session-question");
-      question.appendChild(el("span", "deep-session-result-label", "Вопрос на возвращение"));
-      question.appendChild(el("p", null, result.closing_question));
-      card.appendChild(question);
-    }
-    const followUp = fmtSessionDate(
-      session.follow_up_at || result.follow_up_at || result.check_in_on,
-    );
-    if (followUp) card.appendChild(el("p", "deep-session-followup", "Вернуться к этому: " + followUp));
-  }
-
-  if (["completed", "aborted"].includes(session.status)) {
-    const deleteStatus = el("p", "deep-session-delete-status");
-    deleteStatus.setAttribute("role", "status");
-    deleteStatus.setAttribute("aria-live", "polite");
-    const remove = el("button", "deep-session-delete", "Удалить итог");
-    remove.type = "button";
-    remove.addEventListener("click", async () => {
-      const ok = await confirmAction(
-        "Удалить этот итог глубинной сессии? Связанный с ним текущий шаг тоже будет удалён. Действие нельзя отменить.",
-      );
-      if (!ok) return;
-      remove.disabled = true;
-      remove.setAttribute("aria-busy", "true");
-      remove.textContent = "Удаляю…";
-      try {
-        const updated = await deleteDeepSession(session.id);
-        activeProfileTab = "sessions";
-        renderedProfileFingerprint = null;
-        renderFetchedProfile(updated);
-        announceAction("Итог глубинной сессии удалён.");
-        queueMicrotask(() => {
-          const tab = document.getElementById("tab-sessions");
-          if (tab) tab.focus();
-        });
-      } catch (_) {
-        remove.disabled = false;
-        remove.removeAttribute("aria-busy");
-        remove.textContent = "Повторить удаление";
-        deleteStatus.textContent = "Не удалось удалить итог. Проверь связь и повтори.";
-      }
-    });
-    card.appendChild(remove);
-    card.appendChild(deleteStatus);
-  }
-  return card;
-}
-
-function deepSessionsPanel(p) {
-  const panel = el("section", "sessions-panel");
-  const intro = el("header", "panel-header");
-  intro.appendChild(el("span", "section-eyebrow", "Глубинные сессии"));
-  intro.appendChild(el("h2", "panel-title serif", "Разговор, после которого остаётся твой итог"));
-  intro.appendChild(
-    el(
-      "p",
-      "panel-intro",
-      "Здесь нет стенограммы. Только сохранённый итог с явным разделением твоего описания и рабочей гипотезы.",
-    ),
-  );
-  panel.appendChild(intro);
-
-  const sessions = p.deep_sessions || normalizeDeepSessions(null);
-  const summary = sessions.summary || {};
-  if (summary.total || summary.completed) {
-    const stats = el("dl", "session-summary");
-    [[summary.total, "всего"], [summary.completed, "завершено"]].forEach(([value, label]) => {
-      const item = el("div", "session-summary-item");
-      item.appendChild(el("dt", null, label));
-      item.appendChild(el("dd", null, String(value)));
-      stats.appendChild(item);
-    });
-    panel.appendChild(stats);
-  }
-
-  const active = sessions.recent.filter((session) => ["preparing", "active", "integrating"].includes(session.status));
-  const history = sessions.recent.filter((session) => ["completed", "aborted"].includes(session.status));
-  if (active.length) {
-    const current = el("section", "session-group");
-    current.appendChild(el("h3", "session-group-title", "Сейчас"));
-    active.forEach((session) => current.appendChild(deepSessionCard(session)));
-    panel.appendChild(current);
-  }
-
-  panel.appendChild(deepSessionPreparation(p.show_upgrade));
-
-  const past = el("section", "session-group");
-  past.appendChild(el("h3", "session-group-title", "Последние сессии"));
-  if (history.length) {
-    history.forEach((session) => past.appendChild(deepSessionCard(session)));
-  } else {
-    const empty = el("div", "session-empty");
-    empty.appendChild(el("strong", null, "Здесь пока тихо"));
-    empty.appendChild(el("p", null, "После первой сессии здесь появится сохранённый итог и, если выберешь, следующий шаг."));
-    past.appendChild(empty);
-  }
-  panel.appendChild(past);
-  return panel;
-}
-
-function memoryControlsBlock() {
-  const sec = el("section", "memory-controls");
-  sec.appendChild(el("h2", "memory-controls-title serif", "Ты управляешь памятью"));
-  sec.appendChild(
-    el(
-      "p",
-      "memory-controls-intro",
-      "Факты памяти отделены от рабочих гипотез. В чате можно проверить формулировки, получить копию или удалить всё.",
-    ),
-  );
-  const status = el("p", "command-status");
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  const list = el("div", "memory-command-list");
-  [
-    ["/memory", "Посмотреть и исправить", "Все сохранённые факты"],
-    ["/export", "Получить копию", "Экспорт твоих данных"],
-    ["/deleteall", "Удалить всё", "Подтверждение произойдёт в чате"],
-  ].forEach(([command, label, note]) => {
-    const row = el("div", "memory-command-row");
-    const copy = el("div", "memory-command-copy");
-    copy.appendChild(el("strong", null, label));
-    copy.appendChild(el("span", null, note));
-    row.appendChild(copy);
-    row.appendChild(commandAction(command, command, status));
-    list.appendChild(row);
-  });
-  sec.appendChild(list);
-  sec.appendChild(status);
-  const back = el("button", "memory-chat", "Вернуться в чат");
-  back.type = "button";
-  back.addEventListener("click", closeToChat);
-  sec.appendChild(back);
-  return sec;
-}
-
-function memoryPanel(p) {
-  const panel = el("section", "memory-panel");
-  const header = el("header", "panel-header");
-  header.appendChild(el("span", "section-eyebrow", "Память"));
-  header.appendChild(el("h2", "panel-title serif", "Что остаётся между разговорами"));
-  header.appendChild(el("p", "panel-intro", "Только сообщённые тобой факты. Гипотезы о смысле находятся в отдельном разделе и не выдаются за факты."));
-  panel.appendChild(header);
-  const memories = memoryBlock(p.memories);
-  if (memories) panel.appendChild(memories);
-  else {
-    const empty = el("div", "memory-empty");
-    empty.appendChild(el("strong", null, "Память пока пуста"));
-    empty.appendChild(el("p", null, "Если ты попросишь что-то запомнить или подтвердить важный факт, он появится здесь."));
-    panel.appendChild(empty);
-  }
-  panel.appendChild(memoryControlsBlock());
-  return panel;
-}
-
-function legalLinks() {
-  const nav = el("nav", "legal-links");
-  nav.setAttribute("aria-label", "Условия и данные");
-  [["./privacy.html", "Приватность"], ["./offer.html", "Оферта"], ["./refund.html", "Возврат"]].forEach(([href, label]) => {
-    const link = el("a", null, label);
-    link.href = href;
-    nav.appendChild(link);
-  });
-  return nav;
-}
-
-function morePanel(p) {
-  const panel = el("section", "more-panel");
-  const header = el("header", "panel-header");
-  header.appendChild(el("span", "section-eyebrow", "Доступ и настройки"));
-  header.appendChild(el(
-    "h2",
-    "panel-title serif",
-    p.show_upgrade ? "Продолжить путь" : (p.is_paid ? "Подписка активна" : "Доступ открыт"),
-  ));
-  header.appendChild(el(
-    "p",
-    "panel-intro",
-    p.show_upgrade
-      ? "Сначала ты видишь собственный путь и данные. Здесь можно решить, нужна ли непрерывная работа."
-      : p.is_paid
-        ? "Полный доступ работает. Управлять регулярной оплатой можно в настройках Telegram."
-        : "Сейчас полный доступ открыт. Актуальные условия и остаток маршрута видны в чате.",
-  ));
-  panel.appendChild(header);
-  if (p.show_upgrade) panel.appendChild(upgradeSection(p.billing, p.access));
-  else {
-    const active = el("section", "subscription-active");
-    active.appendChild(el("span", "subscription-active-mark", "✓"));
-    active.appendChild(el("strong", null, p.is_paid ? "Полный доступ открыт" : "Доступ действует сейчас"));
-    active.appendChild(el("p", null, "Глубинные сессии, практики и разговоры доступны в чате."));
-    const back = el("button", "subscription-chat", "Вернуться в чат");
-    back.type = "button";
-    back.addEventListener("click", closeToChat);
-    active.appendChild(back);
-    panel.appendChild(active);
-  }
-  if (p.invite_url) panel.appendChild(shareRow(p.referral, p.invite_url));
-  panel.appendChild(legalLinks());
-  const foot = el("footer", "footer");
-  foot.appendChild(el("p", null, "MindCoach помогает с самонаблюдением, но не ставит диагнозов и не заменяет специалиста."));
-  panel.appendChild(foot);
-  return panel;
-}
-
-function pathPanel(p) {
-  const panel = el("section", "path-panel");
-  const header = el("header", "panel-header path-panel-header");
-  header.appendChild(el("span", "section-eyebrow", "Путь сегодня"));
-  header.appendChild(el("h2", "panel-title serif", "Понимание становится маленьким действием"));
-  header.appendChild(el("p", "panel-intro", "Один следующий шаг важнее десятка метрик. Здесь видно, что проверить в жизни и к чему вернуться в разговоре."));
-  panel.appendChild(header);
-  panel.appendChild(todayBlock(p));
-  panel.appendChild(changePathBlock(p));
-  const dynamics = dynamicsBlock(p.dynamics);
-  if (dynamics) panel.appendChild(dynamics);
-  panel.appendChild(profileInsightsBlock(p));
-  return panel;
-}
-
 // --- сборка профиля ---------------------------------------------------------
 
 function renderProfile(p) {
   const root = el("div", "profile");
+  const c = p.completeness;
 
+  // верхняя строка: бренд + дата
   const top = el("header", "topbar");
-  const identity = el("div", "brand");
-  identity.appendChild(jaguarMark());
+  const brand = el("div", "brand");
   const brandHeading = el("h1", "brand-heading");
   brandHeading.tabIndex = -1;
   brandHeading.dataset.viewHeading = "true";
-  brandHeading.appendChild(el("span", "brand-name", "MindCoach"));
-  brandHeading.appendChild(
-    el("span", "brand-kicker", "Путь · " + (p.pseudonym || "без имени")),
-  );
-  identity.appendChild(brandHeading);
-  top.appendChild(identity);
-  const updated = fmtDate(p.updated_at);
-  if (updated) top.appendChild(el("div", "datepill", "обновлено " + updated));
+  brandHeading.appendChild(el("span", "brand-kicker", "Мой образ"));
+  brandHeading.appendChild(el("span", "brand-name", p.pseudonym || "Аноним"));
+  brand.appendChild(brandHeading);
+  top.appendChild(brand);
+  const upd = fmtDate(p.updated_at);
+  if (upd) top.appendChild(el("div", "datepill", "обновлён " + upd));
   root.appendChild(top);
 
-  root.appendChild(
-    profileTabShell({
-      path: pathPanel(p),
-      sessions: deepSessionsPanel(p),
-      memory: memoryPanel(p),
-      more: morePanel(p),
-    }),
+  // Один полезный следующий шаг вместо общих блоков «Сегодня» и «Мой путь».
+  root.appendChild(todayBlock(p));
+
+  const memories = memoryBlock(p.memories);
+  if (memories) root.appendChild(memories);
+
+  // что изменилось с прошлого визита (динамика между сессиями)
+  const dyn = dynamicsBlock(p.dynamics);
+  if (dyn) root.appendChild(dyn);
+
+  // герой: интро + кольцо глубины
+  const hero = el("section", "hero");
+  const left = el("div", "hero-text");
+  left.appendChild(el("h2", "hero-title", "Что я о тебе понял"));
+  left.appendChild(
+    el(
+      "p",
+      "hero-sub",
+      c.is_sufficient
+        // Не «сложился» (звучит как финал — расти некуда), а вектор дальше: тоньше и
+        // точнее через подтверждение гипотез (счётчик «подтверждено тобой» ниже).
+        ? "Основа собрана. Дальше — тоньше: я уточняю гипотезы и связи, а ты подтверждай те, что отзываются."
+        : "Образ ещё проявляется. Чем больше говорим — тем отчётливее картина.",
+    ),
   );
+  hero.appendChild(left);
+  root.appendChild(hero);
+
+  // карта психики — живой центр страницы вместо статичной шкалы «глубины»: все грани,
+  // комплексы и архетипы как звёзды вокруг Самости + нити общего мотива, тап раскрывает.
+  const sky = psycheMap(p.sections, p.archetypes);
+  if (sky) root.appendChild(sky);
+
+  // Первый CTA следует за персональной картой, а не теряется после длинного профиля.
+  if (p.show_upgrade) root.appendChild(upgradeNudge(p));
+
+  // Блок «Нить наших разговоров» убран (08.07): показывал внутренний конспект бэкенда,
+  // который читался как вечный банальный текст. Живое лицо — карта, нити, динамика.
+
+  // метрики
+  const confirmed = [
+    ...p.sections,
+    ...(p.archetypes || []),
+  ].filter((item) => item.user_confirmed).length;
+  const stats = el("section", "stats");
+  stats.appendChild(stat(p.sections.length, "раскрыто граней"));
+  stats.appendChild(stat(p.archetypes ? p.archetypes.length : 0, "активных архетипов"));
+  stats.appendChild(stat(confirmed, "подтверждено тобой"));
+  root.appendChild(stats);
+
+  // Полные карточки остаются доступны владельцу, но не дублируют карту в основном потоке.
+  const profileDetails = el("details", "profile-details");
+  profileDetails.appendChild(
+    el("summary", "profile-details-toggle", "Все гипотезы и основания"),
+  );
+  const profileDetailsBody = el("div", "profile-details-body");
+  profileDetails.appendChild(profileDetailsBody);
+
+  // разделы
+  const core = p.sections.filter((s) => s.group === "core");
+  const enrichment = p.sections.filter((s) => s.group === "enrichment");
+
+  if (core.length) {
+    profileDetailsBody.appendChild(groupBlock("Основа личности", core));
+  } else {
+    const s = el("section", "group");
+    s.appendChild(el("h2", "group-title", "Основа личности"));
+    const note = el("div", "empty-note");
+    note.textContent = "Базовые грани пока не проявились — расскажи мне о себе побольше в чате.";
+    s.appendChild(note);
+    profileDetailsBody.appendChild(s);
+  }
+
+  if (enrichment.length) {
+    profileDetailsBody.appendChild(groupBlock("Глубинные слои", enrichment));
+  }
+  if (p.archetypes && p.archetypes.length) {
+    profileDetailsBody.appendChild(
+      groupBlock(
+        "Активные архетипы",
+        p.archetypes,
+        "Общечеловеческие образы, которые сейчас звучат в тебе — по Юнгу они живут в каждом.",
+      ),
+    );
+  }
+
+  if (c.is_sufficient && !(p.archetypes && p.archetypes.length)) {
+    // Зрелый профиль без архетипов — НЕ пустой укор, а тёплое приглашение. Архетип —
+    // сильное утверждение, поэтому его НЕ выдумывают в extraction (см. память), а зовут
+    // человека в разговор, который образ проявит. Чипы — примеры образов ВООБЩЕ, не
+    // гипотезы о юзере (эпистемическая скромность): подписаны «например, такие».
+    const s = el("section", "group");
+    s.appendChild(el("h2", "group-title", "Активные архетипы"));
+    s.appendChild(
+      el(
+        "p",
+        "group-sub",
+        "Архетип — древний общечеловеческий образ, который вдруг отчётливо звучит в конкретной истории. По Юнгу они живут в каждом.",
+      ),
+    );
+    const invite = el("div", "empty-note arch-invite");
+    invite.appendChild(
+      el(
+        "p",
+        "arch-invite-lead",
+        "Здесь пока тихо — и это нормально: образы проявляются не из анкеты, а из живого сюжета.",
+      ),
+    );
+    invite.appendChild(el("p", "arch-invite-hint", "Например, такие:"));
+    const examples = el("div", "chips arch-invite-chips");
+    ["Странник", "Тень", "Творец", "Мудрец", "Сирота"].forEach((name) =>
+      examples.appendChild(el("span", "chip chip-ghost", name)),
+    );
+    invite.appendChild(examples);
+    invite.appendChild(
+      el(
+        "p",
+        "arch-invite-cta",
+        "Расскажи мне в чате про повторяющийся сон, любимого героя или ситуацию, где ты вдруг узнал себя, — и первый образ проявится здесь.",
+      ),
+    );
+    s.appendChild(invite);
+    profileDetailsBody.appendChild(s);
+  }
+
+  // Работа с привычкой (/habit): показываем только когда есть что показать — free без
+  // сессий не получает пустую секцию-укор, а платный видит живой прогресс практики.
+  if (p.habits && p.habits.length) {
+    const sec = el("section", "group");
+    sec.appendChild(el("h2", "group-title", "Работа с привычкой"));
+    sec.appendChild(
+      el(
+        "p",
+        "group-sub",
+        "Триггер → потребность → замена → минимальная версия на трудный день. Срыв уточняет карту, а не обнуляет путь.",
+      ),
+    );
+    p.habits.forEach((h) => sec.appendChild(habitCard(h)));
+    // Живая практика (payload.ritual): сколько раз ритуал получился (кнопка «✅ Сделал»
+    // под напоминанием в боте) и во сколько приходит напоминание. Ценность копится на
+    // глазах — без стриков и стыда за пропуск, только «сколько раз получилось».
+    const r = p.ritual;
+    if (r && (r.done_count > 0 || r.reminder_hour != null)) {
+      const parts = [];
+      if (r.done_count > 0) {
+        parts.push(
+          "✅ ритуал получился " + r.done_count + " " + pluralRu(r.done_count, "раз", "раза", "раз"),
+        );
+      }
+      if (r.reminder_hour != null) {
+        parts.push("⏰ напоминание в " + String(r.reminder_hour).padStart(2, "0") + ":00");
+      }
+      sec.appendChild(el("p", "ritual-practice", parts.join(" · ")));
+    }
+    profileDetailsBody.appendChild(sec);
+  }
+
+  // Отдельный раздел «Одна нить» убран как повтор карты. Связи остаются рядом с
+  // выбранной темой в карте, где у них есть контекст и понятное продолжение.
+
+  // что ещё стоит исследовать (если профиль не дозрел)
+  if (!c.is_sufficient && c.missing && c.missing.length) {
+    const ex = el("section", "explore");
+    ex.appendChild(el("h2", "explore-title serif", "Что стоит исследовать"));
+    ex.appendChild(el("p", "explore-sub", "Эти грани пока в тени. Заговори о них в чате — и образ станет полнее."));
+    const chips = el("div", "chips");
+    c.missing.forEach((m) => chips.appendChild(el("span", "chip", m)));
+    ex.appendChild(chips);
+    profileDetailsBody.appendChild(ex);
+  }
+
+  root.appendChild(profileDetails);
+
+  // Платным/владельцу подписку не предлагаем; free видит CTA после показанной ценности.
+  if (p.show_upgrade) root.appendChild(upgradeSection(p.billing, p.access));
+
+  if (p.invite_url) root.appendChild(shareRow(p.referral, p.invite_url));
+
+  const foot = el("footer", "footer");
+  foot.appendChild(
+    el("p", null, "Всё здесь — рабочие гипотезы, а не диагноз. Что-то не так — поправь меня в разговоре."),
+  );
+  root.appendChild(foot);
   return root;
 }
+
 function fmtDate(iso) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -2103,8 +2668,8 @@ function fmtDate(iso) {
 
 function renderEmpty() {
   return stateView(
-    "Путь ещё не начался",
-    "Напиши боту о ситуации, которая повторяется или не даёт покоя. Первый шаг появится здесь после разговора.",
+    "Образ ещё не проявлен",
+    "Мы пока толком не разговаривали. Напиши боту что-нибудь о себе — и я начну тебя понимать.",
     "○",
     [{ label: "Начать разговор", onClick: closeToChat }],
   );
@@ -2212,33 +2777,18 @@ function loadConfig() {
   });
 }
 
-function syncTelegramTheme() {
-  const root = document.documentElement;
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const scheme = tg ? (tg.colorScheme === "dark" ? "dark" : "light") : (prefersDark ? "dark" : "light");
-  root.dataset.telegramTheme = scheme;
-  const params = objectOrEmpty(tg && tg.themeParams);
-  const fallback = scheme === "dark" ? "#101915" : "#f5f4ed";
-  const background = params.bg_color || fallback;
-  const bottom = params.bottom_bar_bg_color || params.secondary_bg_color || background;
-  const themeMeta = document.querySelector('meta[name="theme-color"]');
-  if (themeMeta) themeMeta.setAttribute("content", background);
-  if (!tg) return;
-  try {
-    if (typeof tg.setHeaderColor === "function") tg.setHeaderColor(background);
-    if (typeof tg.setBackgroundColor === "function") tg.setBackgroundColor(background);
-    if (typeof tg.setBottomBarColor === "function") tg.setBottomBarColor(bottom);
-  } catch (_) {
-    /* Старые клиенты используют CSS-тему страницы. */
-  }
-}
-
 async function main() {
   await loadConfig();
-  syncTelegramTheme();
   if (tg) {
     tg.ready();
     tg.expand();
+    try {
+      if (typeof tg.setHeaderColor === "function") tg.setHeaderColor("#0e1320");
+      if (typeof tg.setBackgroundColor === "function") tg.setBackgroundColor("#0e1320");
+      if (typeof tg.setBottomBarColor === "function") tg.setBottomBarColor("#131a2b");
+    } catch (_) {
+      /* Старый клиент Telegram: фирменная тема страницы всё равно сохранится. */
+    }
   }
   try {
     const profile = await fetchProfile();
@@ -2272,10 +2822,7 @@ async function main() {
 
   // Telegram 8.0+ явно сообщает, когда сохранённый WebView снова стал активным.
   // focus/visibility/pageshow остаются fallback для старых клиентов и браузеров.
-  if (tg && typeof tg.onEvent === "function") {
-    tg.onEvent("activated", refreshProfileView);
-    tg.onEvent("themeChanged", syncTelegramTheme);
-  }
+  if (tg && typeof tg.onEvent === "function") tg.onEvent("activated", refreshProfileView);
   window.addEventListener("focus", refreshProfileView);
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) refreshProfileView();
