@@ -10,12 +10,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260821-outcome-evidence-1/);
+assert.match(html, /styles\.css\?v=20260822-price-v3-1/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260821-outcome-evidence-1"/);
+assert.match(boot, /assetVersion = "20260822-price-v3-1"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -61,9 +61,11 @@ assert.match(app, /\/export/);
 
 assert.match(app, /payments_available === false/);
 assert.match(app, /Новое оформление временно закрыто/);
-assert.match(app, /Number\(b\.monthly_xtr\) \|\| 250/);
-assert.match(app, /Number\(b\.annual_xtr\) \|\| 2500/);
+assert.match(app, /Number\(b\.monthly_xtr\) \|\| 500/);
+assert.match(app, /Number\(b\.annual_xtr\) \|\| 5000/);
 assert.match(app, /@PremiumBot/);
+assert.match(app, /Пополни баланс минимум на/);
+assert.match(app, /Проверь рублёвую цену/);
 assert.doesNotMatch(app, /карта Мир|карты Мир|МИР/);
 assert.match(app, /status === "failed"/);
 assert.match(app, /status === "pending"/);
@@ -95,10 +97,12 @@ assert.match(app, /function psycheMap\(sections, archetypes\)/);
 assert.doesNotMatch(app, /root\.appendChild\(pathBlock/);
 assert.doesNotMatch(app, /root\.appendChild\(upgradeNudge/);
 
-assert.match(landing, />250 <span>Stars \/ 30 дней<\/span>/);
-assert.match(landing, /Годовой доступ: 2500 Stars/);
-assert.match(offer, /30 дней — 250 Telegram Stars/);
-assert.match(offer, /365 дней — 2500 Telegram Stars/);
-assert.doesNotMatch(landing, /Подписка за 500 Telegram/);
+assert.match(landing, />500 <span>Stars \/ 30 дней<\/span>/);
+assert.match(landing, /Годовой доступ: 5000 Stars/);
+assert.match(landing, /Пополните баланс минимум на 500 Stars/);
+assert.match(offer, /30 дней — 500 Telegram Stars/);
+assert.match(offer, /365 дней — 5000 Telegram Stars/);
+assert.match(offer, /@PremiumBot/);
+assert.doesNotMatch(landing, /Подписка за 250 Telegram/);
 
 console.log("Mini App redesign smoke passed");

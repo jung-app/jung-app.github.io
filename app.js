@@ -930,8 +930,8 @@ function upgradeSection(billing, access) {
     sec.appendChild(closed);
     return sec;
   }
-  const monthly = Number(b.monthly_xtr) || 250;
-  const annual = Number(b.annual_xtr) || 2500;
+  const monthly = Number(b.monthly_xtr) || 500;
+  const annual = Number(b.annual_xtr) || 5000;
   const annualAvailable = b.annual_available !== false;
   const plans = el("div", "upgrade-plans");
   const feedback = el("p", "payment-feedback");
@@ -960,17 +960,17 @@ function upgradeSection(billing, access) {
   sec.appendChild(plans);
   sec.appendChild(feedback);
   const guide = el("div", "stars-guide");
-  guide.appendChild(el("strong", "stars-guide-title", "Нет Stars?"));
-  guide.appendChild(
-    el(
-      "p",
-      "stars-guide-text",
-      "Открой @PremiumBot → /start → «Звёзды Telegram». Для месяца понадобится " +
-        monthly + " ⭐" +
-        (annualAvailable ? ", для года — " + annual + " ⭐" : "") +
-        ". Затем вернись и нажми нужный тариф.",
-    ),
-  );
+  guide.appendChild(el("strong", "stars-guide-title", "Как купить Stars"));
+  const steps = el("ol", "stars-guide-steps");
+  [
+    "Открой @PremiumBot и нажми /start.",
+    "Выбери «Звёзды Telegram».",
+    "Пополни баланс минимум на " + monthly + " ⭐ для месяца" +
+      (annualAvailable ? " или " + annual + " ⭐ для года." : "."),
+    "Проверь рублёвую цену у платёжного провайдера.",
+    "Вернись сюда, выбери тариф и сверь сумму в счёте Telegram.",
+  ].forEach((instruction) => steps.appendChild(el("li", null, instruction)));
+  guide.appendChild(steps);
   const premiumBtn = el("button", "premiumbot-btn", "Купить Stars в @PremiumBot");
   premiumBtn.type = "button";
   premiumBtn.addEventListener("click", () => {
@@ -979,6 +979,13 @@ function upgradeSection(billing, access) {
     else window.open(url, "_blank");
   });
   guide.appendChild(premiumBtn);
+  guide.appendChild(
+    el(
+      "p",
+      "stars-guide-note",
+      "Доступные пакеты и способы оплаты зависят от клиента Telegram и региона.",
+    ),
+  );
   sec.appendChild(guide);
   sec.appendChild(
     el(

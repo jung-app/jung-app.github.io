@@ -1327,9 +1327,29 @@ canvas {
 .stars-note {
   max-width: 780px;
   margin: 22px auto 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
   color: var(--muted);
   font-size: 13px;
-  text-align: center;
+  text-align: left;
+}
+.stars-note > strong {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+}
+.stars-note ol {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding-left: 21px;
+  line-height: 1.5;
+}
+.stars-note p {
+  margin: 10px 0 0;
+  line-height: 1.5;
 }
 .stars-note a {
   color: var(--gold);
