@@ -450,6 +450,7 @@ a {
 
 .today,
 .change-path,
+.outcome-card,
 .dynamics,
 .profile-details,
 .session-prep,
@@ -557,6 +558,79 @@ a {
 .change-path {
   margin-top: 14px;
   padding: 19px;
+}
+
+.outcome-card {
+  margin-top: 14px;
+  padding: 19px;
+}
+
+.outcome-intro {
+  margin: 0 0 15px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.outcome-question {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.outcome-question + .outcome-question {
+  margin-top: 17px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+
+.outcome-question-label {
+  width: 100%;
+  margin: 0 0 9px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.outcome-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.outcome-option {
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.outcome-option[aria-pressed="true"] {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.outcome-status {
+  min-height: 20px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.outcome-status:empty {
+  min-height: 0;
+  margin-top: 0;
 }
 
 .change-path-intro {
@@ -1353,6 +1427,12 @@ a {
   font-weight: 650;
 }
 
+.deep-session-measure {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
 .deep-session-delete {
   min-height: 44px;
   margin-top: 13px;
@@ -1811,6 +1891,7 @@ a {
 
   .today,
   .change-path,
+  .outcome-card,
   .dynamics,
   .session-prep,
   .deep-session-card,

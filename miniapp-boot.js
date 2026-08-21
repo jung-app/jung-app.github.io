@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260815-path-redesign-2";
+  var assetVersion = "20260821-outcome-evidence-1";
   var timer;
   var failed = false;
 
