@@ -34,11 +34,11 @@ assert.equal(
 );
 assert.match(
   html,
-  /rel="canonical" href="https:\/\/mindcoachbot\.ru\/landing\.html"/,
+  /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/,
 );
 assert.match(
   html,
-  /property="og:url" content="https:\/\/mindcoachbot\.ru\/landing\.html"/,
+  /property="og:url" content="https:\/\/mindcoachbot\.ru\/"/,
 );
 assert.match(html, /property="og:image"/);
 assert.match(html, /<meta\s+[\s\S]*?name="description"/);
@@ -58,7 +58,7 @@ assert.match(rootRedirectJs, /function waitForTelegramInit\(attempt\)/);
 assert.match(rootRedirectJs, /attempt < 30/);
 assert.match(rootRedirectJs, /waitForTelegramInit\(attempt \+ 1\)/);
 assert.match(rootRedirectJs, /miniapp-boot\.js\?v=/);
-assert.match(indexHtml, /root-redirect\.js\?v=20260728-miniapp-handshake/);
+assert.match(indexHtml, /root-redirect\.js\?v=20260822-editorial-path-1/);
 assert.doesNotMatch(indexHtml, /src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
 assert.match(indexHtml, /Content-Security-Policy/);
 assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);
@@ -91,11 +91,10 @@ assert.equal(
 assert.match(js, /mobileCtaObserver/);
 assert.match(js, /updateScrollMotion/);
 assert.match(html, /class="hero-scene"/);
-assert.match(css, /@keyframes mobile-scene-drift/);
-assert.match(
-  css,
-  /\.hero-scene\s*\{[\s\S]*?animation: mobile-scene-drift 8s ease-in-out infinite/,
-);
+assert.doesNotMatch(html, /class="constellation"/);
+assert.doesNotMatch(css, /animation:\s*[^;]*infinite/);
+assert.doesNotMatch(js, /pointermove|drawConstellation|--journey-shift/);
+assert.match(html, /class="brand-mark"[\s\S]*?viewBox="0 0 48 36"/);
 assert.match(css, /--journey-progress/);
 assert.match(css, /\.journey-steps\.has-motion li\.is-active[\s\S]*?transform: none/);
 assert.match(css, /\.mobile-cta\.is-visible/);
@@ -106,6 +105,9 @@ assert.match(html, /Данные можно выгрузить и удалить
 assert.match(html, /Разговоры не продаются/);
 assert.match(html, /не продаём разговоры рекламодателям/);
 assert.match(html, /Полные разговоры без трёхдневных пауз/);
+assert.match(html, /Новое оформление временно закрыто/);
+assert.match(html, /Не пополняйте Stars специально/);
+assert.match(html, /Когда оформление откроется: как купить Stars через @PremiumBot/);
 assert.match(html, /class="button button-primary"[\s\S]*?data-cta="pricing_free"/);
 assert.match(html, /class="button button-secondary"[\s\S]*?data-cta="pricing_month"/);
 assert.doesNotMatch(html, /target="_blank"/);

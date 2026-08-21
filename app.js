@@ -912,6 +912,9 @@ function upgradeSection(billing, access) {
   });
   sec.appendChild(perks);
   const b = billing || {};
+  const monthly = Number(b.monthly_xtr) || 500;
+  const annual = Number(b.annual_xtr) || 5000;
+  const annualAvailable = b.annual_available !== false;
   if (b.payments_available === false) {
     const closed = el("div", "checkout-closed");
     closed.appendChild(el("strong", null, "Новое оформление временно закрыто"));
@@ -919,7 +922,24 @@ function upgradeSection(billing, access) {
       el(
         "p",
         null,
-        "Если платёж уже был или нужен доступ, напиши /paysupport в чате. Новую оплату сейчас не открываем.",
+        "Бесплатный маршрут работает. Если платёж уже был или нужен доступ, напиши /paysupport в чате.",
+      ),
+    );
+    const terms = el("dl", "checkout-closed-terms");
+    [["30 дней", monthly + " Stars"], ["365 дней", annual + " Stars · разово"]].forEach(
+      ([period, price]) => {
+        const row = el("div", "checkout-closed-term");
+        row.appendChild(el("dt", null, period));
+        row.appendChild(el("dd", null, price));
+        terms.appendChild(row);
+      },
+    );
+    closed.appendChild(terms);
+    closed.appendChild(
+      el(
+        "p",
+        "checkout-closed-note",
+        "Не покупай Stars специально для MindCoach, пока оформление закрыто. После открытия их можно будет пополнить через @PremiumBot и сверить сумму в счёте Telegram.",
       ),
     );
     const status = el("p", "command-status");
@@ -930,9 +950,6 @@ function upgradeSection(billing, access) {
     sec.appendChild(closed);
     return sec;
   }
-  const monthly = Number(b.monthly_xtr) || 500;
-  const annual = Number(b.annual_xtr) || 5000;
-  const annualAvailable = b.annual_available !== false;
   const plans = el("div", "upgrade-plans");
   const feedback = el("p", "payment-feedback");
   feedback.hidden = true;
@@ -1301,6 +1318,7 @@ function todayBlock(p) {
   };
   let step = stages[stage];
   let ctaLabel = "Продолжить в чате";
+  let labelText = "Следующий шаг";
   const experiment = changeExperimentView(p.change_experiment);
   let showExperiment = Boolean(experiment);
   if (experiment) {
@@ -1327,10 +1345,11 @@ function todayBlock(p) {
       state:
         latestMemory.kind === "effective_strategy"
           ? "Нашлась рабочая опора"
-          : "Вернёмся к твоему шагу",
-      next: latestMemory.summary + " Что изменилось после последнего разговора?",
+          : "Вернёмся к важной теме",
+      next: latestMemory.summary,
     };
-    ctaLabel = "Отметить, что изменилось";
+    labelText = "К чему вернуться";
+    ctaLabel = "Продолжить эту тему";
   }
   if (!step && p.completeness && p.completeness.missing && p.completeness.missing.length) {
     step = {
@@ -1354,7 +1373,7 @@ function todayBlock(p) {
   }
   const sec = el("section", "today");
   if (showExperiment) sec.classList.add("today--experiment");
-  labelSection(sec, "today-heading", "Следующий шаг", "today-label");
+  labelSection(sec, "today-heading", labelText, "today-label");
   sec.appendChild(el("strong", "today-state", step.state));
   sec.appendChild(el("p", "today-q", step.next));
   if (showExperiment) {
