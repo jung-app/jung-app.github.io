@@ -7,7 +7,6 @@
   var header = document.querySelector("[data-header]");
   var menuButton = document.querySelector(".menu-toggle");
   var navigation = document.querySelector(".site-nav");
-  var heroVisual = document.querySelector("[data-hero-visual]");
   var heroSection = document.querySelector(".hero");
   var finalSection = document.querySelector(".final-cta");
   var mobileCta = document.querySelector("[data-mobile-cta]");
@@ -57,18 +56,6 @@
   }
 
   function updateScrollMotion() {
-    if (!reducedMotion && heroVisual && heroSection) {
-      var heroBounds = heroSection.getBoundingClientRect();
-      var heroProgress = Math.max(
-        0,
-        Math.min(1, -heroBounds.top / Math.max(heroBounds.height, 1)),
-      );
-      heroVisual.style.setProperty(
-        "--sy",
-        (heroProgress * 22).toFixed(1) + "px",
-      );
-    }
-
     if (!journeySection || !journeySteps || !journeyItems.length) return;
     var journeyBounds = journeySteps.getBoundingClientRect();
     var viewportAnchor = window.innerHeight * 0.52;
@@ -83,10 +70,6 @@
     journeySection.style.setProperty(
       "--journey-progress",
       journeyProgress.toFixed(4),
-    );
-    journeySection.style.setProperty(
-      "--journey-shift",
-      (journeyProgress * 160 - 80).toFixed(1) + "px",
     );
     journeySteps.style.setProperty(
       "--journey-progress",
@@ -196,21 +179,6 @@
       viewObserver.observe(section);
     });
 
-    if (heroVisual) {
-      var motionObserver = new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (entry) {
-            heroVisual.style.setProperty(
-              "--motion-state",
-              entry.isIntersecting ? "running" : "paused",
-            );
-          });
-        },
-        { threshold: 0.05 },
-      );
-      motionObserver.observe(heroVisual);
-    }
-
     if (mobileCta && heroSection && finalSection) {
       var mobileCtaObserver = new IntersectionObserver(
         function (entries) {
@@ -236,89 +204,12 @@
 
   track("hero_view");
 
-  if (
-    heroVisual &&
-    !reducedMotion &&
-    window.matchMedia("(pointer: fine)").matches
-  ) {
-    var frame = 0;
-    heroVisual.addEventListener("pointermove", function (event) {
-      if (frame) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(function () {
-        var bounds = heroVisual.getBoundingClientRect();
-        var x = (event.clientX - bounds.left) / bounds.width - 0.5;
-        var y = (event.clientY - bounds.top) / bounds.height - 0.5;
-        heroVisual.style.setProperty("--ry", (x * 9).toFixed(2) + "deg");
-        heroVisual.style.setProperty("--rx", (-y * 7).toFixed(2) + "deg");
-      });
-    });
-    heroVisual.addEventListener("pointerleave", function () {
-      heroVisual.style.setProperty("--ry", "5deg");
-      heroVisual.style.setProperty("--rx", "-4deg");
-    });
-  }
-
-  function drawConstellation() {
-    var canvas = document.getElementById("constellation");
-    if (!canvas || reducedMotion) return;
-    var context = canvas.getContext("2d", { alpha: true });
-    if (!context) return;
-    var ratio = Math.min(window.devicePixelRatio || 1, 1.5);
-    var width = window.innerWidth;
-    var height = window.innerHeight;
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.clearRect(0, 0, width, height);
-
-    var count = Math.min(44, Math.max(20, Math.round(width / 34)));
-    var points = [];
-    var seed = 7307;
-    function random() {
-      seed = (seed * 16807) % 2147483647;
-      return (seed - 1) / 2147483646;
-    }
-    for (var i = 0; i < count; i += 1) {
-      points.push({
-        x: random() * width,
-        y: random() * height,
-        r: random() * 1.1 + 0.35,
-      });
-    }
-    context.lineWidth = 0.45;
-    points.forEach(function (point, index) {
-      context.fillStyle =
-        index % 7 === 0 ? "rgba(239,199,123,.42)" : "rgba(191,207,226,.25)";
-      context.beginPath();
-      context.arc(point.x, point.y, point.r, 0, Math.PI * 2);
-      context.fill();
-      for (var j = index + 1; j < points.length; j += 1) {
-        var other = points[j];
-        var distance = Math.hypot(point.x - other.x, point.y - other.y);
-        if (distance < 128) {
-          context.strokeStyle =
-            "rgba(155,177,202," +
-            ((1 - distance / 128) * 0.075).toFixed(3) +
-            ")";
-          context.beginPath();
-          context.moveTo(point.x, point.y);
-          context.lineTo(other.x, other.y);
-          context.stroke();
-        }
-      }
-    });
-  }
-
-  var resizeTimer;
   window.addEventListener(
     "resize",
     function () {
-      window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(drawConstellation, 120);
       if (window.innerWidth > 760) closeMenu();
       scheduleViewportUpdate();
     },
     { passive: true },
   );
-  drawConstellation();
 })();

@@ -10,12 +10,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260822-price-v3-1/);
+assert.match(html, /styles\.css\?v=20260822-editorial-path-1/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260822-price-v3-1"/);
+assert.match(boot, /assetVersion = "20260822-editorial-path-1"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -61,6 +61,9 @@ assert.match(app, /\/export/);
 
 assert.match(app, /payments_available === false/);
 assert.match(app, /Новое оформление временно закрыто/);
+assert.match(app, /Не покупай Stars специально для MindCoach/);
+assert.match(app, /\[\["30 дней", monthly \+ " Stars"\]/);
+assert.match(app, /\["365 дней", annual \+ " Stars · разово"\]\]/);
 assert.match(app, /Number\(b\.monthly_xtr\) \|\| 500/);
 assert.match(app, /Number\(b\.annual_xtr\) \|\| 5000/);
 assert.match(app, /@PremiumBot/);
@@ -88,6 +91,9 @@ assert.match(app, /Сессия завершилась/);
 assert.match(app, /Обновить статус/);
 assert.match(app, /function changeExperimentView\(raw\)/);
 assert.match(app, /Пауза тоже часть пути/);
+assert.match(app, /labelText = "К чему вернуться"/);
+assert.match(app, /ctaLabel = "Продолжить эту тему"/);
+assert.doesNotMatch(app, /latestMemory\.summary \+ " Что изменилось/);
 assert.match(app, /\/api\/memory\/forget/);
 assert.match(app, /Забыть именно эту запись/);
 assert.match(app, /не восстановится автоматически/);

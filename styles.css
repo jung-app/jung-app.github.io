@@ -1748,6 +1748,48 @@ a {
   font-size: 14px;
 }
 
+.checkout-closed-terms {
+  display: grid;
+  gap: 1px;
+  margin: 12px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--line);
+}
+
+.checkout-closed-term {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 11px;
+  background: var(--surface);
+}
+
+.checkout-closed-term dt,
+.checkout-closed-term dd {
+  margin: 0;
+}
+
+.checkout-closed-term dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.checkout-closed-term dd {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: right;
+}
+
+.checkout-closed .checkout-closed-note {
+  color: var(--text);
+  font-size: 13px;
+}
+
 .checkout-closed .command-action {
   width: 100%;
 }
