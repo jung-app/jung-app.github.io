@@ -20,10 +20,10 @@
       href="https://fonts.googleapis.com/css2?family=Lora:wght@600&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./admin.css?v=20260822-admin-1" />
+    <link rel="stylesheet" href="./admin.css?v=20260822-admin-2" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="./config.js?v=20260822-admin-1"></script>
-    <script src="./admin.js?v=20260822-admin-1" defer></script>
+    <script src="./admin.js?v=20260822-admin-2" defer></script>
   </head>
   <body>
     <div class="control-shell">
@@ -106,7 +106,7 @@
           <form id="user-search" class="search-card" novalidate>
             <div class="search-copy">
               <h2>Найти пользователя</h2>
-              <p>Только служебный статус. Переписка и психологический профиль не загружаются.</p>
+              <p>Ищет и запись в базе, и старый бессрочный owner-доступ. Переписка и психологический профиль не загружаются.</p>
             </div>
             <label for="telegram-id">Telegram ID</label>
             <div class="search-row">
@@ -125,6 +125,21 @@
             <p id="search-error" class="field-error" role="alert" hidden></p>
           </form>
           <div id="user-content" aria-live="polite"></div>
+          <section class="directory-card" aria-labelledby="directory-title">
+            <div class="section-heading">
+              <div>
+                <h2 id="directory-title">Доступы и пользователи</h2>
+                <p>Сначала особые доступы, затем недавно активные аккаунты.</p>
+              </div>
+              <button id="directory-refresh" class="compact-button" type="button">Обновить</button>
+            </div>
+            <div id="directory-content" aria-live="polite" aria-busy="true">
+              <div class="loading-inline" role="status">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Загружаю каталог…</span>
+              </div>
+            </div>
+          </section>
         </section>
       </main>
     </div>

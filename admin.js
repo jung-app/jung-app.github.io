@@ -7,8 +7,10 @@
   var timeoutMs = 10000;
   var overviewContent = document.getElementById("overview-content");
   var userContent = document.getElementById("user-content");
+  var directoryContent = document.getElementById("directory-content");
   var searchError = document.getElementById("search-error");
   var currentUser = null;
+  var directoryLoaded = false;
 
   function element(tag, className, text) {
     var node = document.createElement(tag);
@@ -68,12 +70,12 @@
       return ["Нет доступа", "Jung Control открывается только аккаунтам из owner allow-list."];
     }
     if (error && error.message === "not-found") {
-      return ["Пользователь не найден", "Пусть человек сначала откроет бота через /start."];
+      return ["Доступ не найден", "Нет ни записи пользователя в базе, ни legacy owner-доступа с таким ID."];
     }
     if (error && error.message === "recurring") {
       return [
-        "Подарок не применён",
-        "У пользователя активна recurring-подписка. Локальные дни разойдутся с графиком списаний Telegram.",
+        "Действие заблокировано",
+        "У пользователя активна recurring-подписка. Не меняй подарочные дни, пока они могут разойтись с графиком списаний Telegram.",
       ];
     }
     if (error && error.message === "timeout") {
@@ -368,6 +370,11 @@
   }
 
   function renderGrantForm(card, user) {
+    if (!user.record_exists) {
+      var missingNote = element("p", "grant-note", "Подарок можно выдать после того, как пользователь хотя бы один раз откроет бота через /start.");
+      card.appendChild(missingNote);
+      return;
+    }
     var subscription = user.subscription || {};
     var paidRecurring = Boolean(subscription.auto_renew && subscription.plan !== "free");
     if (paidRecurring) {
@@ -382,8 +389,8 @@
     var form = element("form", "grant-form");
     form.noValidate = true;
 
-    var daysLabel = element("label");
-    daysLabel.appendChild(element("span", null, "Срок"));
+    var daysField = element("label");
+    daysField.appendChild(element("span", null, "Срок"));
     var days = element("select");
     days.name = "days";
     [1, 7, 14, 30, 90, 365].forEach(function (value) {
@@ -392,8 +399,8 @@
       if (value === 7) option.selected = true;
       days.appendChild(option);
     });
-    daysLabel.appendChild(days);
-    form.appendChild(daysLabel);
+    daysField.appendChild(days);
+    form.appendChild(daysField);
 
     var reasonLabel = element("label");
     reasonLabel.appendChild(element("span", null, "Причина, 3–200 символов"));
@@ -451,16 +458,109 @@
     card.appendChild(details);
   }
 
+  function renderRevokePanel(parent, user, kind, grant) {
+    var isOwnerOverride = kind === "owner_override";
+    var details = element("details", "revoke-panel");
+    details.appendChild(element("summary", null, isOwnerOverride ? "Отозвать legacy owner-доступ" : "Отозвать этот подарок"));
+    var form = element("form", "grant-form revoke-form");
+    form.noValidate = true;
+    var consequence = isOwnerOverride
+      ? "Будут немедленно выключены полный доступ и права Jung Control. Изменение сохранится после перезапуска."
+      : "Срок полного доступа уменьшится на " + daysLabel(grant.days) + ". Оплаты и другие источники доступа останутся.";
+    form.appendChild(element("p", "danger-note", consequence));
+    var reasonField = element("label");
+    reasonField.appendChild(element("span", null, "Причина отзыва, 3–200 символов"));
+    var reason = element("textarea");
+    reason.maxLength = 200;
+    reason.required = true;
+    reason.placeholder = "Например: тестовый доступ завершён";
+    reasonField.appendChild(reason);
+    form.appendChild(reasonField);
+    var formError = element("p", "field-error");
+    formError.setAttribute("role", "alert");
+    formError.hidden = true;
+    form.appendChild(formError);
+    var submit = element("button", "danger-button", "Проверить и отозвать");
+    submit.type = "submit";
+    form.appendChild(submit);
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var cleanReason = reason.value.trim();
+      if (cleanReason.length < 3) {
+        formError.textContent = "Укажи конкретную причину отзыва.";
+        formError.hidden = false;
+        reason.focus();
+        return;
+      }
+      formError.hidden = true;
+      var target = "ID " + user.telegram_id;
+      var accepted = await confirmAction("Отозвать доступ у " + target + "? " + consequence + " Причина: " + cleanReason);
+      if (!accepted) return;
+      submit.disabled = true;
+      submit.textContent = "Отзываю…";
+      var payload = {
+        telegram_id: user.telegram_id,
+        kind: kind,
+        reason: cleanReason,
+        request_id: newRequestId(),
+      };
+      if (grant) payload.grant_id = grant.id;
+      try {
+        var result = await fetchJson("/api/admin/revoke", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        currentUser = result.user;
+        renderUser(result.user);
+        directoryLoaded = false;
+        loadDirectory();
+        announce(result.applied ? "Доступ отозван" : "Этот отзыв уже был применён");
+      } catch (error) {
+        var copy = errorCopy(error, "отзыв доступа");
+        formError.textContent = copy[0] + ". " + copy[1];
+        formError.hidden = false;
+        submit.disabled = false;
+        submit.textContent = "Проверить и отозвать";
+      }
+    });
+    details.appendChild(form);
+    parent.appendChild(details);
+  }
+
+  function renderOwnerOverride(card, user) {
+    if (!user.owner_override) return;
+    var active = user.owner_override === "active";
+    var block = element("section", "override-card " + (active ? "is-active" : "is-revoked"));
+    block.appendChild(element("h3", null, active ? "Legacy owner-доступ активен" : "Legacy owner-доступ отозван"));
+    block.appendChild(element("p", null, active
+      ? "Этот ID получает полный доступ и может открывать Jung Control независимо от записи в базе."
+      : "Конфигурация всё ещё содержит ID, но сервер блокирует и премиум, и права администратора."));
+    if (active && user.is_self) {
+      block.appendChild(element("p", "protected-note", "Это ваш текущий вход. Самоотзыв заблокирован, чтобы не потерять управление."));
+    } else if (active) {
+      renderRevokePanel(block, user, "owner_override", null);
+    }
+    card.appendChild(block);
+  }
+
   function renderUser(user) {
     currentUser = user;
     var card = element("article", "user-card");
     var title = element("div", "user-title");
     title.appendChild(element("h2", null, "ID " + user.telegram_id));
-    title.appendChild(element("span", "status-chip", user.is_onboarded ? "Онбординг завершён" : "Онбординг не завершён"));
+    var chipText = user.owner_override === "active"
+      ? "Owner-доступ"
+      : user.owner_override === "revoked"
+        ? "Owner отозван"
+        : user.is_onboarded ? "Онбординг завершён" : "Онбординг не завершён";
+    title.appendChild(element("span", "status-chip " + (user.owner_override === "revoked" ? "is-revoked" : ""), chipText));
     card.appendChild(title);
+
+    renderOwnerOverride(card, user);
 
     var subscription = user.subscription || {};
     var details = element("ul", "detail-list");
+    details.appendChild(detailRow("Запись в базе", user.record_exists ? "Есть" : "Нет, только конфигурация"));
     details.appendChild(detailRow("Последняя активность", dateTime(user.last_active_at)));
     details.appendChild(detailRow("Доступ", planLabel(subscription)));
     details.appendChild(detailRow("Этап", stageLabel(subscription.activation_stage)));
@@ -477,9 +577,15 @@
       card.appendChild(grantsTitle);
       var grantList = element("ul", "grant-list");
       grants.forEach(function (grant) {
-        var item = element("li");
-        item.appendChild(element("strong", null, grantSourceLabel(grant.source) + " · " + daysLabel(grant.days)));
+        var item = element("li", grant.revoked_at ? "is-revoked" : "");
+        var state = grant.revoked_at ? " · отозван" : "";
+        item.appendChild(element("strong", null, grantSourceLabel(grant.source) + " · " + daysLabel(grant.days) + state));
         item.appendChild(element("span", null, (grant.reason || "Без причины") + " · " + dateTime(grant.created_at)));
+        if (grant.revoked_at) {
+          item.appendChild(element("span", "revocation-copy", "Отзыв: " + (grant.revocation_reason || "без причины") + " · " + dateTime(grant.revoked_at)));
+        } else if (grant.source === "gift" && grant.id) {
+          renderRevokePanel(item, user, "gift", grant);
+        }
         grantList.appendChild(item);
       });
       card.appendChild(grantList);
@@ -499,6 +605,62 @@
     }
   }
 
+  function directoryAccessLabel(user) {
+    if (user.owner_override === "active") return "Owner · полный доступ";
+    if (user.owner_override === "revoked") return "Owner · отозван";
+    if (Number(user.active_gifts) > 0) return "Подарок активен";
+    if (user.auto_renew) return (user.plan || "Plus") + " · recurring";
+    if (user.plan && user.plan !== "free") return String(user.plan).toUpperCase();
+    return "Бесплатный";
+  }
+
+  function renderDirectory(rows) {
+    var list = element("ul", "directory-list");
+    if (!rows || !rows.length) {
+      var empty = element("div", "empty-card");
+      empty.appendChild(element("h3", null, "Пользователей пока нет"));
+      empty.appendChild(element("p", null, "Каталог заполнится после первого /start."));
+      directoryContent.replaceChildren(empty);
+      directoryContent.setAttribute("aria-busy", "false");
+      return;
+    }
+    rows.forEach(function (user) {
+      var item = element("li");
+      var button = element("button", "directory-row");
+      button.type = "button";
+      var copy = element("span", "directory-copy");
+      copy.appendChild(element("strong", null, "ID " + user.telegram_id));
+      var activity = user.record_exists ? "Активность: " + dateTime(user.last_active_at) : "Нет записи в базе";
+      copy.appendChild(element("small", null, activity));
+      button.appendChild(copy);
+      var accessClass = user.owner_override === "revoked" ? "is-revoked" : "";
+      button.appendChild(element("span", "status-chip " + accessClass, directoryAccessLabel(user)));
+      button.addEventListener("click", function () {
+        document.getElementById("telegram-id").value = user.telegram_id;
+        loadUser(user.telegram_id);
+        userContent.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      item.appendChild(button);
+      list.appendChild(item);
+    });
+    directoryContent.replaceChildren(list);
+    directoryContent.setAttribute("aria-busy", "false");
+  }
+
+  async function loadDirectory() {
+    directoryContent.setAttribute("aria-busy", "true");
+    directoryContent.replaceChildren(loadingCard("Загружаю доступы…"));
+    try {
+      var body = await fetchJson("/api/admin/users");
+      renderDirectory(body.users || []);
+      directoryLoaded = true;
+      announce("Каталог доступов обновлён");
+    } catch (error) {
+      directoryContent.setAttribute("aria-busy", "false");
+      directoryContent.replaceChildren(errorCard(error, "каталог доступов", loadDirectory));
+    }
+  }
+
   function selectTab(name, focus) {
     document.querySelectorAll("[role=tab]").forEach(function (tab) {
       var active = tab.dataset.tab === name;
@@ -513,6 +675,7 @@
       if (name === "user") tg.BackButton.show();
       else tg.BackButton.hide();
     }
+    if (name === "user" && !directoryLoaded) loadDirectory();
   }
 
   document.querySelectorAll("[role=tab]").forEach(function (tab) {
@@ -538,8 +701,10 @@
 
   document.getElementById("window-filter").addEventListener("change", loadOverview);
   document.getElementById("source-filter").addEventListener("change", loadOverview);
+  document.getElementById("directory-refresh").addEventListener("click", loadDirectory);
   document.getElementById("refresh").addEventListener("click", function () {
     if (document.getElementById("overview-panel").hidden) {
+      loadDirectory();
       if (currentUser) loadUser(currentUser.telegram_id);
     } else {
       loadOverview();
