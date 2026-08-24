@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260822-editorial-compact-2";
+      boot.src = "./miniapp-boot.js?v=20260824-memory-center";
       document.body.appendChild(boot);
     });
   }

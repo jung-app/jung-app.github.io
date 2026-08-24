@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260822-editorial-compact-2";
+  var assetVersion = "20260824-memory-center";
   var timer;
   var failed = false;
 

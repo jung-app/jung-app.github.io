@@ -10,12 +10,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260822-editorial-compact-2/);
+assert.match(html, /styles\.css\?v=20260824-memory-center/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260822-editorial-compact-2"/);
+assert.match(boot, /assetVersion = "20260824-memory-center"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -56,8 +56,13 @@ assert.match(app, /Связанный с ним текущий шаг тоже �
 assert.match(app, /Подтверждённый итог пока не сохранён/);
 assert.match(app, /Скопировать \/imagine/);
 assert.match(app, /Ты управляешь памятью/);
-assert.match(app, /\/deleteall/);
-assert.match(app, /\/export/);
+assert.match(app, /\/api\/memory\/control/);
+assert.match(app, /\/api\/memory\/export/);
+assert.match(app, /delete_all/);
+assert.match(app, /delete_class/);
+assert.match(app, /Новые записи на паузе/);
+assert.match(app, /Почему это здесь/);
+assert.match(app, /Добавить важное самому/);
 
 assert.match(app, /payments_available === false/);
 assert.match(app, /Новое оформление временно закрыто/);
@@ -86,6 +91,8 @@ assert.match(styles, /min-width: 320px/);
 assert.match(styles, /min-height: 44px/);
 assert.match(styles, /\.outcome-option[\s\S]*min-height: 48px/);
 assert.match(styles, /\.outcome-options[\s\S]*gap: 8px/);
+assert.match(styles, /\.memory-origin-toggle,[\s\S]*min-height: 44px/);
+assert.match(styles, /@media \(max-width: 359px\)[\s\S]*\.memory-global-actions/);
 
 assert.match(app, /Сессия завершилась/);
 assert.match(app, /Обновить статус/);
@@ -94,10 +101,8 @@ assert.match(app, /Пауза тоже часть пути/);
 assert.match(app, /labelText = "К чему вернуться"/);
 assert.match(app, /ctaLabel = "Продолжить эту тему"/);
 assert.doesNotMatch(app, /latestMemory\.summary \+ " Что изменилось/);
-assert.match(app, /\/api\/memory\/forget/);
-assert.match(app, /Забыть именно эту запись/);
-assert.match(app, /не восстановится автоматически/);
-assert.match(app, /через \/reset/);
+assert.match(app, /item\.needs_confirmation \? "reject" : "delete"/);
+assert.match(app, /История разговора останется до полного сброса данных/);
 assert.match(html, /id="action-status"[^>]*role="status"[^>]*aria-live="polite"/);
 assert.match(app, /function psycheMap\(sections, archetypes\)/);
 assert.doesNotMatch(app, /root\.appendChild\(pathBlock/);
