@@ -11,6 +11,9 @@
   var searchError = document.getElementById("search-error");
   var currentUser = null;
   var directoryLoaded = false;
+  var overviewRequest = 0;
+  var userRequest = 0;
+  var directoryRequest = 0;
 
   function element(tag, className, text) {
     var node = document.createElement(tag);
@@ -284,6 +287,7 @@
   }
 
   async function loadOverview() {
+    var requestId = ++overviewRequest;
     overviewContent.setAttribute("aria-busy", "true");
     overviewContent.replaceChildren(loadingCard("Собираю рабочий срез…"));
     var windowValue = document.getElementById("window-filter").value;
@@ -292,10 +296,12 @@
     if (source) query += "&source=" + encodeURIComponent(source);
     try {
       var body = await fetchJson("/api/admin/overview" + query);
+      if (requestId !== overviewRequest) return;
       syncSourceOptions(body.sources || []);
       renderOverview(body);
       announce("Обзор обновлён");
     } catch (error) {
+      if (requestId !== overviewRequest) return;
       overviewContent.setAttribute("aria-busy", "false");
       overviewContent.replaceChildren(errorCard(error, "обзор", loadOverview));
     }
@@ -595,12 +601,15 @@
   }
 
   async function loadUser(telegramId) {
+    var requestId = ++userRequest;
     userContent.replaceChildren(loadingCard("Проверяю доступ и платежи…"));
     try {
       var body = await fetchJson("/api/admin/user?telegram_id=" + encodeURIComponent(telegramId));
+      if (requestId !== userRequest) return;
       renderUser(body.user);
       announce("Пользователь найден");
     } catch (error) {
+      if (requestId !== userRequest) return;
       userContent.replaceChildren(errorCard(error, "пользователя", function () { loadUser(telegramId); }));
     }
   }
@@ -648,14 +657,17 @@
   }
 
   async function loadDirectory() {
+    var requestId = ++directoryRequest;
     directoryContent.setAttribute("aria-busy", "true");
     directoryContent.replaceChildren(loadingCard("Загружаю доступы…"));
     try {
       var body = await fetchJson("/api/admin/users");
+      if (requestId !== directoryRequest) return;
       renderDirectory(body.users || []);
       directoryLoaded = true;
       announce("Каталог доступов обновлён");
     } catch (error) {
+      if (requestId !== directoryRequest) return;
       directoryContent.setAttribute("aria-busy", "false");
       directoryContent.replaceChildren(errorCard(error, "каталог доступов", loadDirectory));
     }

@@ -1278,6 +1278,33 @@ a {
   font-size: 13px;
 }
 
+.session-urgent {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.session-urgent p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.session-emergency {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: var(--danger);
+  color: var(--on-action);
+  font-weight: 750;
+  text-decoration: none;
+}
+
 .session-back {
   width: 100%;
   margin-top: 8px;

@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260824-memory-center";
+      boot.src = "./miniapp-boot.js?v=20260824-prepaid-hardening";
       document.body.appendChild(boot);
     });
   }
@@ -43,6 +43,10 @@
     if (webApp && webApp.initData) {
       settled = true;
       window.clearTimeout(timeout);
+      // initData уже принят SDK. Не оставляем replayable bearer в history и referrer.
+      if (window.history && typeof window.history.replaceState === "function") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
       loadMiniApp();
       return;
     }
