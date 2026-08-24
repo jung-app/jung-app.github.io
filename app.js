@@ -1732,7 +1732,7 @@ function memoryGroup(group, types) {
   copy.appendChild(el("h3", "memory-group-title serif", group.label));
   copy.appendChild(el("p", "memory-group-description", group.description));
   head.appendChild(copy);
-  const clear = el("button", "memory-group-clear", "Удалить раздел");
+  const clear = el("button", "memory-group-clear", "Удалить записи раздела");
   clear.type = "button";
   clear.addEventListener("click", async () => {
     const ok = await confirmAction(
@@ -1750,11 +1750,11 @@ function memoryGroup(group, types) {
       clear.textContent = "Повторить удаление";
     }
   });
-  head.appendChild(clear);
   section.appendChild(head);
   const list = el("div", "memory-record-list");
   group.items.forEach((item) => list.appendChild(memoryRecord(item, types)));
   section.appendChild(list);
+  section.appendChild(clear);
   return section;
 }
 
@@ -2465,7 +2465,7 @@ function memoryControlsBlock(center) {
     el(
       "p",
       "memory-controls-intro",
-      "Можно забрать копию или удалить все записи прямо здесь. Рабочие гипотезы подтверждаются отдельно ниже в профиле.",
+      "Можно забрать копию или удалить все записи прямо здесь. Рабочие гипотезы подтверждаются отдельно в разделе «Путь».",
     ),
   );
   const status = el("p", "command-status");

@@ -79,7 +79,7 @@
   --fallback-link: #75c99e;
   --accent: #ed8a53;
   --ok: #6fc397;
-  --danger: #ff8a80;
+  --danger: var(--tg-theme-destructive-text-color, #ff8a80);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
 }
 
@@ -1654,8 +1654,9 @@ a {
 }
 
 .memory-group-clear {
+  display: block;
   min-height: 44px;
-  flex: 0 0 auto;
+  margin: 12px 0 0 auto;
   padding: 6px 9px;
   font-size: 11px;
 }
