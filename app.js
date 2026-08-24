@@ -284,6 +284,33 @@ function normalizeProfile(raw) {
   p.archetypes = arrayOfObjects(p.archetypes);
   p.habits = arrayOfObjects(p.habits);
   p.memories = arrayOfObjects(p.memories);
+  const memoryCenter = objectOrEmpty(p.memory_center);
+  p.memory_center = {
+    writes_paused: Boolean(memoryCenter.writes_paused),
+    manual_types: arrayOfObjects(memoryCenter.manual_types)
+      .map((item) => ({
+        value: typeof item.value === "string" ? item.value : "",
+        label: typeof item.label === "string" ? item.label : "",
+      }))
+      .filter((item) => item.value && item.label),
+    groups: arrayOfObjects(memoryCenter.groups).map((group) => ({
+      class: typeof group.class === "string" ? group.class : "",
+      label: typeof group.label === "string" ? group.label : "",
+      description: typeof group.description === "string" ? group.description : "",
+      items: arrayOfObjects(group.items).map((item) => ({
+        key: typeof item.key === "string" ? item.key : "",
+        type: typeof item.type === "string" ? item.type : "",
+        type_label: typeof item.type_label === "string" ? item.type_label : "Важное",
+        content: typeof item.content === "string" ? item.content : "",
+        source: typeof item.source === "string" ? item.source : "",
+        why: typeof item.why === "string" ? item.why : "",
+        recorded_on: typeof item.recorded_on === "string" ? item.recorded_on : "",
+        expires_on: typeof item.expires_on === "string" ? item.expires_on : "",
+        needs_confirmation: Boolean(item.needs_confirmation),
+        editable: Boolean(item.editable),
+      })).filter((item) => item.key && item.content),
+    })).filter((group) => group.class && group.label),
+  };
   p.threads = arrayOfObjects(p.threads).map((thread) => ({
     ...thread,
     members: arrayOfObjects(thread.members),
@@ -341,6 +368,21 @@ async function dismissSection(key) {
   return fetchProfile(true);
 }
 
+async function confirmSection(key) {
+  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/profile/confirm", {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ key }),
+  });
+  if (!res.ok) throw new Error("http-" + res.status);
+  await res.json();
+  return fetchProfile(true);
+}
+
 // Удалить один подтверждённый факт по opaque key, который бэкенд уже вернул владельцу.
 async function forgetMemory(key) {
   const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
@@ -357,6 +399,42 @@ async function forgetMemory(key) {
   if (!res.ok) throw new Error("http-" + res.status);
   await res.json();
   return fetchProfile(true);
+}
+
+async function controlMemory(action, payload) {
+  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/memory/control", {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ action, ...(payload || {}) }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  await res.json();
+  return fetchProfile(true);
+}
+
+async function downloadMemoryExport() {
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(freshApiUrl("/api/memory/export"), {
+    headers: apiHeaders(initData, false),
+    cache: "no-store",
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = el("a");
+  link.href = url;
+  link.download = "jung-bot-my-data.zip";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function deleteDeepSession(sessionId) {
@@ -535,7 +613,7 @@ function insightCard(item) {
 
   // «Это не про меня» — только для insight-разделов (у них есть key); архетипы без key.
   // Профиль обязан уметь ошибаться: человек вправе снять гипотезу, и она не вернётся.
-  if (item.key) card.appendChild(dismissRow(item.key, item.label));
+  if (item.key) card.appendChild(dismissRow(item.key, item.label, item.user_confirmed));
   return card;
 }
 
@@ -592,8 +670,24 @@ function habitCard(item) {
   return card;
 }
 
-function dismissRow(key, label) {
+function dismissRow(key, label, alreadyConfirmed) {
   const row = el("div", "card-actions");
+  const confirm = el("button", "card-confirm", "Да, это про меня");
+  confirm.type = "button";
+  confirm.addEventListener("click", async () => {
+    confirm.disabled = true;
+    confirm.textContent = "Подтверждаю…";
+    try {
+      const updated = await confirmSection(key);
+      announceAction("Гипотеза подтверждена тобой.");
+      renderedProfileFingerprint = null;
+      renderFetchedProfile(updated);
+    } catch (_) {
+      confirm.disabled = false;
+      confirm.textContent = "Повторить подтверждение";
+      announceAction("Не удалось подтвердить гипотезу. Проверь связь.");
+    }
+  });
   const btn = el("button", "card-dismiss", "Это не про меня");
   btn.type = "button";
   btn.addEventListener("click", async () => {
@@ -612,6 +706,7 @@ function dismissRow(key, label) {
       btn.textContent = "Не вышло — ещё раз";
     }
   });
+  if (!alreadyConfirmed) row.appendChild(confirm);
   row.appendChild(btn);
   return row;
 }
@@ -1496,65 +1591,216 @@ async function copyPlainText(text) {
   }
 }
 
-function memoryBlock(items) {
-  if (!items || !items.length) return null;
-  const sec = el("section", "memory-card");
-  labelSection(sec, "memory-heading", "Что я держу в уме", "memory-label");
-  sec.appendChild(
-    el(
-      "p",
-      "memory-note",
-      "Только важные факты, которые ты сообщил прямо. Рабочие гипотезы живут отдельно.",
-    ),
-  );
-  const list = el("ul", "memory-list");
-  items.slice(0, 6).forEach((item) => {
-    const row = el("li", "memory-item");
-    row.appendChild(el("span", "memory-mark", "✓"));
-    const summary = item.summary || "";
-    row.appendChild(el("span", "memory-item-text", summary));
-    const forget = el("button", "memory-forget", "Забыть");
-    const forgetStatus = el("span", "memory-forget-status");
-    forgetStatus.setAttribute("role", "status");
-    forgetStatus.setAttribute("aria-live", "polite");
-    forget.type = "button";
-    forget.setAttribute("aria-label", "Забыть запись: " + summary);
-    forget.addEventListener("click", async () => {
-      const ok = await confirmAction(
-        "Забыть именно эту запись? Она исчезнет из долговременной памяти и не восстановится автоматически. Исходный разговор останется в истории; полностью очистить его можно через /reset.",
-      );
-      if (!ok) return;
-      forget.disabled = true;
-      forget.setAttribute("aria-busy", "true");
-      forget.textContent = "Забываю…";
-      forgetStatus.textContent = "";
+function renderMemoryUpdate(updated, message) {
+  announceAction(message);
+  activeProfileTab = "memory";
+  renderedProfileFingerprint = null;
+  renderFetchedProfile(updated);
+  queueMicrotask(() => {
+    const tab = document.getElementById("tab-memory");
+    if (tab) tab.focus();
+  });
+}
+
+function memoryTypeSelect(types, selected) {
+  const select = el("select", "memory-input");
+  types.forEach((item) => {
+    const option = el("option", null, item.label);
+    option.value = item.value;
+    option.selected = item.value === selected;
+    select.appendChild(option);
+  });
+  return select;
+}
+
+function memoryEditForm(item, types) {
+  const details = el("details", "memory-edit");
+  details.appendChild(el("summary", "memory-edit-toggle", "Исправить"));
+  const form = el("form", "memory-form");
+  const typeId = "memory-edit-type-" + Math.random().toString(36).slice(2);
+  const textId = "memory-edit-text-" + Math.random().toString(36).slice(2);
+  const typeLabel = el("label", "memory-field-label", "Что это");
+  typeLabel.htmlFor = typeId;
+  const select = memoryTypeSelect(types, item.type);
+  select.id = typeId;
+  const textLabel = el("label", "memory-field-label", "Формулировка");
+  textLabel.htmlFor = textId;
+  const textarea = el("textarea", "memory-input memory-textarea");
+  textarea.id = textId;
+  textarea.maxLength = 280;
+  textarea.required = true;
+  textarea.value = item.content;
+  const status = el("p", "memory-action-status");
+  status.setAttribute("role", "status");
+  const save = el("button", "memory-primary", "Сохранить исправление");
+  save.type = "submit";
+  form.append(typeLabel, select, textLabel, textarea, save, status);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    save.textContent = "Сохраняю…";
+    try {
+      const updated = await controlMemory("edit", {
+        key: item.key,
+        type: select.value,
+        content: textarea.value,
+      });
+      renderMemoryUpdate(updated, "Запись исправлена.");
+    } catch (_) {
+      save.disabled = false;
+      save.textContent = "Повторить";
+      status.textContent = "Не удалось сохранить. Проверь формулировку и связь.";
+    }
+  });
+  details.appendChild(form);
+  return details;
+}
+
+function memoryRecord(item, types) {
+  const card = el("article", "memory-record");
+  const head = el("div", "memory-record-head");
+  head.appendChild(el("span", "memory-kind", item.type_label));
+  if (item.needs_confirmation) head.appendChild(el("span", "memory-pending", "ждёт решения"));
+  card.appendChild(head);
+  card.appendChild(el("p", "memory-record-text", item.content));
+
+  const provenance = el("details", "memory-origin");
+  provenance.appendChild(el("summary", "memory-origin-toggle", "Почему это здесь"));
+  const body = el("div", "memory-origin-body");
+  body.appendChild(el("p", null, item.source));
+  body.appendChild(el("p", null, item.why));
+  const dates = [item.recorded_on ? "Записано: " + fmtDate(item.recorded_on) : ""];
+  if (item.expires_on) dates.push("Удалится автоматически: " + fmtDate(item.expires_on));
+  body.appendChild(el("p", "memory-origin-date", dates.filter(Boolean).join(" · ")));
+  provenance.appendChild(body);
+  card.appendChild(provenance);
+
+  const actions = el("div", "memory-record-actions");
+  const status = el("p", "memory-action-status");
+  status.setAttribute("role", "status");
+  if (item.needs_confirmation) {
+    const confirm = el("button", "memory-primary", "Оставить");
+    confirm.type = "button";
+    confirm.addEventListener("click", async () => {
+      confirm.disabled = true;
       try {
-        const updated = await forgetMemory(item.key);
-        announceAction("Запись забыта.");
-        activeProfileTab = "memory";
-        renderedProfileFingerprint = null;
-        renderFetchedProfile(updated);
-        queueMicrotask(() => {
-          const tab = document.getElementById("tab-memory");
-          if (tab) tab.focus();
-        });
+        renderMemoryUpdate(
+          await controlMemory("confirm", { key: item.key }),
+          "Запись подтверждена.",
+        );
       } catch (_) {
-        forget.disabled = false;
-        forget.removeAttribute("aria-busy");
-        forget.textContent = "Повторить";
-        forgetStatus.textContent = "Не удалось забыть запись. Проверь связь.";
-        announceAction("Не удалось забыть запись. Проверь связь и повтори.");
+        confirm.disabled = false;
+        status.textContent = "Не удалось подтвердить. Проверь связь.";
       }
     });
-    row.appendChild(forget);
-    row.appendChild(forgetStatus);
-    list.appendChild(row);
-  });
-  sec.appendChild(list);
-  if (items.length > 6) {
-    sec.appendChild(el("p", "memory-more", "Ещё " + (items.length - 6) + " — в /memory и /export."));
+    actions.appendChild(confirm);
   }
-  return sec;
+  if (item.editable) actions.appendChild(memoryEditForm(item, types));
+  const remove = el("button", "memory-danger-quiet", item.needs_confirmation ? "Отклонить" : "Удалить");
+  remove.type = "button";
+  remove.addEventListener("click", async () => {
+    const ok = await confirmAction(
+      item.needs_confirmation
+        ? "Отклонить эту запись? Она не будет использоваться и не сохранится как факт."
+        : "Удалить эту запись? Она перестанет использоваться. История разговора останется до полного сброса данных.",
+    );
+    if (!ok) return;
+    remove.disabled = true;
+    remove.textContent = "Удаляю…";
+    try {
+      const action = item.needs_confirmation ? "reject" : "delete";
+      renderMemoryUpdate(
+        await controlMemory(action, { key: item.key }),
+        item.needs_confirmation ? "Запись отклонена." : "Запись удалена.",
+      );
+    } catch (_) {
+      remove.disabled = false;
+      remove.textContent = "Повторить";
+      status.textContent = "Не удалось удалить. Проверь связь.";
+    }
+  });
+  actions.appendChild(remove);
+  card.append(actions, status);
+  return card;
+}
+
+function memoryGroup(group, types) {
+  if (!group.items.length) return null;
+  const section = el("section", "memory-group");
+  const head = el("div", "memory-group-head");
+  const copy = el("div");
+  copy.appendChild(el("h3", "memory-group-title serif", group.label));
+  copy.appendChild(el("p", "memory-group-description", group.description));
+  head.appendChild(copy);
+  const clear = el("button", "memory-group-clear", "Удалить записи раздела");
+  clear.type = "button";
+  clear.addEventListener("click", async () => {
+    const ok = await confirmAction(
+      "Удалить все записи раздела «" + group.label + "»? Остальные разделы останутся.",
+    );
+    if (!ok) return;
+    clear.disabled = true;
+    try {
+      renderMemoryUpdate(
+        await controlMemory("delete_class", { class: group.class }),
+        "Раздел памяти очищен.",
+      );
+    } catch (_) {
+      clear.disabled = false;
+      clear.textContent = "Повторить удаление";
+    }
+  });
+  section.appendChild(head);
+  const list = el("div", "memory-record-list");
+  group.items.forEach((item) => list.appendChild(memoryRecord(item, types)));
+  section.appendChild(list);
+  section.appendChild(clear);
+  return section;
+}
+
+function memoryAddBlock(types) {
+  const details = el("details", "memory-add");
+  details.appendChild(el("summary", "memory-add-toggle", "Добавить важное самому"));
+  const intro = el(
+    "p",
+    "memory-add-intro",
+    "Запиши устойчивый факт, который поможет не повторять важное. Временные чувства и секреты сюда лучше не добавлять.",
+  );
+  const form = el("form", "memory-form");
+  const typeLabel = el("label", "memory-field-label", "Что это");
+  typeLabel.htmlFor = "memory-add-type";
+  const select = memoryTypeSelect(types, "goal");
+  select.id = "memory-add-type";
+  const textLabel = el("label", "memory-field-label", "Что помнить");
+  textLabel.htmlFor = "memory-add-text";
+  const textarea = el("textarea", "memory-input memory-textarea");
+  textarea.id = "memory-add-text";
+  textarea.maxLength = 280;
+  textarea.minLength = 8;
+  textarea.required = true;
+  textarea.placeholder = "Например: мне помогает сначала записать один маленький следующий шаг";
+  const submit = el("button", "memory-primary", "Добавить в память");
+  submit.type = "submit";
+  const status = el("p", "memory-action-status");
+  status.setAttribute("role", "status");
+  form.append(typeLabel, select, textLabel, textarea, submit, status);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submit.disabled = true;
+    submit.textContent = "Добавляю…";
+    try {
+      renderMemoryUpdate(
+        await controlMemory("add", { type: select.value, content: textarea.value }),
+        "Запись добавлена тобой.",
+      );
+    } catch (_) {
+      submit.disabled = false;
+      submit.textContent = "Повторить";
+      status.textContent = "Не удалось добавить. Нужно от 8 до 280 символов.";
+    }
+  });
+  details.append(intro, form);
+  return details;
 }
 
 // Быстрая карта тем. В предыдущей версии одна область одновременно поддерживала drag,
@@ -2179,34 +2425,91 @@ function deepSessionsPanel(p) {
   return panel;
 }
 
-function memoryControlsBlock() {
+function memoryPauseBlock(center) {
+  const section = el("section", "memory-pause");
+  const copy = el("div", "memory-pause-copy");
+  copy.appendChild(el("strong", null, center.writes_paused ? "Новые записи на паузе" : "Новые записи включены"));
+  copy.appendChild(
+    el(
+      "span",
+      null,
+      center.writes_paused
+        ? "Разговор продолжится, но Проводник не будет добавлять новую память."
+        : "Проводник может сохранять только записи, прошедшие строгий отбор.",
+    ),
+  );
+  const toggle = el("button", "memory-pause-toggle", center.writes_paused ? "Возобновить" : "Поставить на паузу");
+  toggle.type = "button";
+  toggle.setAttribute("aria-pressed", String(center.writes_paused));
+  toggle.addEventListener("click", async () => {
+    toggle.disabled = true;
+    try {
+      const action = center.writes_paused ? "resume" : "pause";
+      renderMemoryUpdate(
+        await controlMemory(action),
+        center.writes_paused ? "Новая память снова включена." : "Новые записи поставлены на паузу.",
+      );
+    } catch (_) {
+      toggle.disabled = false;
+      toggle.textContent = "Повторить";
+    }
+  });
+  section.append(copy, toggle);
+  return section;
+}
+
+function memoryControlsBlock(center) {
   const sec = el("section", "memory-controls");
   sec.appendChild(el("h2", "memory-controls-title serif", "Ты управляешь памятью"));
   sec.appendChild(
     el(
       "p",
       "memory-controls-intro",
-      "Факты памяти отделены от рабочих гипотез. В чате можно проверить формулировки, получить копию или удалить всё.",
+      "Можно забрать копию или удалить все записи прямо здесь. Рабочие гипотезы подтверждаются отдельно в разделе «Путь».",
     ),
   );
   const status = el("p", "command-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  const list = el("div", "memory-command-list");
-  [
-    ["/memory", "Посмотреть и исправить", "Все сохранённые факты"],
-    ["/export", "Получить копию", "Экспорт твоих данных"],
-    ["/deleteall", "Удалить всё", "Подтверждение произойдёт в чате"],
-  ].forEach(([command, label, note]) => {
-    const row = el("div", "memory-command-row");
-    const copy = el("div", "memory-command-copy");
-    copy.appendChild(el("strong", null, label));
-    copy.appendChild(el("span", null, note));
-    row.appendChild(copy);
-    row.appendChild(commandAction(command, command, status));
-    list.appendChild(row);
+  const actions = el("div", "memory-global-actions");
+  const exportButton = el("button", "memory-secondary", "Скачать мою копию");
+  exportButton.type = "button";
+  exportButton.addEventListener("click", async () => {
+    exportButton.disabled = true;
+    exportButton.textContent = "Готовлю файл…";
+    try {
+      await downloadMemoryExport();
+      exportButton.disabled = false;
+      exportButton.textContent = "Скачать ещё раз";
+      status.textContent = "Копия подготовлена. Проверь загрузки устройства.";
+    } catch (_) {
+      exportButton.disabled = false;
+      exportButton.textContent = "Повторить скачивание";
+      status.textContent = "Не удалось подготовить копию. Проверь связь.";
+    }
   });
-  sec.appendChild(list);
+  actions.appendChild(exportButton);
+  const total = center.groups.reduce((sum, group) => sum + group.items.length, 0);
+  const deleteAll = el("button", "memory-danger", "Удалить всю память");
+  deleteAll.type = "button";
+  deleteAll.disabled = total === 0;
+  deleteAll.addEventListener("click", async () => {
+    const ok = await confirmAction(
+      "Удалить все записи памяти? Они перестанут использоваться. Профильные гипотезы и история чата очищаются отдельно через полный сброс.",
+    );
+    if (!ok) return;
+    deleteAll.disabled = true;
+    deleteAll.textContent = "Удаляю…";
+    try {
+      renderMemoryUpdate(await controlMemory("delete_all"), "Вся память удалена.");
+    } catch (_) {
+      deleteAll.disabled = false;
+      deleteAll.textContent = "Повторить удаление";
+      status.textContent = "Не удалось удалить память. Проверь связь.";
+    }
+  });
+  actions.appendChild(deleteAll);
+  sec.appendChild(actions);
   sec.appendChild(status);
   const back = el("button", "memory-chat", "Вернуться в чат");
   back.type = "button";
@@ -2216,21 +2519,30 @@ function memoryControlsBlock() {
 }
 
 function memoryPanel(p) {
+  const center = p.memory_center || { writes_paused: false, groups: [], manual_types: [] };
   const panel = el("section", "memory-panel");
   const header = el("header", "panel-header");
   header.appendChild(el("span", "section-eyebrow", "Память"));
   header.appendChild(el("h2", "panel-title serif", "Что остаётся между разговорами"));
-  header.appendChild(el("p", "panel-intro", "Только сообщённые тобой факты. Гипотезы о смысле находятся в отдельном разделе и не выдаются за факты."));
+  header.appendChild(el("p", "panel-intro", "Здесь видно, что сохранено, откуда это взялось и зачем может пригодиться. Гипотезы о смысле остаются отдельными и не выдаются за факты."));
   panel.appendChild(header);
-  const memories = memoryBlock(p.memories);
-  if (memories) panel.appendChild(memories);
-  else {
+  panel.appendChild(memoryPauseBlock(center));
+  if (center.manual_types.length) panel.appendChild(memoryAddBlock(center.manual_types));
+  let hasItems = false;
+  center.groups.forEach((group) => {
+    const block = memoryGroup(group, center.manual_types);
+    if (block) {
+      hasItems = true;
+      panel.appendChild(block);
+    }
+  });
+  if (!hasItems) {
     const empty = el("div", "memory-empty");
     empty.appendChild(el("strong", null, "Память пока пуста"));
-    empty.appendChild(el("p", null, "Если ты попросишь что-то запомнить или подтвердить важный факт, он появится здесь."));
+    empty.appendChild(el("p", null, "Можно добавить устойчивый факт самому. Проводник не сохраняет весь разговор, временное настроение или догадки."));
     panel.appendChild(empty);
   }
-  panel.appendChild(memoryControlsBlock());
+  panel.appendChild(memoryControlsBlock(center));
   return panel;
 }
 
