@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260824-memory-center";
+  var assetVersion = "20260824-prepaid-hardening";
   var timer;
   var failed = false;
 

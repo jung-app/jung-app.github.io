@@ -316,6 +316,7 @@ function normalizeProfile(raw) {
     members: arrayOfObjects(thread.members),
   }));
   p.billing = objectOrEmpty(p.billing);
+  p.safety_pause = Boolean(p.safety_pause);
   p.access = objectOrEmpty(p.access);
   p.path = objectOrEmpty(p.path);
   p.change_experiment = objectOrEmpty(p.change_experiment);
@@ -846,7 +847,21 @@ async function requestInvoice(period) {
     body: JSON.stringify({ period: period || "monthly" }),
   });
   if (!res.ok) throw new Error("http-" + res.status);
-  return (await res.json()).url;
+  const url = (await res.json()).url;
+  if (!isTelegramInvoiceUrl(url)) throw new Error("invalid-invoice-url");
+  return url;
+}
+
+function isTelegramInvoiceUrl(value) {
+  if (typeof value !== "string" || value.length > 240) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "t.me" &&
+      /^\/\$[A-Za-z0-9_-]{1,160}$/.test(url.pathname) &&
+      !url.search && !url.hash && !url.username && !url.password;
+  } catch (error) {
+    return false;
+  }
 }
 
 // Оплата прямо из мини-аппа: человек увидел свой образ → открывает нативный Stars invoice.
@@ -1007,10 +1022,15 @@ function upgradeSection(billing, access) {
   });
   sec.appendChild(perks);
   const b = billing || {};
-  const monthly = Number(b.monthly_xtr) || 500;
-  const annual = Number(b.annual_xtr) || 5000;
-  const annualAvailable = b.annual_available !== false;
-  if (b.payments_available === false) {
+  const monthly = Number.isInteger(Number(b.monthly_xtr)) && Number(b.monthly_xtr) > 0
+    ? Number(b.monthly_xtr)
+    : null;
+  const annual = Number.isInteger(Number(b.annual_xtr)) && Number(b.annual_xtr) > 0
+    ? Number(b.annual_xtr)
+    : null;
+  const annualAvailable = b.annual_available === true && annual !== null;
+  const paymentsAvailable = b.payments_available === true && monthly !== null;
+  if (!paymentsAvailable) {
     const closed = el("div", "checkout-closed");
     closed.appendChild(el("strong", null, "Новое оформление временно закрыто"));
     closed.appendChild(
@@ -1021,7 +1041,10 @@ function upgradeSection(billing, access) {
       ),
     );
     const terms = el("dl", "checkout-closed-terms");
-    [["30 дней", monthly + " Stars"], ["365 дней", annual + " Stars · разово"]].forEach(
+    [
+      ["30 дней", monthly === null ? "цена недоступна" : monthly + " Stars"],
+      ["365 дней", annual === null ? "цена недоступна" : annual + " Stars · разово"],
+    ].forEach(
       ([period, price]) => {
         const row = el("div", "checkout-closed-term");
         row.appendChild(el("dt", null, period));
@@ -2005,6 +2028,10 @@ function profileTabShell(panels) {
         if (selected && moveFocus) button.focus();
       }
       if (panel) panel.hidden = !selected;
+      if (panel) {
+        panel.inert = !selected;
+        panel.setAttribute("aria-hidden", selected ? "false" : "true");
+      }
     });
     syncNativeBackButton(key);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -2143,7 +2170,7 @@ function commandAction(command, label, statusNode) {
   return button;
 }
 
-function deepSessionPreparation(showUpgrade) {
+function deepSessionPreparation(showUpgrade, safetyPause) {
   const sec = el("section", "session-prep");
   sec.appendChild(el("span", "section-eyebrow", "Перед началом"));
   sec.appendChild(el("h2", "session-prep-title serif", "Освободи место для разговора"));
@@ -2177,7 +2204,26 @@ function deepSessionPreparation(showUpgrade) {
   const status = el("p", "command-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  if (showUpgrade) {
+  if (safetyPause) {
+    const urgent = el("div", "session-urgent");
+    urgent.setAttribute("role", "alert");
+    urgent.appendChild(el("strong", null, "Сейчас глубинную сессию лучше отложить"));
+    urgent.appendChild(
+      el(
+        "p",
+        null,
+        "Вернись в чат за короткой поддержкой. Если есть непосредственная опасность для жизни, позвони 112 или обратись к человеку рядом.",
+      ),
+    );
+    const emergency = el("a", "session-emergency", "Позвонить 112");
+    emergency.href = "tel:112";
+    urgent.appendChild(emergency);
+    const back = el("button", "session-back", "Вернуться в чат");
+    back.type = "button";
+    back.addEventListener("click", closeToChat);
+    urgent.appendChild(back);
+    sec.appendChild(urgent);
+  } else if (showUpgrade) {
     const upgrade = el("button", "session-start", "Открыть глубинные сессии");
     upgrade.type = "button";
     upgrade.dataset.openTab = "more";
@@ -2409,7 +2455,7 @@ function deepSessionsPanel(p) {
     panel.appendChild(current);
   }
 
-  panel.appendChild(deepSessionPreparation(p.show_upgrade));
+  panel.appendChild(deepSessionPreparation(p.show_upgrade, p.safety_pause));
 
   const past = el("section", "session-group");
   past.appendChild(el("h3", "session-group-title", "Последние сессии"));
@@ -2552,6 +2598,12 @@ function legalLinks() {
   [["./privacy.html", "Приватность"], ["./offer.html", "Оферта"], ["./refund.html", "Возврат"]].forEach(([href, label]) => {
     const link = el("a", null, label);
     link.href = href;
+    link.rel = "noreferrer";
+    link.addEventListener("click", (event) => {
+      if (!tg || typeof tg.openLink !== "function") return;
+      event.preventDefault();
+      tg.openLink(new URL(href, window.location.href).href);
+    });
     nav.appendChild(link);
   });
   return nav;
