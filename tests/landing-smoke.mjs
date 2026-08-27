@@ -24,6 +24,14 @@ const attributionJs = await readFile(
   new URL("../attribution.js", import.meta.url),
   "utf8",
 );
+const offerHtml = await readFile(
+  new URL("../offer.html", import.meta.url),
+  "utf8",
+);
+const refundHtml = await readFile(
+  new URL("../refund.html", import.meta.url),
+  "utf8",
+);
 const telegramUrl = "https://t.me/extaz_assistant_bot?start=src_landing";
 
 assert.match(html, /<html lang="ru">/);
@@ -116,6 +124,12 @@ assert.doesNotMatch(html, /target="_blank"/);
 assert.doesNotMatch(html, /http:\/\//);
 assert.doesNotMatch(js, /localStorage|sessionStorage|document\.cookie/);
 assert.doesNotMatch(attributionJs, /localStorage|sessionStorage|document\.cookie/);
+assert.match(offerHtml, /Новое оформление подписки временно закрыто/);
+assert.match(refundHtml, /Новое оформление подписки временно закрыто/);
+assert.match(offerHtml, /командой <b>\/cancel<\/b>/);
+assert.match(refundHtml, /командой <b>\/cancel<\/b>/);
+assert.match(offerHtml, /права Пользователя, которые\s+нельзя исключить или уменьшить по закону/);
+assert.doesNotMatch(offerHtml, /Сервис не несёт ответственности/);
 
 function fallbackTarget(href) {
   const current = new URL(href);
