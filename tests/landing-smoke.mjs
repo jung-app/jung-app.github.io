@@ -53,6 +53,8 @@ assert.match(html, /<meta\s+[\s\S]*?name="description"/);
 assert.match(html, /id="main"/);
 assert.match(html, /class="skip-link"/);
 assert.match(html, /<script type="application\/ld\+json">/);
+assert.match(html, /до 100 сообщений в день/);
+assert.match(html, /не скидка и не депозит/);
 assert.match(indexHtml, /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/);
 assert.doesNotMatch(
   rootRedirectJs,
