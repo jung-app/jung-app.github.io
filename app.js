@@ -207,6 +207,38 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function reminderHourOrNull(value) {
+  // Number(null) and Number("") are both 0. Treating either as a real hour invents a
+  // midnight reminder that the person never enabled.
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !/^(?:[0-9]|1[0-9]|2[0-3])$/.test(value.trim())) {
+    return null;
+  }
+  const hour = typeof value === "string" ? Number(value.trim()) : value;
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+}
+
+function utcOffsetMinutesOrNull(value) {
+  if (
+    value === null || value === undefined || typeof value === "boolean" ||
+    typeof value === "object" ||
+    (typeof value === "string" && value.trim() === "")
+  ) return null;
+  const offset = Number(value);
+  return Number.isInteger(offset) && offset >= -720 && offset <= 840 ? offset : null;
+}
+
+function utcOffsetLabel(minutes) {
+  const offset = utcOffsetMinutesOrNull(minutes);
+  if (offset === null) return "UTC";
+  if (offset === 0) return "UTC";
+  const sign = offset > 0 ? "+" : "−";
+  const absolute = Math.abs(offset);
+  const hours = Math.floor(absolute / 60);
+  const rest = absolute % 60;
+  return "UTC" + sign + String(hours) + (rest ? ":" + String(rest).padStart(2, "0") : "");
+}
+
 const DEEP_SESSION_STATUSES = new Set([
   "preparing",
   "active",
@@ -322,10 +354,6 @@ function normalizeProfile(raw) {
   p.safety_pause = Boolean(p.safety_pause);
   p.access = objectOrEmpty(p.access);
   const path = objectOrEmpty(p.path);
-  const reminderHour = (value) => {
-    const hour = Number(value);
-    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
-  };
   p.path = {
     ...path,
     ritual_done_count: Math.max(0, Number(path.ritual_done_count) || 0),
@@ -334,7 +362,12 @@ function normalizeProfile(raw) {
     growth_done_at: cleanText(path.growth_done_at),
     growth_name: cleanText(path.growth_name),
     growth_step: cleanText(path.growth_step),
-    growth_reminder_hour: reminderHour(path.growth_reminder_hour),
+    growth_reminder_hour: reminderHourOrNull(path.growth_reminder_hour),
+    practice_timezone: cleanText(path.practice_timezone),
+    practice_utc_offset_minutes: utcOffsetMinutesOrNull(path.practice_utc_offset_minutes),
+    practice_fallback_utc_offset_minutes: utcOffsetMinutesOrNull(
+      path.practice_fallback_utc_offset_minutes,
+    ),
     nudges_paused_at: cleanText(path.nudges_paused_at),
   };
   p.change_experiment = objectOrEmpty(p.change_experiment);
@@ -350,7 +383,7 @@ function normalizeProfile(raw) {
   const ritual = objectOrEmpty(p.ritual);
   p.ritual = {
     ...ritual,
-    reminder_hour: reminderHour(ritual.reminder_hour),
+    reminder_hour: reminderHourOrNull(ritual.reminder_hour),
     done_count: Math.max(0, Number(ritual.done_count) || 0),
   };
   p.live_sync = objectOrEmpty(p.live_sync);
@@ -495,6 +528,65 @@ async function submitOutcome(event, value, measurementPoint, subjectKey) {
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
   return res.json();
+}
+
+async function submitPracticeCheckIn(kind) {
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(freshApiUrl("/api/practice/check-in"), {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ kind }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  const body = await res.json();
+  if (
+    !body || body.kind !== kind ||
+    !Number.isInteger(Number(body.count)) || typeof body.counted !== "boolean"
+  ) throw new Error("invalid-response");
+  return body;
+}
+
+function practiceClockMetadata() {
+  let timezone = null;
+  try {
+    const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof resolved === "string" && resolved.trim()) timezone = resolved.trim();
+  } catch (_) {
+    timezone = null;
+  }
+  const rawOffset = -new Date().getTimezoneOffset();
+  const utcOffsetMinutes = Number.isInteger(rawOffset) && rawOffset >= -720 && rawOffset <= 840
+    ? rawOffset
+    : 0;
+  return { timezone, utc_offset_minutes: utcOffsetMinutes };
+}
+
+async function submitPracticeReminder(kind, hour) {
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const clock = practiceClockMetadata();
+  const res = await fetchWithDeadline(freshApiUrl("/api/practice/reminder"), {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({
+      kind,
+      hour,
+      timezone: clock.timezone,
+      utc_offset_minutes: clock.utc_offset_minutes,
+    }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  const body = await res.json();
+  if (
+    !body || body.kind !== kind ||
+    reminderHourOrNull(body.reminder_hour) !== hour
+  ) throw new Error("invalid-response");
+  return body;
 }
 
 function newRequestId() {
@@ -2145,7 +2237,8 @@ function changePathBlock(p) {
 
 function practiceProgressBlock(p) {
   const path = p.path || {};
-  const paused = Boolean(path.nudges_paused_at);
+  let paused = Boolean(path.nudges_paused_at);
+  const remindersAvailable = Boolean(p.is_paid);
   const growthHour = path.growth_reminder_hour;
   const ritualHour = p.ritual ? p.ritual.reminder_hour : null;
   const ritualHabit = (p.habits || []).find((habit) => cleanText(habit.ritual));
@@ -2158,66 +2251,271 @@ function practiceProgressBlock(p) {
   if (!growthVisible && !ritualVisible) return null;
 
   const sec = el("section", "practice-progress");
-  labelSection(sec, "practice-progress-heading", "Практика между разговорами", "section-eyebrow");
+  labelSection(sec, "practice-progress-heading", "Практика сегодня", "section-eyebrow");
   sec.appendChild(
     el(
       "p",
       "practice-progress-intro",
-      "Не серия и не оценка. Здесь видно, какую опору ты пробуешь, сколько раз получилось и включено ли напоминание.",
+      "Одна маленькая попытка важнее идеальной серии. Отметка не оценивает тебя и ничего не обнуляет.",
     ),
   );
   const cards = el("div", "practice-grid");
+  const refreshReminderBadges = [];
 
-  function reminderText(hour) {
-    if (paused) return "На паузе";
-    if (hour === null) return "Не включено";
-    return "Каждый день в " + String(hour).padStart(2, "0") + ":00";
+  function reminderState(hour) {
+    if (hour === null) return { state: "off", text: "Напоминание выключено" };
+    if (!remindersAvailable) {
+      return { state: "unavailable", text: "Не отправляется: доступ завершён" };
+    }
+    if (paused) return { state: "paused", text: "Напоминание на паузе" };
+    const personalClock = Boolean(
+      path.practice_timezone || path.practice_utc_offset_minutes !== null
+    );
+    const clockLabel = personalClock
+      ? "местное"
+      : utcOffsetLabel(path.practice_fallback_utc_offset_minutes);
+    return {
+      state: "active",
+      text: "Напоминание " + String(hour).padStart(2, "0") + ":00 · " + clockLabel,
+    };
   }
 
-  function practiceCard({ title, name, step, count, hour, lastDone }) {
+  function practiceCard({ kind, title, name, step, cue, need, fallback, count, hour, lastDone, configured }) {
+    let currentHour = hour;
     const card = el("article", "practice-card");
-    card.appendChild(el("h3", "practice-title", title));
+    const head = el("div", "practice-card-head");
+    head.appendChild(el("h3", "practice-title", title));
+    const reminder = reminderState(currentHour);
+    const reminderBadge = el("span", "practice-reminder", reminder.text);
+    reminderBadge.dataset.state = reminder.state;
+    const refreshReminder = () => {
+      const next = reminderState(currentHour);
+      reminderBadge.textContent = next.text;
+      reminderBadge.dataset.state = next.state;
+    };
+    refreshReminderBadges.push(refreshReminder);
+    head.appendChild(reminderBadge);
+    card.appendChild(head);
     if (name) card.appendChild(el("strong", "practice-name", name));
     if (step) card.appendChild(el("p", "practice-step", step));
-    const stats = el("dl", "practice-stats");
+    const plan = el("dl", "practice-plan");
     [
-      ["Получилось", String(count) + " раз"],
-      ["Напоминание", reminderText(hour)],
+      ["Сигнал", cue],
+      ["Что поддерживает", need],
+      ["Минимум на трудный день", fallback],
     ].forEach(([label, value]) => {
-      const row = el("div", "practice-stat");
+      if (!value) return;
+      const row = el("div", "practice-plan-row");
       row.appendChild(el("dt", null, label));
       row.appendChild(el("dd", null, value));
-      stats.appendChild(row);
+      plan.appendChild(row);
     });
+    if (plan.children.length) card.appendChild(plan);
+    const stats = el("dl", "practice-stats");
+    const countRow = el("div", "practice-stat");
+    countRow.appendChild(el("dt", null, "Получилось всего"));
+    const countValue = el(
+      "dd",
+      null,
+      String(count) + " " + pluralRu(count, "раз", "раза", "раз"),
+    );
+    countRow.appendChild(countValue);
+    stats.appendChild(countRow);
     const last = fmtDate(lastDone);
-    if (last) {
-      const row = el("div", "practice-stat practice-stat--wide");
-      row.appendChild(el("dt", null, "Последний раз"));
-      row.appendChild(el("dd", null, last));
-      stats.appendChild(row);
-    }
+    const lastRow = el("div", "practice-stat");
+    lastRow.appendChild(el("dt", null, "Последняя отметка"));
+    const lastValue = el("dd", null, last || "Ещё не было");
+    lastRow.appendChild(lastValue);
+    stats.appendChild(lastRow);
     card.appendChild(stats);
+    if (configured) {
+      const actions = el("div", "practice-actions");
+      const done = el("button", "practice-done", "Отметить, что получилось");
+      done.type = "button";
+      const discuss = el("button", "practice-discuss", "Обсудить трудный день");
+      discuss.type = "button";
+      const status = el("p", "practice-action-status");
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      discuss.addEventListener("click", async () => {
+        done.disabled = true;
+        discuss.disabled = true;
+        discuss.setAttribute("aria-busy", "true");
+        discuss.textContent = "Готовлю вопрос…";
+        status.textContent = "";
+        try {
+          await postChatIntent(
+            kind === "growth" ? "growth_practice" : "ritual_practice",
+            newRequestId(),
+          );
+          discuss.removeAttribute("aria-busy");
+          discuss.textContent = "Вопрос уже в чате";
+          status.textContent = "Открываю разговор без передачи текста из профиля.";
+          window.setTimeout(closeToChat, 350);
+        } catch (_) {
+          done.disabled = false;
+          discuss.disabled = false;
+          discuss.removeAttribute("aria-busy");
+          discuss.textContent = "Попробовать открыть разговор снова";
+          status.textContent = "Не удалось подготовить вопрос в чате. Проверь связь и повтори.";
+        }
+      });
+      done.addEventListener("click", async () => {
+        done.disabled = true;
+        discuss.disabled = true;
+        done.setAttribute("aria-busy", "true");
+        done.textContent = "Отмечаю…";
+        status.textContent = "";
+        try {
+          const result = await submitPracticeCheckIn(kind);
+          const nextCount = Math.max(0, Number(result.count) || 0);
+          countValue.textContent = String(nextCount) + " " +
+            pluralRu(nextCount, "раз", "раза", "раз");
+          lastValue.textContent = fmtDate(result.done_at) || "сегодня";
+          done.removeAttribute("aria-busy");
+          done.textContent = result.counted ? "Сегодня отмечено" : "Уже отмечено сегодня";
+          status.textContent = result.counted
+            ? "Попытка сохранена. Путь вырос ещё на один реальный шаг."
+            : "Повторная отметка не увеличила счётчик.";
+          const haptic = tg && tg.HapticFeedback;
+          if (haptic && typeof haptic.notificationOccurred === "function") {
+            haptic.notificationOccurred("success");
+          }
+        } catch (_) {
+          done.disabled = false;
+          discuss.disabled = false;
+          done.removeAttribute("aria-busy");
+          done.textContent = "Попробовать отметить снова";
+          status.textContent = "Не удалось сохранить отметку. Проверь связь и повтори.";
+        }
+      });
+      actions.appendChild(done);
+      actions.appendChild(discuss);
+      card.appendChild(actions);
+      card.appendChild(status);
+
+      const settings = el("details", "practice-reminder-settings");
+      settings.appendChild(el("summary", "practice-reminder-toggle", "Настроить напоминание"));
+      const settingsBody = el("div", "practice-reminder-body");
+      const field = el("label", "practice-reminder-field");
+      field.appendChild(el("span", null, "Время"));
+      const select = el("select", "practice-reminder-select");
+      select.setAttribute("aria-label", "Время напоминания для практики «" + title + "»");
+      for (let value = 0; value < 24; value += 1) {
+        const label = String(value).padStart(2, "0") + ":00";
+        const option = el("option", null, label);
+        option.value = String(value);
+        select.appendChild(option);
+      }
+      select.value = String(currentHour === null ? (kind === "growth" ? 9 : 21) : currentHour);
+      select.disabled = !remindersAvailable;
+      field.appendChild(select);
+      settingsBody.appendChild(field);
+      const helper = el(
+        "p",
+        "practice-reminder-help",
+        remindersAvailable
+          ? "По местному времени устройства. Часовой пояс нужен только для доставки вовремя."
+          : "Доставка доступна при активной подписке. Текущее напоминание можно выключить.",
+      );
+      settingsBody.appendChild(helper);
+      if (paused && remindersAvailable) {
+        settingsBody.appendChild(
+          el(
+            "p",
+            "practice-reminder-help practice-reminder-help--paused",
+            "Сохранение времени возобновит ежедневные напоминания.",
+          ),
+        );
+      }
+      const settingActions = el("div", "practice-reminder-actions");
+      const saveReminder = el("button", "practice-reminder-save", "Сохранить время");
+      saveReminder.type = "button";
+      saveReminder.disabled = !remindersAvailable;
+      const disableReminder = el("button", "practice-reminder-disable", "Выключить");
+      disableReminder.type = "button";
+      disableReminder.disabled = currentHour === null;
+      const settingStatus = el("p", "practice-reminder-status");
+      settingStatus.setAttribute("role", "status");
+      settingStatus.setAttribute("aria-live", "polite");
+
+      async function updateReminder(nextHour) {
+        saveReminder.disabled = true;
+        disableReminder.disabled = true;
+        select.disabled = true;
+        settingStatus.textContent = nextHour === null ? "Выключаю…" : "Сохраняю…";
+        try {
+          const result = await submitPracticeReminder(kind, nextHour);
+          currentHour = reminderHourOrNull(result.reminder_hour);
+          if (kind === "growth") path.growth_reminder_hour = currentHour;
+          else if (p.ritual) p.ritual.reminder_hour = currentHour;
+          if (currentHour !== null) {
+            paused = false;
+            path.nudges_paused_at = "";
+          }
+          path.practice_timezone = cleanText(result.practice_timezone);
+          path.practice_utc_offset_minutes = utcOffsetMinutesOrNull(
+            result.practice_utc_offset_minutes,
+          );
+          refreshReminderBadges.forEach((refresh) => refresh());
+          disableReminder.disabled = currentHour === null;
+          select.disabled = !remindersAvailable;
+          saveReminder.disabled = !remindersAvailable;
+          settingStatus.textContent = currentHour === null
+            ? "Напоминание выключено."
+            : "Буду напоминать в " + String(currentHour).padStart(2, "0") + ":00 по местному времени.";
+          const haptic = tg && tg.HapticFeedback;
+          if (haptic && typeof haptic.notificationOccurred === "function") {
+            haptic.notificationOccurred("success");
+          }
+        } catch (_) {
+          select.disabled = !remindersAvailable;
+          saveReminder.disabled = !remindersAvailable;
+          disableReminder.disabled = currentHour === null;
+          settingStatus.textContent = "Не удалось изменить время. Проверь связь и повтори.";
+        }
+      }
+
+      saveReminder.addEventListener("click", () => updateReminder(Number(select.value)));
+      disableReminder.addEventListener("click", () => updateReminder(null));
+      settingActions.appendChild(saveReminder);
+      settingActions.appendChild(disableReminder);
+      settingsBody.appendChild(settingActions);
+      settingsBody.appendChild(settingStatus);
+      settings.appendChild(settingsBody);
+      card.appendChild(settings);
+    }
     return card;
   }
 
   if (growthVisible) {
     cards.appendChild(practiceCard({
+      kind: "growth",
       title: "Полезная привычка",
       name: path.growth_name,
       step: path.growth_step,
+      cue: "",
+      need: "",
+      fallback: "",
       count: path.growth_done_count,
       hour: growthHour,
       lastDone: path.growth_done_at,
+      configured: Boolean(path.growth_step),
     }));
   }
   if (ritualVisible) {
     cards.appendChild(practiceCard({
+      kind: "ritual",
       title: "Ритуал замещения",
       name: ritualHabit ? cleanText(ritualHabit.ritual) : "",
       step: "",
+      cue: ritualHabit ? cleanText(ritualHabit.trigger) : "",
+      need: ritualHabit ? cleanText(ritualHabit.serves) : "",
+      fallback: ritualHabit ? cleanText(ritualHabit.fallback) : "",
       count: path.ritual_done_count,
       hour: ritualHour,
       lastDone: path.ritual_done_at,
+      configured: Boolean(ritualHabit),
     }));
   }
   if (growthVisible && ritualVisible) cards.classList.add("practice-grid--paired");

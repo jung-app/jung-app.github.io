@@ -580,10 +580,18 @@ a {
 
 .practice-card {
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface-alt);
+}
+
+.practice-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .practice-title,
@@ -602,6 +610,38 @@ a {
   text-transform: uppercase;
 }
 
+.practice-reminder {
+  display: inline-flex;
+  min-height: 28px;
+  padding: 5px 9px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.practice-reminder[data-state="active"] {
+  border-color: color-mix(in srgb, var(--ok) 38%, var(--line));
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.practice-reminder[data-state="paused"] {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.practice-reminder[data-state="unavailable"] {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
 .practice-name {
   display: block;
   margin-top: 6px;
@@ -610,9 +650,40 @@ a {
 }
 
 .practice-step {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.practice-plan {
+  display: grid;
+  gap: 0;
+  margin: 13px 0 0;
+}
+
+.practice-plan-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.38fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.practice-plan-row dt,
+.practice-plan-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.practice-plan-row dt {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.practice-plan-row dd {
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .practice-stats {
@@ -642,6 +713,152 @@ a {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.35;
+}
+
+.practice-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.practice-done,
+.practice-discuss {
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.practice-done {
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--on-action);
+}
+
+.practice-discuss {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.practice-action-status {
+  min-height: 0;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.practice-action-status:empty {
+  display: none;
+}
+
+.practice-reminder-settings {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.practice-reminder-toggle {
+  min-height: 44px;
+  padding: 12px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.practice-reminder-toggle:focus-visible,
+.practice-reminder-select:focus-visible,
+.practice-reminder-save:focus-visible,
+.practice-reminder-disable:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.practice-reminder-body {
+  padding: 10px 0 2px;
+}
+
+.practice-reminder-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.58fr);
+  gap: 12px;
+  align-items: center;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.practice-reminder-select {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 34px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.practice-reminder-help,
+.practice-reminder-status {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.practice-reminder-help--paused {
+  color: var(--accent);
+}
+
+.practice-reminder-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.8fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.practice-reminder-save,
+.practice-reminder-disable {
+  min-height: 46px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.practice-reminder-save {
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--on-action);
+}
+
+.practice-reminder-disable {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.practice-reminder-save:disabled,
+.practice-reminder-disable:disabled,
+.practice-reminder-select:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.practice-reminder-status:empty {
+  display: none;
 }
 
 .practice-stat dd {
@@ -2365,6 +2582,17 @@ a {
     font-size: 24px;
   }
 
+  .practice-actions,
+  .practice-plan-row,
+  .practice-reminder-actions,
+  .practice-reminder-field {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-plan-row {
+    gap: 3px;
+  }
+
   .today,
   .practice-progress,
   .change-path,
@@ -2439,9 +2667,6 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .practice-grid--paired {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (prefers-contrast: more) {

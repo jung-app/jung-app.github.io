@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260901-commerce-launch";
+  var assetVersion = "20260901-local-reminders";
   var timer;
   var failed = false;
 

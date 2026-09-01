@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260824-prepaid-hardening";
+      boot.src = "./miniapp-boot.js?v=20260901-local-reminders";
       document.body.appendChild(boot);
     });
   }
