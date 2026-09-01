@@ -208,7 +208,7 @@ h3 {
 
 .control-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 16px;
   padding: 4px;
@@ -292,6 +292,7 @@ textarea {
 .search-card,
 .user-card,
 .directory-card,
+.audit-card,
 .loading-card,
 .error-card,
 .empty-card {
@@ -318,6 +319,10 @@ textarea {
 
 .directory-card {
   margin-top: 12px;
+  padding: 14px;
+}
+
+.audit-card {
   padding: 14px;
 }
 
@@ -503,6 +508,17 @@ textarea {
   text-align: center;
 }
 
+.action-notice {
+  margin-top: 12px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--ok) 38%, var(--line));
+  border-radius: 12px;
+  background: var(--ok-soft);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
 .quiet-button,
 .primary-button,
 .danger-button,
@@ -533,7 +549,7 @@ textarea {
 }
 
 .compact-button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -585,6 +601,7 @@ textarea {
   color: var(--ok);
   font-size: 0.72rem;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .status-chip.is-revoked {
@@ -687,6 +704,47 @@ textarea {
   border-top: 1px solid var(--line);
 }
 
+.audit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.audit-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.audit-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audit-heading strong {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-heading time,
+.audit-actor {
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.audit-reason {
+  margin: 4px 0 2px;
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
 .directory-list li:first-child {
   border-top: 0;
 }
@@ -771,7 +829,8 @@ textarea {
 
   .search-card,
   .user-card,
-  .directory-card {
+  .directory-card,
+  .audit-card {
     max-width: 760px;
     margin-right: auto;
     margin-left: auto;
@@ -779,6 +838,16 @@ textarea {
 }
 
 @media (max-width: 430px) {
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-heading .compact-button {
+    width: 100%;
+  }
+
   .filter-bar,
   .search-row {
     grid-template-columns: 1fr;
@@ -786,6 +855,11 @@ textarea {
 
   .search-row .primary-button {
     width: 100%;
+  }
+
+  .audit-heading {
+    display: grid;
+    gap: 2px;
   }
 }
 
