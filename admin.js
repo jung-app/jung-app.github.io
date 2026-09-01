@@ -8,12 +8,15 @@
   var overviewContent = document.getElementById("overview-content");
   var userContent = document.getElementById("user-content");
   var directoryContent = document.getElementById("directory-content");
+  var auditContent = document.getElementById("audit-content");
   var searchError = document.getElementById("search-error");
   var currentUser = null;
   var directoryLoaded = false;
+  var auditLoaded = false;
   var overviewRequest = 0;
   var userRequest = 0;
   var directoryRequest = 0;
+  var auditRequest = 0;
 
   function element(tag, className, text) {
     var node = document.createElement(tag);
@@ -329,6 +332,28 @@
     return plan + " · " + status;
   }
 
+  function effectiveAccessLabel(access) {
+    var labels = {
+      owner_override: "Legacy owner override",
+      paid_recurring: "Оплаченная recurring-подписка",
+      payment: "Оплата Telegram Stars",
+      gift: "Подарок владельца",
+      referral: "Реферальная награда",
+      promo: "Промокампания",
+      combined: "Несколько источников",
+      full_access: "Ограниченный полный доступ",
+      trial: "Пробный доступ",
+      free: "Бесплатный режим",
+    };
+    return labels[access && access.source] || "Источник не определён";
+  }
+
+  function effectiveAccessTerm(access) {
+    if (access && access.unlimited) return "Без срока";
+    if (access && access.until) return "До " + dateTime(access.until);
+    return "Без активного периода";
+  }
+
   function stageLabel(stage) {
     var stages = {
       portrait_ready: "Портрет готов",
@@ -424,8 +449,10 @@
     var submit = element("button", "primary-button", "Проверить и выдать");
     submit.type = "submit";
     form.appendChild(submit);
+    var requestId = newRequestId();
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
+      if (submit.disabled) return;
       var cleanReason = reason.value.trim();
       if (cleanReason.length < 3) {
         formError.textContent = "Укажи конкретную причину выдачи доступа.";
@@ -435,9 +462,14 @@
       }
       formError.hidden = true;
       var grantDays = Number(days.value);
-      var accepted = await confirmAction("Выдать пользователю " + user.telegram_id + " доступ на " + grantDays + " дней? Причина: " + cleanReason);
-      if (!accepted) return;
       submit.disabled = true;
+      submit.textContent = "Жду подтверждения…";
+      var accepted = await confirmAction("Выдать пользователю " + user.telegram_id + " доступ на " + grantDays + " дней? Срок полного доступа продлится, оплаты и другие источники не изменятся. Причина: " + cleanReason);
+      if (!accepted) {
+        submit.disabled = false;
+        submit.textContent = "Проверить и выдать";
+        return;
+      }
       submit.textContent = "Выдаю…";
       try {
         var result = await fetchJson("/api/admin/grant", {
@@ -446,11 +478,14 @@
             telegram_id: user.telegram_id,
             days: grantDays,
             reason: cleanReason,
-            request_id: newRequestId(),
+            request_id: requestId,
           }),
         });
         currentUser = result.user;
-        renderUser(result.user);
+        renderUser(result.user, result.applied
+          ? "Подарок выдан и добавлен в журнал."
+          : "Повторный запрос распознан. Второй подарок не создан.");
+        auditLoaded = false;
         announce(result.applied ? "Доступ выдан" : "Эта выдача уже была применена");
       } catch (error) {
         var copy = errorCopy(error, "доступ");
@@ -489,8 +524,10 @@
     var submit = element("button", "danger-button", "Проверить и отозвать");
     submit.type = "submit";
     form.appendChild(submit);
+    var requestId = newRequestId();
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
+      if (submit.disabled) return;
       var cleanReason = reason.value.trim();
       if (cleanReason.length < 3) {
         formError.textContent = "Укажи конкретную причину отзыва.";
@@ -500,15 +537,20 @@
       }
       formError.hidden = true;
       var target = "ID " + user.telegram_id;
-      var accepted = await confirmAction("Отозвать доступ у " + target + "? " + consequence + " Причина: " + cleanReason);
-      if (!accepted) return;
       submit.disabled = true;
+      submit.textContent = "Жду подтверждения…";
+      var accepted = await confirmAction("Отозвать доступ у " + target + "? " + consequence + " Причина: " + cleanReason);
+      if (!accepted) {
+        submit.disabled = false;
+        submit.textContent = "Проверить и отозвать";
+        return;
+      }
       submit.textContent = "Отзываю…";
       var payload = {
         telegram_id: user.telegram_id,
         kind: kind,
         reason: cleanReason,
-        request_id: newRequestId(),
+        request_id: requestId,
       };
       if (grant) payload.grant_id = grant.id;
       try {
@@ -517,8 +559,11 @@
           body: JSON.stringify(payload),
         });
         currentUser = result.user;
-        renderUser(result.user);
+        renderUser(result.user, result.applied
+          ? "Доступ отозван и добавлен в журнал."
+          : "Повторный запрос распознан. Доступ не изменён повторно.");
         directoryLoaded = false;
+        auditLoaded = false;
         loadDirectory();
         announce(result.applied ? "Доступ отозван" : "Этот отзыв уже был применён");
       } catch (error) {
@@ -549,8 +594,14 @@
     card.appendChild(block);
   }
 
-  function renderUser(user) {
+  function renderUser(user, notice) {
     currentUser = user;
+    var content = document.createDocumentFragment();
+    if (notice) {
+      var noticeCard = element("div", "action-notice", notice);
+      noticeCard.setAttribute("role", "status");
+      content.appendChild(noticeCard);
+    }
     var card = element("article", "user-card");
     var title = element("div", "user-title");
     title.appendChild(element("h2", null, "ID " + user.telegram_id));
@@ -565,12 +616,14 @@
     renderOwnerOverride(card, user);
 
     var subscription = user.subscription || {};
+    var effective = user.effective_access || {};
     var details = element("ul", "detail-list");
     details.appendChild(detailRow("Запись в базе", user.record_exists ? "Есть" : "Нет, только конфигурация"));
     details.appendChild(detailRow("Последняя активность", dateTime(user.last_active_at)));
-    details.appendChild(detailRow("Доступ", planLabel(subscription)));
+    details.appendChild(detailRow("Источник доступа", effectiveAccessLabel(effective)));
+    details.appendChild(detailRow("Срок доступа", effectiveAccessTerm(effective)));
+    details.appendChild(detailRow("Статус подписки", planLabel(subscription)));
     details.appendChild(detailRow("Этап", stageLabel(subscription.activation_stage)));
-    details.appendChild(detailRow("Доступ до", dateTime(subscription.current_period_end)));
     details.appendChild(detailRow("Автопродление", subscription.auto_renew ? "Включено" : "Выключено"));
     details.appendChild(detailRow("Оплаты", number(user.payments_count) + " · " + number(user.revenue_xtr) + " Stars"));
     details.appendChild(detailRow("Приглашено / оплатили", number(user.referrals && user.referrals.invited) + " / " + number(user.referrals && user.referrals.rewarded)));
@@ -597,7 +650,8 @@
       card.appendChild(grantList);
     }
     renderGrantForm(card, user);
-    userContent.replaceChildren(card);
+    content.appendChild(card);
+    userContent.replaceChildren(content);
   }
 
   async function loadUser(telegramId) {
@@ -673,6 +727,61 @@
     }
   }
 
+  function auditActionLabel(action) {
+    var labels = {
+      gift_granted: "Подарок выдан",
+      gift_revoked: "Подарок отозван",
+      owner_revoke: "Legacy owner-доступ отозван",
+      owner_restore: "Legacy owner-доступ восстановлен",
+      owner_revoked: "Legacy owner-доступ отозван",
+      owner_restored: "Legacy owner-доступ восстановлен",
+    };
+    return labels[action] || "Доступ изменён";
+  }
+
+  function renderAudit(rows) {
+    if (!rows || !rows.length) {
+      var empty = element("div", "empty-card");
+      empty.appendChild(element("h3", null, "Действий пока нет"));
+      empty.appendChild(element("p", null, "Выдача и отзыв доступа появятся здесь после подтверждения."));
+      auditContent.replaceChildren(empty);
+      auditContent.setAttribute("aria-busy", "false");
+      return;
+    }
+    var list = element("ol", "audit-list");
+    rows.forEach(function (event) {
+      var item = element("li", "audit-row");
+      var heading = element("div", "audit-heading");
+      var title = auditActionLabel(event.action) + " · ID " + event.target_telegram_id;
+      if (event.days) title += " · " + daysLabel(event.days);
+      heading.appendChild(element("strong", null, title));
+      heading.appendChild(element("time", null, dateTime(event.created_at)));
+      item.appendChild(heading);
+      item.appendChild(element("p", "audit-reason", event.reason || "Причина не указана"));
+      item.appendChild(element("span", "audit-actor", event.actor_is_self ? "Выполнили вы" : "Другой owner"));
+      list.appendChild(item);
+    });
+    auditContent.replaceChildren(list);
+    auditContent.setAttribute("aria-busy", "false");
+  }
+
+  async function loadAudit() {
+    var requestId = ++auditRequest;
+    auditContent.setAttribute("aria-busy", "true");
+    auditContent.replaceChildren(loadingCard("Загружаю журнал…"));
+    try {
+      var body = await fetchJson("/api/admin/audit?limit=50");
+      if (requestId !== auditRequest) return;
+      renderAudit(body.events || []);
+      auditLoaded = true;
+      announce("Журнал обновлён");
+    } catch (error) {
+      if (requestId !== auditRequest) return;
+      auditContent.setAttribute("aria-busy", "false");
+      auditContent.replaceChildren(errorCard(error, "журнал", loadAudit));
+    }
+  }
+
   function selectTab(name, focus) {
     document.querySelectorAll("[role=tab]").forEach(function (tab) {
       var active = tab.dataset.tab === name;
@@ -683,11 +792,13 @@
     });
     document.getElementById("overview-panel").hidden = name !== "overview";
     document.getElementById("user-panel").hidden = name !== "user";
+    document.getElementById("audit-panel").hidden = name !== "audit";
     if (tg && tg.BackButton) {
-      if (name === "user") tg.BackButton.show();
+      if (name !== "overview") tg.BackButton.show();
       else tg.BackButton.hide();
     }
     if (name === "user" && !directoryLoaded) loadDirectory();
+    if (name === "audit" && !auditLoaded) loadAudit();
   }
 
   document.querySelectorAll("[role=tab]").forEach(function (tab) {
@@ -695,7 +806,10 @@
     tab.addEventListener("keydown", function (event) {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       event.preventDefault();
-      selectTab(tab.dataset.tab === "overview" ? "user" : "overview", true);
+      var names = ["overview", "user", "audit"];
+      var index = names.indexOf(tab.dataset.tab);
+      var delta = event.key === "ArrowRight" ? 1 : -1;
+      selectTab(names[(index + delta + names.length) % names.length], true);
     });
   });
 
@@ -714,8 +828,11 @@
   document.getElementById("window-filter").addEventListener("change", loadOverview);
   document.getElementById("source-filter").addEventListener("change", loadOverview);
   document.getElementById("directory-refresh").addEventListener("click", loadDirectory);
+  document.getElementById("audit-refresh").addEventListener("click", loadAudit);
   document.getElementById("refresh").addEventListener("click", function () {
-    if (document.getElementById("overview-panel").hidden) {
+    if (!document.getElementById("audit-panel").hidden) {
+      loadAudit();
+    } else if (!document.getElementById("user-panel").hidden) {
       loadDirectory();
       if (currentUser) loadUser(currentUser.telegram_id);
     } else {
