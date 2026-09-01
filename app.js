@@ -203,6 +203,10 @@ function arrayOfObjects(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
 }
 
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 const DEEP_SESSION_STATUSES = new Set([
   "preparing",
   "active",
@@ -223,7 +227,6 @@ const DEEP_SESSION_STAGES = new Set([
 function normalizeDeepSessions(value) {
   const block = objectOrEmpty(value);
   const summary = objectOrEmpty(block.summary);
-  const cleanText = (text) => (typeof text === "string" ? text.trim() : "");
   const exactContract = Array.isArray(value);
   const source = (exactContract ? arrayOfObjects(value) : arrayOfObjects(block.recent)).slice(0, 5);
   const recent = source
@@ -318,7 +321,22 @@ function normalizeProfile(raw) {
   p.billing = objectOrEmpty(p.billing);
   p.safety_pause = Boolean(p.safety_pause);
   p.access = objectOrEmpty(p.access);
-  p.path = objectOrEmpty(p.path);
+  const path = objectOrEmpty(p.path);
+  const reminderHour = (value) => {
+    const hour = Number(value);
+    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+  };
+  p.path = {
+    ...path,
+    ritual_done_count: Math.max(0, Number(path.ritual_done_count) || 0),
+    growth_done_count: Math.max(0, Number(path.growth_done_count) || 0),
+    ritual_done_at: cleanText(path.ritual_done_at),
+    growth_done_at: cleanText(path.growth_done_at),
+    growth_name: cleanText(path.growth_name),
+    growth_step: cleanText(path.growth_step),
+    growth_reminder_hour: reminderHour(path.growth_reminder_hour),
+    nudges_paused_at: cleanText(path.nudges_paused_at),
+  };
   p.change_experiment = objectOrEmpty(p.change_experiment);
   p.outcome_prompts = objectOrEmpty(p.outcome_prompts);
   p.outcome_feedback = arrayOfObjects(p.outcome_feedback).map((item) => ({
@@ -329,7 +347,12 @@ function normalizeProfile(raw) {
       : "",
     subject_key: typeof item.subject_key === "string" ? item.subject_key : "",
   })).filter((item) => item.event && item.value && item.measurement_point && item.subject_key);
-  p.ritual = objectOrEmpty(p.ritual);
+  const ritual = objectOrEmpty(p.ritual);
+  p.ritual = {
+    ...ritual,
+    reminder_hour: reminderHour(ritual.reminder_hour),
+    done_count: Math.max(0, Number(ritual.done_count) || 0),
+  };
   p.live_sync = objectOrEmpty(p.live_sync);
   p.referral = objectOrEmpty(p.referral);
   p.deep_sessions = normalizeDeepSessions(p.deep_sessions);
@@ -1009,11 +1032,11 @@ function upgradeSection(billing, access) {
   );
   const perks = el("ul", "upgrade-perks");
   [
-    "Полные разговоры без трёхдневных пауз, до 100 сообщений в день",
+    "Полные разговоры без трёхдневных пауз, до 30 сообщений в день",
     "Память о согласованных шагах и о том, что уже помогло",
     "Глубинные сессии с подготовкой и сохранённым тобой итогом",
-    "Разборы снов и работа с привычками",
-    "Бережные напоминания между разговорами",
+    "Привычки: триггер, замена, напоминание и видимый прогресс",
+    "Бережные напоминания и сверка результата между разговорами",
   ].forEach((t) => {
     const li = el("li", "upgrade-perk");
     li.appendChild(el("span", "perk-mark", "✓"));
@@ -2120,6 +2143,88 @@ function changePathBlock(p) {
   return sec;
 }
 
+function practiceProgressBlock(p) {
+  const path = p.path || {};
+  const paused = Boolean(path.nudges_paused_at);
+  const growthHour = path.growth_reminder_hour;
+  const ritualHour = p.ritual ? p.ritual.reminder_hour : null;
+  const ritualHabit = (p.habits || []).find((habit) => cleanText(habit.ritual));
+  const growthVisible = Boolean(
+    path.growth_name || path.growth_step || path.growth_done_count || growthHour !== null
+  );
+  const ritualVisible = Boolean(
+    ritualHabit || path.ritual_done_count || ritualHour !== null
+  );
+  if (!growthVisible && !ritualVisible) return null;
+
+  const sec = el("section", "practice-progress");
+  labelSection(sec, "practice-progress-heading", "Практика между разговорами", "section-eyebrow");
+  sec.appendChild(
+    el(
+      "p",
+      "practice-progress-intro",
+      "Не серия и не оценка. Здесь видно, какую опору ты пробуешь, сколько раз получилось и включено ли напоминание.",
+    ),
+  );
+  const cards = el("div", "practice-grid");
+
+  function reminderText(hour) {
+    if (paused) return "На паузе";
+    if (hour === null) return "Не включено";
+    return "Каждый день в " + String(hour).padStart(2, "0") + ":00";
+  }
+
+  function practiceCard({ title, name, step, count, hour, lastDone }) {
+    const card = el("article", "practice-card");
+    card.appendChild(el("h3", "practice-title", title));
+    if (name) card.appendChild(el("strong", "practice-name", name));
+    if (step) card.appendChild(el("p", "practice-step", step));
+    const stats = el("dl", "practice-stats");
+    [
+      ["Получилось", String(count) + " раз"],
+      ["Напоминание", reminderText(hour)],
+    ].forEach(([label, value]) => {
+      const row = el("div", "practice-stat");
+      row.appendChild(el("dt", null, label));
+      row.appendChild(el("dd", null, value));
+      stats.appendChild(row);
+    });
+    const last = fmtDate(lastDone);
+    if (last) {
+      const row = el("div", "practice-stat practice-stat--wide");
+      row.appendChild(el("dt", null, "Последний раз"));
+      row.appendChild(el("dd", null, last));
+      stats.appendChild(row);
+    }
+    card.appendChild(stats);
+    return card;
+  }
+
+  if (growthVisible) {
+    cards.appendChild(practiceCard({
+      title: "Полезная привычка",
+      name: path.growth_name,
+      step: path.growth_step,
+      count: path.growth_done_count,
+      hour: growthHour,
+      lastDone: path.growth_done_at,
+    }));
+  }
+  if (ritualVisible) {
+    cards.appendChild(practiceCard({
+      title: "Ритуал замещения",
+      name: ritualHabit ? cleanText(ritualHabit.ritual) : "",
+      step: "",
+      count: path.ritual_done_count,
+      hour: ritualHour,
+      lastDone: path.ritual_done_at,
+    }));
+  }
+  if (growthVisible && ritualVisible) cards.classList.add("practice-grid--paired");
+  sec.appendChild(cards);
+  return sec;
+}
+
 function profileInsightsBlock(p) {
   const wrap = el("details", "profile-details");
   wrap.appendChild(el("summary", "profile-details-toggle", "Темы и рабочие гипотезы"));
@@ -2662,6 +2767,8 @@ function pathPanel(p) {
   panel.appendChild(todayBlock(p));
   const stepOutcome = stepAttemptBlock(p);
   if (stepOutcome) panel.appendChild(stepOutcome);
+  const practiceProgress = practiceProgressBlock(p);
+  if (practiceProgress) panel.appendChild(practiceProgress);
   panel.appendChild(changePathBlock(p));
   const conversationOutcome = conversationOutcomeBlock(p);
   if (conversationOutcome) panel.appendChild(conversationOutcome);

@@ -32,6 +32,10 @@ const refundHtml = await readFile(
   new URL("../refund.html", import.meta.url),
   "utf8",
 );
+const privacyHtml = await readFile(
+  new URL("../privacy.html", import.meta.url),
+  "utf8",
+);
 const telegramUrl = "https://t.me/extaz_assistant_bot?start=src_landing";
 
 assert.match(html, /<html lang="ru">/);
@@ -53,7 +57,7 @@ assert.match(html, /<meta\s+[\s\S]*?name="description"/);
 assert.match(html, /id="main"/);
 assert.match(html, /class="skip-link"/);
 assert.match(html, /<script type="application\/ld\+json">/);
-assert.match(html, /до 100 сообщений в день/);
+assert.match(html, /до 30 сообщений в день/);
 assert.match(html, /не скидка и не депозит/);
 assert.match(indexHtml, /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/);
 assert.doesNotMatch(
@@ -68,7 +72,7 @@ assert.match(rootRedirectJs, /function waitForTelegramInit\(attempt\)/);
 assert.match(rootRedirectJs, /attempt < 30/);
 assert.match(rootRedirectJs, /waitForTelegramInit\(attempt \+ 1\)/);
 assert.match(rootRedirectJs, /miniapp-boot\.js\?v=/);
-assert.match(indexHtml, /root-redirect\.js\?v=20260824-prepaid-hardening/);
+assert.match(indexHtml, /root-redirect\.js\?v=20260901-commerce-launch/);
 assert.doesNotMatch(indexHtml, /src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
 assert.match(indexHtml, /Content-Security-Policy/);
 assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);
@@ -117,19 +121,22 @@ assert.match(html, /Данные можно выгрузить и удалить
 assert.match(html, /Разговоры не продаются/);
 assert.match(html, /не продаём разговоры рекламодателям/);
 assert.match(html, /Полные разговоры без трёхдневных пауз/);
-assert.match(html, /Новое оформление временно закрыто/);
-assert.match(html, /Не пополняйте Stars специально/);
-assert.match(html, /Как купить Stars, когда оформление откроется/);
+assert.match(html, /Подписка доступна в Telegram/);
+assert.match(html, /Как купить Stars и оформить подписку/);
 assert.match(html, /class="button button-primary"[\s\S]*?data-cta="pricing_free"/);
 assert.match(html, /class="button button-secondary"[\s\S]*?data-cta="pricing_month"/);
 assert.doesNotMatch(html, /target="_blank"/);
 assert.doesNotMatch(html, /http:\/\//);
 assert.doesNotMatch(js, /localStorage|sessionStorage|document\.cookie/);
 assert.doesNotMatch(attributionJs, /localStorage|sessionStorage|document\.cookie/);
-assert.match(offerHtml, /Новое оформление подписки временно закрыто/);
-assert.match(refundHtml, /Новое оформление подписки временно закрыто/);
+assert.doesNotMatch(offerHtml, /временно закрыто/);
+assert.doesNotMatch(refundHtml, /временно закрыто/);
+assert.match(refundHtml, /команда <b>\/paysupport<\/b>/);
 assert.match(offerHtml, /командой <b>\/cancel<\/b>/);
 assert.match(refundHtml, /командой <b>\/cancel<\/b>/);
+assert.match(privacyHtml, /не просим имя, телефон, email или данные банковской карты/);
+assert.match(privacyHtml, /не продаём данные/);
+assert.doesNotMatch(privacyHtml, /Supabase|OpenRouter/);
 assert.match(offerHtml, /права Пользователя, которые\s+нельзя исключить или уменьшить по закону/);
 assert.doesNotMatch(offerHtml, /Сервис не несёт ответственности/);
 

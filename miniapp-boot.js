@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260824-prepaid-hardening";
+  var assetVersion = "20260901-commerce-launch";
   var timer;
   var failed = false;
 

@@ -449,6 +449,7 @@ a {
 /* Path */
 
 .today,
+.practice-progress,
 .change-path,
 .outcome-card,
 .dynamics,
@@ -558,6 +559,97 @@ a {
 .change-path {
   margin-top: 14px;
   padding: 19px;
+}
+
+.practice-progress {
+  margin-top: 14px;
+  padding: 19px;
+}
+
+.practice-progress-intro {
+  margin: 0 0 15px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.practice-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.practice-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+
+.practice-title,
+.practice-name,
+.practice-step {
+  overflow-wrap: anywhere;
+}
+
+.practice-title {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.practice-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.practice-step {
+  margin: 5px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.practice-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 13px 0 0;
+}
+
+.practice-stat {
+  min-width: 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.practice-stat--wide {
+  grid-column: 1 / -1;
+}
+
+.practice-stat dt,
+.practice-stat dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.practice-stat dt {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.practice-stat dd {
+  margin-top: 3px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .outcome-card {
@@ -2274,6 +2366,7 @@ a {
   }
 
   .today,
+  .practice-progress,
   .change-path,
   .outcome-card,
   .dynamics,
@@ -2343,6 +2436,10 @@ a {
   }
 
   .upgrade-plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .practice-grid--paired {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2421,6 +2518,7 @@ a {
 }
 
 .today,
+.practice-progress,
 .outcome-card,
 .session-prep,
 .deep-session-card,
@@ -2435,6 +2533,7 @@ a {
   box-shadow: none;
 }
 
+.practice-progress,
 .change-path,
 .dynamics,
 .profile-details {
@@ -2450,6 +2549,11 @@ a {
 .change-path {
   padding-top: 18px;
   padding-bottom: 7px;
+}
+
+.practice-progress {
+  padding-top: 18px;
+  padding-bottom: 4px;
 }
 
 .change-path-intro {
