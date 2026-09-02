@@ -207,6 +207,18 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function practiceKeyOrNull(value) {
+  const key = cleanText(value);
+  return /^[0-9a-f]{24}$/.test(key) ? key : null;
+}
+
+function currentRitualHabit(habits) {
+  const candidates = arrayOfObjects(habits).filter((habit) => cleanText(habit.ritual));
+  const current = candidates.filter((habit) => habit.is_current_practice === true);
+  if (current.length === 1) return current[0];
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 function reminderHourOrNull(value) {
   // Number(null) and Number("") are both 0. Treating either as a real hour invents a
   // midnight reminder that the person never enabled.
@@ -317,7 +329,17 @@ function normalizeProfile(raw) {
   };
   p.sections = arrayOfObjects(p.sections);
   p.archetypes = arrayOfObjects(p.archetypes);
-  p.habits = arrayOfObjects(p.habits);
+  p.habits = arrayOfObjects(p.habits).map((habit) => ({
+    ...habit,
+    name: cleanText(habit.name),
+    summary: cleanText(habit.summary),
+    trigger: cleanText(habit.trigger),
+    serves: cleanText(habit.serves),
+    ritual: cleanText(habit.ritual),
+    fallback: cleanText(habit.fallback),
+    practice_key: practiceKeyOrNull(habit.practice_key),
+    is_current_practice: habit.is_current_practice === true,
+  })).filter((habit) => habit.name);
   p.memories = arrayOfObjects(p.memories);
   const memoryCenter = objectOrEmpty(p.memory_center);
   p.memory_center = {
@@ -530,21 +552,25 @@ async function submitOutcome(event, value, measurementPoint, subjectKey) {
   return res.json();
 }
 
-async function submitPracticeCheckIn(kind) {
+async function submitPracticeCheckIn(kind, practiceKey) {
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
   const res = await fetchWithDeadline(freshApiUrl("/api/practice/check-in"), {
     method: "POST",
     headers: apiHeaders(initData, true),
     cache: "no-store",
-    body: JSON.stringify({ kind }),
+    body: JSON.stringify({
+      kind,
+      ...(kind === "ritual" && practiceKey ? { practice_key: practiceKey } : {}),
+    }),
   });
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
   const body = await res.json();
   if (
     !body || body.kind !== kind ||
-    !Number.isInteger(Number(body.count)) || typeof body.counted !== "boolean"
+    !Number.isInteger(Number(body.count)) || typeof body.counted !== "boolean" ||
+    (kind === "ritual" && practiceKey && body.practice_key !== practiceKey)
   ) throw new Error("invalid-response");
   return body;
 }
@@ -564,7 +590,7 @@ function practiceClockMetadata() {
   return { timezone, utc_offset_minutes: utcOffsetMinutes };
 }
 
-async function submitPracticeReminder(kind, hour) {
+async function submitPracticeReminder(kind, hour, practiceKey) {
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
   const clock = practiceClockMetadata();
@@ -577,6 +603,7 @@ async function submitPracticeReminder(kind, hour) {
       hour,
       timezone: clock.timezone,
       utc_offset_minutes: clock.utc_offset_minutes,
+      ...(kind === "ritual" && practiceKey ? { practice_key: practiceKey } : {}),
     }),
   });
   if (res.status === 401) throw new Error("unauthorized");
@@ -584,7 +611,8 @@ async function submitPracticeReminder(kind, hour) {
   const body = await res.json();
   if (
     !body || body.kind !== kind ||
-    reminderHourOrNull(body.reminder_hour) !== hour
+    reminderHourOrNull(body.reminder_hour) !== hour ||
+    (kind === "ritual" && hour !== null && practiceKey && body.practice_key !== practiceKey)
   ) throw new Error("invalid-response");
   return body;
 }
@@ -2235,18 +2263,24 @@ function changePathBlock(p) {
   return sec;
 }
 
+let activePracticeTab = null;
+let openPracticeReminderKind = null;
+let habitQueueOpen = false;
+
 function practiceProgressBlock(p) {
   const path = p.path || {};
   let paused = Boolean(path.nudges_paused_at);
   const remindersAvailable = Boolean(p.is_paid);
   const growthHour = path.growth_reminder_hour;
   const ritualHour = p.ritual ? p.ritual.reminder_hour : null;
-  const ritualHabit = (p.habits || []).find((habit) => cleanText(habit.ritual));
+  const ritualHabits = (p.habits || []).filter((habit) => cleanText(habit.ritual));
+  const ritualHabit = currentRitualHabit(p.habits);
+  const otherHabits = (p.habits || []).filter((habit) => habit !== ritualHabit);
   const growthVisible = Boolean(
     path.growth_name || path.growth_step || path.growth_done_count || growthHour !== null
   );
   const ritualVisible = Boolean(
-    ritualHabit || path.ritual_done_count || ritualHour !== null
+    ritualHabit || ritualHabits.length || path.ritual_done_count || ritualHour !== null
   );
   if (!growthVisible && !ritualVisible) return null;
 
@@ -2280,9 +2314,13 @@ function practiceProgressBlock(p) {
     };
   }
 
-  function practiceCard({ kind, title, name, step, cue, need, fallback, count, hour, lastDone, configured }) {
+  function practiceCard({
+    kind, title, context, name, step, cue, need, fallback, count, hour, lastDone,
+    configured, practiceKey,
+  }) {
     let currentHour = hour;
     const card = el("article", "practice-card");
+    card.dataset.practiceKind = kind;
     const head = el("div", "practice-card-head");
     head.appendChild(el("h3", "practice-title", title));
     const reminder = reminderState(currentHour);
@@ -2296,6 +2334,7 @@ function practiceProgressBlock(p) {
     refreshReminderBadges.push(refreshReminder);
     head.appendChild(reminderBadge);
     card.appendChild(head);
+    if (context) card.appendChild(el("p", "practice-context", context));
     if (name) card.appendChild(el("strong", "practice-name", name));
     if (step) card.appendChild(el("p", "practice-step", step));
     const plan = el("dl", "practice-plan");
@@ -2330,10 +2369,12 @@ function practiceProgressBlock(p) {
     card.appendChild(stats);
     if (configured) {
       const actions = el("div", "practice-actions");
-      const done = el("button", "practice-done", "Отметить, что получилось");
+      const done = el("button", "practice-done", "Отметить попытку");
       done.type = "button";
+      done.dataset.practiceAction = "done";
       const discuss = el("button", "practice-discuss", "Обсудить трудный день");
       discuss.type = "button";
+      discuss.dataset.practiceAction = "discuss";
       const status = el("p", "practice-action-status");
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
@@ -2367,13 +2408,14 @@ function practiceProgressBlock(p) {
         done.textContent = "Отмечаю…";
         status.textContent = "";
         try {
-          const result = await submitPracticeCheckIn(kind);
+          const result = await submitPracticeCheckIn(kind, practiceKey);
           const nextCount = Math.max(0, Number(result.count) || 0);
           countValue.textContent = String(nextCount) + " " +
             pluralRu(nextCount, "раз", "раза", "раз");
           lastValue.textContent = fmtDate(result.done_at) || "сегодня";
           done.removeAttribute("aria-busy");
-          done.textContent = result.counted ? "Сегодня отмечено" : "Уже отмечено сегодня";
+          done.textContent = result.counted ? "Отмечено сегодня" : "Уже отмечено сегодня";
+          discuss.disabled = false;
           status.textContent = result.counted
             ? "Попытка сохранена. Путь вырос ещё на один реальный шаг."
             : "Повторная отметка не увеличила счётчик.";
@@ -2381,11 +2423,23 @@ function practiceProgressBlock(p) {
           if (haptic && typeof haptic.notificationOccurred === "function") {
             haptic.notificationOccurred("success");
           }
-        } catch (_) {
+        } catch (error) {
+          if (error && error.message === "http-409") {
+            done.removeAttribute("aria-busy");
+            status.textContent = "Практика изменилась после открытия экрана. Обновляю актуальный план…";
+            await refreshProfileView();
+            if (done.isConnected) {
+              done.disabled = false;
+              discuss.disabled = false;
+              done.textContent = "Повторить после обновления";
+              status.textContent = "План пока не обновился. Закрой и снова открой Mini App или повтори чуть позже.";
+            }
+            return;
+          }
           done.disabled = false;
           discuss.disabled = false;
           done.removeAttribute("aria-busy");
-          done.textContent = "Попробовать отметить снова";
+          done.textContent = "Повторить отметку";
           status.textContent = "Не удалось сохранить отметку. Проверь связь и повтори.";
         }
       });
@@ -2395,6 +2449,11 @@ function practiceProgressBlock(p) {
       card.appendChild(status);
 
       const settings = el("details", "practice-reminder-settings");
+      settings.open = openPracticeReminderKind === kind;
+      settings.addEventListener("toggle", () => {
+        if (settings.open) openPracticeReminderKind = kind;
+        else if (openPracticeReminderKind === kind) openPracticeReminderKind = null;
+      });
       settings.appendChild(el("summary", "practice-reminder-toggle", "Настроить напоминание"));
       const settingsBody = el("div", "practice-reminder-body");
       const field = el("label", "practice-reminder-field");
@@ -2445,7 +2504,7 @@ function practiceProgressBlock(p) {
         select.disabled = true;
         settingStatus.textContent = nextHour === null ? "Выключаю…" : "Сохраняю…";
         try {
-          const result = await submitPracticeReminder(kind, nextHour);
+          const result = await submitPracticeReminder(kind, nextHour, practiceKey);
           currentHour = reminderHourOrNull(result.reminder_hour);
           if (kind === "growth") path.growth_reminder_hour = currentHour;
           else if (p.ritual) p.ritual.reminder_hour = currentHour;
@@ -2468,7 +2527,18 @@ function practiceProgressBlock(p) {
           if (haptic && typeof haptic.notificationOccurred === "function") {
             haptic.notificationOccurred("success");
           }
-        } catch (_) {
+        } catch (error) {
+          if (error && error.message === "http-409") {
+            settingStatus.textContent = "Практика изменилась. Обновляю актуальный план…";
+            await refreshProfileView();
+            if (select.isConnected) {
+              select.disabled = !remindersAvailable;
+              saveReminder.disabled = !remindersAvailable;
+              disableReminder.disabled = currentHour === null;
+              settingStatus.textContent = "План пока не обновился. Переоткрой Mini App и повтори настройку.";
+            }
+            return;
+          }
           select.disabled = !remindersAvailable;
           saveReminder.disabled = !remindersAvailable;
           disableReminder.disabled = currentHour === null;
@@ -2488,10 +2558,88 @@ function practiceProgressBlock(p) {
     return card;
   }
 
+  function otherHabitsBlock(habits) {
+    if (!habits.length) return null;
+    const details = el("details", "practice-queue");
+    details.open = habitQueueOpen;
+    details.addEventListener("toggle", () => {
+      habitQueueOpen = details.open;
+    });
+    const summary = el("summary", "practice-queue-toggle");
+    summary.appendChild(el("span", null, "Другие привычки"));
+    summary.appendChild(el("span", "practice-queue-count", String(habits.length)));
+    details.appendChild(summary);
+    const intro = el(
+      "p",
+      "practice-queue-intro",
+      "Они остаются в профиле, но кнопки относятся только к одной текущей практике, чтобы отметки и напоминания не смешивались.",
+    );
+    details.appendChild(intro);
+    const list = el("ul", "practice-queue-list");
+    habits.forEach((habit) => {
+      const item = el("li", "practice-queue-item");
+      const copy = el("span", "practice-queue-copy");
+      copy.appendChild(el("strong", null, habit.name));
+      copy.appendChild(
+        el(
+          "small",
+          null,
+          habit.ritual ? "Ритуал: " + habit.ritual : "Ритуал замещения ещё не выбран",
+        ),
+      );
+      item.appendChild(copy);
+      const state = el("span", "practice-queue-state", STATUS_LABELS[habit.status] || "в профиле");
+      state.dataset.status = habit.status || "working";
+      item.appendChild(state);
+      list.appendChild(item);
+    });
+    details.appendChild(list);
+    const switchButton = el("button", "practice-switch-chat", "Выбрать другую в чате");
+    switchButton.type = "button";
+    const switchStatus = el("p", "practice-action-status");
+    switchStatus.setAttribute("role", "status");
+    switchStatus.setAttribute("aria-live", "polite");
+    switchButton.addEventListener("click", async () => {
+      switchButton.disabled = true;
+      switchButton.setAttribute("aria-busy", "true");
+      switchButton.textContent = "Готовлю вопрос…";
+      switchStatus.textContent = "";
+      try {
+        await postChatIntent("habit_practice_switch", newRequestId());
+        switchButton.removeAttribute("aria-busy");
+        switchButton.textContent = "Вопрос уже в чате";
+        switchStatus.textContent = "Открываю разговор без передачи текста привычек из профиля.";
+        window.setTimeout(closeToChat, 350);
+      } catch (_) {
+        switchButton.disabled = false;
+        switchButton.removeAttribute("aria-busy");
+        switchButton.textContent = "Попробовать снова";
+        switchStatus.textContent = "Не удалось открыть выбор. Проверь связь и повтори.";
+      }
+    });
+    details.appendChild(switchButton);
+    details.appendChild(switchStatus);
+    return details;
+  }
+
+  const entries = [];
+
+  function addEntry(key, label, content) {
+    const panel = el("div", "practice-panel");
+    panel.id = "practice-panel-" + key;
+    panel.dataset.practicePanel = key;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "practice-tab-" + key);
+    panel.appendChild(content);
+    entries.push({ key, label, panel });
+    cards.appendChild(panel);
+  }
+
   if (growthVisible) {
-    cards.appendChild(practiceCard({
+    addEntry("growth", "Полезная", practiceCard({
       kind: "growth",
       title: "Полезная привычка",
+      context: "Небольшое действие, которое ты решил попробовать",
       name: path.growth_name,
       step: path.growth_step,
       cue: "",
@@ -2501,24 +2649,93 @@ function practiceProgressBlock(p) {
       hour: growthHour,
       lastDone: path.growth_done_at,
       configured: Boolean(path.growth_step),
+      practiceKey: null,
     }));
   }
   if (ritualVisible) {
-    cards.appendChild(practiceCard({
-      kind: "ritual",
-      title: "Ритуал замещения",
-      name: ritualHabit ? cleanText(ritualHabit.ritual) : "",
-      step: "",
-      cue: ritualHabit ? cleanText(ritualHabit.trigger) : "",
-      need: ritualHabit ? cleanText(ritualHabit.serves) : "",
-      fallback: ritualHabit ? cleanText(ritualHabit.fallback) : "",
-      count: path.ritual_done_count,
-      hour: ritualHour,
-      lastDone: path.ritual_done_at,
-      configured: Boolean(ritualHabit),
-    }));
+    const ritualPanel = el("div", "practice-ritual-content");
+    if (ritualHabit) {
+      ritualPanel.appendChild(practiceCard({
+        kind: "ritual",
+        title: "Ритуал замещения",
+        context: "Сейчас в фокусе привычка «" + ritualHabit.name + "»",
+        name: ritualHabit.ritual,
+        step: "",
+        cue: ritualHabit.trigger,
+        need: ritualHabit.serves,
+        fallback: ritualHabit.fallback,
+        count: path.ritual_done_count,
+        hour: ritualHour,
+        lastDone: path.ritual_done_at,
+        configured: true,
+        practiceKey: ritualHabit.practice_key,
+      }));
+    } else {
+      const unresolved = el("div", "practice-selection-warning");
+      unresolved.setAttribute("role", "status");
+      unresolved.appendChild(el("strong", null, "Нужно обновить текущую практику"));
+      unresolved.appendChild(el("p", null, "Несколько привычек готовы к работе, но активная ещё не определена. Действия временно скрыты, чтобы не записать отметку не туда."));
+      const refresh = el("button", "practice-refresh", "Обновить профиль");
+      refresh.type = "button";
+      refresh.addEventListener("click", () => refreshProfileView());
+      unresolved.appendChild(refresh);
+      ritualPanel.appendChild(unresolved);
+    }
+    const queue = otherHabitsBlock(otherHabits);
+    if (queue) ritualPanel.appendChild(queue);
+    addEntry("ritual", "Замещение", ritualPanel);
   }
-  if (growthVisible && ritualVisible) cards.classList.add("practice-grid--paired");
+
+  if (entries.length > 1) {
+    const tabs = el("div", "practice-tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Выбор практики на сегодня");
+    const buttons = [];
+    const selectPractice = (key, moveFocus) => {
+      activePracticeTab = key;
+      entries.forEach((entry) => {
+        const selected = entry.key === key;
+        const button = buttons.find((candidate) => candidate.dataset.practiceTab === entry.key);
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.tabIndex = selected ? 0 : -1;
+        entry.panel.hidden = !selected;
+        entry.panel.inert = !selected;
+        if (selected && moveFocus) button.focus();
+      });
+    };
+    entries.forEach((entry, index) => {
+      const button = el("button", "practice-tab", entry.label);
+      button.type = "button";
+      button.id = "practice-tab-" + entry.key;
+      button.dataset.practiceTab = entry.key;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", entry.panel.id);
+      button.addEventListener("click", () => selectPractice(entry.key, false));
+      button.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        let next = index;
+        if (event.key === "ArrowLeft") next = (index - 1 + entries.length) % entries.length;
+        if (event.key === "ArrowRight") next = (index + 1) % entries.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = entries.length - 1;
+        selectPractice(entries[next].key, true);
+      });
+      buttons.push(button);
+      tabs.appendChild(button);
+    });
+    sec.appendChild(tabs);
+    const growthTime = Date.parse(path.growth_done_at || "") || 0;
+    const ritualTime = Date.parse(path.ritual_done_at || "") || 0;
+    const fallbackTab = ritualHabit && ritualTime >= growthTime ? "ritual" : "growth";
+    const selectedTab = entries.some((entry) => entry.key === activePracticeTab)
+      ? activePracticeTab
+      : fallbackTab;
+    selectPractice(selectedTab, false);
+  } else if (entries.length === 1) {
+    entries[0].panel.removeAttribute("role");
+    entries[0].panel.removeAttribute("aria-labelledby");
+  }
   sec.appendChild(cards);
   return sec;
 }
