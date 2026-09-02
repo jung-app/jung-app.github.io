@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260901-local-reminders";
+  var assetVersion = "20260902-practice-focus";
   var timer;
   var failed = false;
 

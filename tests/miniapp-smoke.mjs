@@ -11,12 +11,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260901-local-reminders/);
+assert.match(html, /styles\.css\?v=20260902-practice-focus/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260901-local-reminders"/);
+assert.match(boot, /assetVersion = "20260902-practice-focus"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -44,6 +44,17 @@ assert.equal(utcOffsetMinutesOrNull(false), null);
 assert.equal(utcOffsetMinutesOrNull("180"), 180);
 assert.equal(utcOffsetMinutesOrNull(-720), -720);
 assert.equal(utcOffsetMinutesOrNull(841), null);
+const currentRitualSource = app.match(/function currentRitualHabit\(habits\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(currentRitualSource, "current ritual selector must stay independently testable");
+const currentRitualHabit = vm.runInNewContext("(" + currentRitualSource + ")", {
+  arrayOfObjects: (value) => Array.isArray(value) ? value.filter(Boolean) : [],
+  cleanText: (value) => typeof value === "string" ? value.trim() : "",
+});
+const ritualOne = { ritual: "чай", is_current_practice: false };
+const ritualTwo = { ritual: "прогулка", is_current_practice: true };
+assert.equal(currentRitualHabit([ritualOne]), ritualOne);
+assert.equal(currentRitualHabit([ritualOne, ritualTwo]), ritualTwo);
+assert.equal(currentRitualHabit([ritualOne, { ritual: "книга" }]), null);
 assert.match(app, /function normalizeDeepSessions\(value\)/);
 assert.match(app, /p\.deep_sessions = normalizeDeepSessions\(p\.deep_sessions\)/);
 assert.match(app, /DEEP_SESSION_STATUSES/);
@@ -63,11 +74,18 @@ assert.match(app, /Практика сегодня/);
 assert.match(app, /growth_reminder_hour/);
 assert.match(app, /\/api\/practice\/check-in/);
 assert.match(app, /\/api\/practice\/reminder/);
+assert.match(app, /practice_key: practiceKey/);
+assert.match(app, /function currentRitualHabit\(habits\)/);
+assert.match(app, /Другие привычки/);
+assert.match(app, /Выбрать другую в чате/);
+assert.match(app, /habit_practice_switch/);
+assert.match(app, /discuss\.disabled = false/);
+assert.match(app, /dataset\.practiceAction/);
 assert.match(app, /practiceClockMetadata/);
 assert.match(app, /По местному времени устройства/);
 assert.match(app, /practice_fallback_utc_offset_minutes/);
 assert.match(app, /Не отправляется: доступ завершён/);
-assert.match(app, /Отметить, что получилось/);
+assert.match(app, /Отметить попытку/);
 assert.match(app, /growth_practice/);
 assert.match(app, /ritual_practice/);
 assert.match(app, /Напоминание выключено/);
