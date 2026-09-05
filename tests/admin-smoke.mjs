@@ -12,7 +12,7 @@ assert.match(html, /inputmode="numeric"/);
 assert.match(html, /id="action-status"[^>]*aria-live="polite"/);
 assert.match(html, /id="directory-content"[^>]*aria-live="polite"/);
 assert.match(html, /admin\.css\?v=20260901-admin-3/);
-assert.match(html, /admin\.js\?v=20260901-admin-3/);
+assert.match(html, /admin\.js\?v=20260905-retention/);
 assert.match(html, /id="audit-panel"/);
 assert.match(html, /id="audit-content"[^>]*aria-live="polite"/);
 
