@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260902-practice-focus";
+  var assetVersion = "20260905-product-audit";
   var timer;
   var failed = false;
 

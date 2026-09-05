@@ -1223,7 +1223,10 @@ function upgradeSection(billing, access) {
   );
   btn.type = "button";
   btn.addEventListener("click", () => startUpgrade(btn, "monthly", feedback));
-  plans.appendChild(btn);
+  const monthlyPlan = el("div", "upgrade-plan");
+  monthlyPlan.appendChild(btn);
+  monthlyPlan.appendChild(el("p", "plan-terms", "Автопродление каждые 30 дней. Отключить: /cancel в чате или в настройках Telegram. Доступ сохранится до конца оплаченного срока."));
+  plans.appendChild(monthlyPlan);
   if (annualAvailable) {
     const ybtn = el(
       "button",
@@ -1231,14 +1234,19 @@ function upgradeSection(billing, access) {
       "365 дней · " + annual + " ⭐",
     );
     ybtn.type = "button";
-    ybtn.appendChild(el("span", "upgrade-saving", "цена десяти месяцев"));
+    if (annual === monthly * 10) {
+      ybtn.appendChild(el("span", "upgrade-saving", "цена десяти месяцев"));
+    }
     ybtn.addEventListener("click", () => startUpgrade(ybtn, "annual", feedback));
-    plans.appendChild(ybtn);
+    const annualPlan = el("div", "upgrade-plan");
+    annualPlan.appendChild(ybtn);
+    annualPlan.appendChild(el("p", "plan-terms", "Один платёж за 365 дней. Без автопродления."));
+    plans.appendChild(annualPlan);
   }
   sec.appendChild(plans);
   sec.appendChild(feedback);
-  const guide = el("div", "stars-guide");
-  guide.appendChild(el("strong", "stars-guide-title", "Как купить Stars"));
+  const guide = el("details", "stars-guide");
+  guide.appendChild(el("summary", "stars-guide-title", "Как купить Stars"));
   const steps = el("ol", "stars-guide-steps");
   [
     "Открой @PremiumBot и нажми /start.",
@@ -1494,11 +1502,8 @@ function conversationOutcomeBlock(p) {
   const key = typeof p.outcome_prompts.conversation_key === "string"
     ? p.outcome_prompts.conversation_key
     : "";
-  const stage = p.path && p.path.activation ? p.path.activation.stage : "";
-  const eligible = ["pattern_named", "step_chosen", "outcome_shared", "loop_completed"]
-    .includes(stage);
   if (
-    !key || !eligible ||
+    !key ||
     (p.live_sync && p.live_sync.pending_profile_update) ||
     (hasOutcome(p.outcome_feedback, "conversation_insight") &&
       hasOutcome(p.outcome_feedback, "next_step_clarity"))
@@ -1561,8 +1566,8 @@ function todayBlock(p) {
   const stage = p.path && p.path.activation ? p.path.activation.stage : "";
   const stages = {
     portrait_ready: {
-      state: "Образ собран",
-      next: "Назови один повторяющийся сценарий, который хочется изменить.",
+      state: "Начнём с важного для тебя",
+      next: "Можно разобрать ситуацию, выбрать маленький шаг или просто выговориться.",
     },
     pattern_named: {
       state: "Сценарий замечен",
@@ -1616,16 +1621,10 @@ function todayBlock(p) {
     labelText = "К чему вернуться";
     ctaLabel = "Продолжить эту тему";
   }
-  if (!step && p.completeness && p.completeness.missing && p.completeness.missing.length) {
-    step = {
-      state: "Образ ещё уточняется",
-      next: "Расскажи о ситуации, где особенно заметна тема «" + p.completeness.missing[0] + "».",
-    };
-  }
   if (!step) {
     step = {
-      state: "Выбери живую тему",
-      next: "Открой одну тему на карте ниже и продолжи её в разговоре.",
+      state: "Что поможет сейчас?",
+      next: "Расскажи в чате, что занимает тебя сегодня. Личный профиль будет уточняться по ходу разговора.",
     };
   }
   if (p.live_sync && p.live_sync.pending_profile_update) {
@@ -1659,6 +1658,7 @@ function todayBlock(p) {
 
 function closeToChat() {
   if (tg && typeof tg.close === "function") tg.close();
+  else window.location.assign("./landing.html");
 }
 
 function topicSelectionFeedback() {
@@ -1765,11 +1765,31 @@ function renderMemoryUpdate(updated, message) {
   announceAction(message);
   activeProfileTab = "memory";
   renderedProfileFingerprint = null;
-  renderFetchedProfile(updated);
+  renderFetchedProfile(updated, true);
   queueMicrotask(() => {
     const tab = document.getElementById("tab-memory");
     if (tab) tab.focus();
   });
+}
+
+function hasMemoryDraft() {
+  return Boolean(document.querySelector('.memory-form[data-dirty="true"]'));
+}
+
+function protectMemoryDraft(form) {
+  const mark = () => { form.dataset.dirty = "true"; };
+  form.addEventListener("input", mark);
+  form.addEventListener("change", mark);
+  const cancel = el("button", "memory-secondary", "Отменить ввод");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => {
+    form.reset();
+    delete form.dataset.dirty;
+    const details = form.closest("details");
+    if (details) details.open = false;
+    refreshProfileView();
+  });
+  form.appendChild(cancel);
 }
 
 function memoryTypeSelect(types, selected) {
@@ -1800,11 +1820,13 @@ function memoryEditForm(item, types) {
   textarea.maxLength = 280;
   textarea.required = true;
   textarea.value = item.content;
+  textarea.defaultValue = item.content;
   const status = el("p", "memory-action-status");
   status.setAttribute("role", "status");
   const save = el("button", "memory-primary", "Сохранить исправление");
   save.type = "submit";
   form.append(typeLabel, select, textLabel, textarea, save, status);
+  protectMemoryDraft(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     save.disabled = true;
@@ -1954,6 +1976,7 @@ function memoryAddBlock(types) {
   const status = el("p", "memory-action-status");
   status.setAttribute("role", "status");
   form.append(typeLabel, select, textLabel, textarea, submit, status);
+  protectMemoryDraft(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     submit.disabled = true;
@@ -2225,13 +2248,13 @@ function profileTabShell(panels) {
 }
 
 function changePathBlock(p) {
-  const sec = el("section", "change-path");
-  labelSection(sec, "change-path-heading", "Твой цикл изменения", "section-eyebrow");
+  const sec = el("details", "change-path");
+  sec.appendChild(el("summary", "section-eyebrow", "Твой цикл изменения"));
   sec.appendChild(
     el(
       "p",
       "change-path-intro",
-      "Не отчёт и не серия достижений. Это место, где понимание превращается в проверяемый шаг.",
+      "Если хочется что-то изменить, можно двигаться так. Любой этап можно обсудить, уменьшить или поставить на паузу.",
     ),
   );
   const stage = (p.path && p.path.activation && p.path.activation.stage) ||
@@ -3276,8 +3299,8 @@ function pathPanel(p) {
   const panel = el("section", "path-panel");
   const header = el("header", "panel-header path-panel-header");
   header.appendChild(el("span", "section-eyebrow", "Путь сегодня"));
-  header.appendChild(el("h2", "panel-title serif", "Понимание становится маленьким действием"));
-  header.appendChild(el("p", "panel-intro", "Один следующий шаг важнее десятка метрик. Здесь видно, что проверить в жизни и к чему вернуться в разговоре."));
+  header.appendChild(el("h2", "panel-title serif", "Что поможет сегодня"));
+  header.appendChild(el("p", "panel-intro", "Продолжить разговор или вернуться к выбранному шагу."));
   panel.appendChild(header);
   panel.appendChild(todayBlock(p));
   const stepOutcome = stepAttemptBlock(p);
@@ -3356,7 +3379,10 @@ function profileRenderFingerprint(profile) {
   return JSON.stringify(stable);
 }
 
-function renderFetchedProfile(profile) {
+function renderFetchedProfile(profile, replaceDrafts = false) {
+  // A background extraction can finish while the person is correcting memory.
+  // Preserve their draft even if the field has lost focus or its tab is hidden.
+  if (!replaceDrafts && hasMemoryDraft()) return false;
   // Polling/lifecycle events usually return the same document. Replacing the whole DOM
   // in that case resets scroll, focus and the star map, making a quiet refresh look like
   // a page reload. Only reconcile the view when the payload actually changed.

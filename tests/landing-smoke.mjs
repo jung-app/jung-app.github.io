@@ -72,7 +72,7 @@ assert.match(rootRedirectJs, /function waitForTelegramInit\(attempt\)/);
 assert.match(rootRedirectJs, /attempt < 30/);
 assert.match(rootRedirectJs, /waitForTelegramInit\(attempt \+ 1\)/);
 assert.match(rootRedirectJs, /miniapp-boot\.js\?v=/);
-assert.match(indexHtml, /root-redirect\.js\?v=20260902-practice-focus/);
+assert.match(indexHtml, /root-redirect\.js\?v=20260905-product-audit/);
 assert.doesNotMatch(indexHtml, /src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
 assert.match(indexHtml, /Content-Security-Policy/);
 assert.match(indexHtml, /script-src 'self' https:\/\/telegram\.org/);

@@ -3079,3 +3079,29 @@ a {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Put the recurring commitment next to the purchase decision. */
+.plan-terms {
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+summary.stars-guide-title {
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 10px;
+}
+summary.stars-guide-title:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 3px;
+}
+.change-path > summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 10px;
+}
+.change-path > summary:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 3px;
+}
