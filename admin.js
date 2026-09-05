@@ -232,11 +232,11 @@
     var columns = element("div", "overview-columns");
     columns.appendChild(renderFunnel(body.funnel || []));
     var side = element("div");
-    var retention = sectionCard("Возвраты", "Анонимные события в выбранном срезе");
+    var retention = sectionCard("Возвраты", "Первый возврат спустя указанный срок. Это не доля вернувшихся в конкретный день.");
     var retentionGrid = element("div", "metric-grid");
-    retentionGrid.appendChild(metricCard("D1", body.retention && body.retention.d1));
-    retentionGrid.appendChild(metricCard("D7", body.retention && body.retention.d7));
-    retentionGrid.appendChild(metricCard("D30", body.retention && body.retention.d30));
+    retentionGrid.appendChild(metricCard("Спустя ≥1 день", body.retention && body.retention.d1));
+    retentionGrid.appendChild(metricCard("Спустя ≥7 дней", body.retention && body.retention.d7));
+    retentionGrid.appendChild(metricCard("Спустя ≥30 дней", body.retention && body.retention.d30));
     retentionGrid.appendChild(metricCard("У стены", body.access && body.access.at_wall));
     retention.appendChild(retentionGrid);
     side.appendChild(retention);
