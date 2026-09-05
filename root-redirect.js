@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260902-practice-focus";
+      boot.src = "./miniapp-boot.js?v=20260905-product-audit";
       document.body.appendChild(boot);
     });
   }
