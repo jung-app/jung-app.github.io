@@ -575,6 +575,27 @@ async function submitPracticeCheckIn(kind, practiceKey) {
   return body;
 }
 
+let experimentMutationEpoch = 0;
+
+async function controlExperiment(operation, revision, payload) {
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(freshApiUrl("/api/experiment/control"), {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ operation, revision, payload,
+      ...(operation === "edit" ? { clock: practiceClockMetadata() } : {}),
+    }),
+  });
+  if (!res.ok) throw new Error("http-" + res.status);
+  const body = await res.json();
+  if (!body.change_experiment || !body.change_experiment.revision) {
+    throw new Error("invalid-response");
+  }
+  return body.change_experiment;
+}
+
 function practiceClockMetadata() {
   let timezone = null;
   try {
@@ -1381,8 +1402,12 @@ function changeExperimentView(raw) {
     cta = "Выбрать следующий шаг";
   } else if (status === "paused") {
     state = "Пауза тоже часть пути";
-    next = "Можно оставить этот шаг или уменьшить его без стыда и гонки.";
+    next = "«" + action + "» можно оставить на паузе или изменить, когда захочется.";
     cta = "Пересобрать без давления";
+  } else if (outcome) {
+    state = "Результат отмечен";
+    next = "Можно уменьшить шаг «" + action + "», выбрать другое время или взять паузу.";
+    cta = "Скорректировать план";
   } else if (checkIn && checkIn.key <= today) {
     state = "Время сверить результат";
     next = "Что фактически произошло с шагом: «" + action + "»?";
@@ -1401,7 +1426,7 @@ function changeExperimentView(raw) {
   if (trigger) details.push(["Когда", trigger]);
   if (fallback) details.push(["Минимум", fallback]);
   if (successSignal) details.push(["Признак", successSignal]);
-  if (checkIn) details.push(["Сверка", fmtDateOnly(checkIn.key)]);
+  if (checkIn && status !== "paused") details.push(["Сверка", fmtDateOnly(checkIn.key)]);
   if (status !== "attempted" && outcome) {
     details.push(["Что произошло", outcome]);
   }
@@ -1409,7 +1434,7 @@ function changeExperimentView(raw) {
     details.push(["Что берём дальше", learning]);
   }
   const feedbackDue = Boolean(
-    measurementKey && (
+    measurementKey && status !== "paused" && (
       ["attempted", "adjusted", "completed"].includes(status) ||
       (checkIn && checkIn.key <= today) ||
       (planned && planned.key < today)
@@ -1540,6 +1565,7 @@ function conversationOutcomeBlock(p) {
 }
 
 function stepAttemptBlock(p) {
+  if (p.change_experiment && p.change_experiment.revision) return null;
   const experiment = changeExperimentView(p.change_experiment);
   if (!experiment || !experiment.feedbackDue || !experiment.measurementKey) return null;
   const section = el("section", "outcome-card outcome-card--step");
@@ -1652,8 +1678,170 @@ function todayBlock(p) {
   const btn = el("button", "today-cta", ctaLabel);
   btn.type = "button";
   btn.addEventListener("click", closeToChat);
+  if (showExperiment && p.change_experiment.revision) {
+    sec.appendChild(experimentControls(p, sec));
+    btn.className = "experiment-chat";
+    btn.textContent = "Обсудить в чате";
+  }
   sec.appendChild(btn);
   return sec;
+}
+
+function experimentControls(p, section) {
+  const step = p.change_experiment;
+  const controls = el("div", "experiment-controls");
+  const feedback = el("p", "experiment-feedback");
+  feedback.setAttribute("role", "status");
+  feedback.setAttribute("aria-live", "polite");
+  const editor = el("details", "experiment-editor");
+  const editToggle = el("summary", "experiment-edit-toggle", "Изменить шаг или сроки");
+  editor.appendChild(editToggle);
+  const form = el("form", "experiment-form");
+  form.appendChild(el("p", "experiment-hint", "Выбери посильную версию. Сроки необязательны. Изменения сохранятся только по кнопке."));
+  const fields = {};
+  [
+    ["action", "Маленькое действие", "textarea"],
+    ["trigger", "Когда или в какой ситуации, необязательно", "text"],
+    ["fallback", "Если сил мало, необязательно", "text"],
+    ["success_signal", "Как замечу, что попробовал, необязательно", "text"],
+    ["planned_for", "Когда попробую, необязательно", "date"],
+    ["check_in_on", "Когда сверюсь, необязательно", "date"],
+  ].forEach(([key, label, type]) => {
+    const input = el(type === "textarea" ? "textarea" : "input", "memory-input");
+    input.id = "experiment-" + key;
+    input.name = key;
+    if (type !== "textarea") input.type = type;
+    if (type !== "date") {
+      input.maxLength = 280;
+      input.minLength = key === "action" ? 8 : 4;
+    }
+    input.required = key === "action";
+    input.value = cleanText(step[key]);
+    input.defaultValue = input.value;
+    const labelNode = el("label", "memory-field-label", label);
+    labelNode.htmlFor = input.id;
+    form.append(labelNode, input);
+    fields[key] = input;
+  });
+  form.addEventListener("input", () => { form.dataset.dirty = "true"; });
+  form.appendChild(el("p", "experiment-hint", "Даты шага и время напоминаний будут по местному времени этого устройства."));
+  form.addEventListener("change", () => { form.dataset.dirty = "true"; });
+  const save = el("button", "memory-primary", "Сохранить план");
+  save.type = "submit";
+  const cancel = el("button", "memory-secondary", "Отменить изменения");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => {
+    form.reset();
+    delete form.dataset.dirty;
+    editor.open = false;
+    editToggle.focus();
+    refreshProfileView();
+  });
+  form.append(save, cancel);
+  editor.appendChild(form);
+
+  async function commit(operation, payload, message) {
+    if (controls.dataset.busy === "true") return;
+    if (operation !== "edit" && form.dataset.dirty === "true") {
+      feedback.textContent = "Сначала сохрани или отмени изменения плана. Черновик остаётся здесь.";
+      editor.open = true;
+      save.focus();
+      return;
+    }
+    controls.dataset.busy = "true";
+    experimentMutationEpoch++;
+    controls.setAttribute("aria-busy", "true");
+    const inputs = Array.from(controls.querySelectorAll("button, input, textarea"));
+    inputs.forEach((node) => { node.disabled = true; });
+    feedback.textContent = "Сохраняю…";
+    try {
+      const updated = await controlExperiment(operation, step.revision, payload);
+      p.change_experiment = updated;
+      const replacement = todayBlock(p);
+      section.replaceWith(replacement);
+      const readout = replacement.querySelector(".experiment-feedback");
+      if (readout) readout.textContent = message;
+      const focus = replacement.querySelector(".today-cta") || replacement.querySelector(".experiment-edit-toggle");
+      if (focus) focus.focus();
+      renderedProfileFingerprint = null;
+      announceAction(message);
+    } catch (error) {
+      if (error.message === "http-409") {
+        feedback.textContent = "План уже изменился, возможно, сохранение успело пройти. Черновик остаётся здесь. Отмени изменения, чтобы загрузить текущий план.";
+        editor.open = true;
+        form.dataset.dirty = "true";
+      } else {
+        const errors = {
+          "http-401": "Сессия завершилась. Открой профиль заново из чата.",
+          "http-400": "Проверь формулировки: от 8 символов для действия, от 4 для необязательных полей. Дата сверки должна быть не раньше попытки.",
+          "http-422": "Эту формулировку нельзя сохранить как план. Можно обсудить её в чате. Ввод пока остаётся только на экране.",
+        };
+        feedback.textContent = errors[error.message] || "Не удалось подтвердить сохранение. Твой ввод остался здесь. Проверь связь и повтори.";
+      }
+      inputs.forEach((node) => { node.disabled = false; });
+      if (error.message === "http-409") {
+        controls.querySelectorAll("button").forEach((node) => { node.disabled = node !== cancel; });
+      }
+    } finally {
+      experimentMutationEpoch++;
+      delete controls.dataset.busy;
+      controls.removeAttribute("aria-busy");
+    }
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (fields.planned_for.value && fields.check_in_on.value &&
+        fields.check_in_on.value < fields.planned_for.value) {
+      feedback.textContent = "Дата сверки должна быть в день попытки или позже.";
+      fields.check_in_on.focus();
+      return;
+    }
+    const payload = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value]));
+    commit("edit", payload, "План сохранён. Можно пробовать в своём темпе.");
+  });
+
+  if (!["paused", "completed"].includes(step.status)) {
+    const toggle = el("button", "today-cta", step.outcome ? "Уточнить результат" : "Отметить результат");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", "experiment-check-in");
+    const choices = el("fieldset", "outcome-question experiment-check-in");
+    choices.id = "experiment-check-in";
+    choices.hidden = true;
+    choices.appendChild(el("legend", "outcome-question-label", "Удалось попробовать шаг?"));
+    choices.appendChild(el("p", "experiment-hint", "Любой исход подходит. Отметку можно исправить."));
+    const row = el("div", "outcome-options");
+    [
+      ["done", "Попробовал", "Попытка отмечена. Теперь можно обсудить, что помогло и что хочется изменить."],
+      ["partly", "Частично", "Частичная попытка отмечена. Можно сделать шаг меньше или выбрать другое время."],
+      ["not_yet", "Пока нет", "Отмечено без оценки. Можно уменьшить шаг, изменить сроки или взять паузу."],
+    ].forEach(([value, label, message]) => {
+      const button = el("button", "outcome-option", label);
+      button.type = "button";
+      button.addEventListener("click", () => commit("check_in", { value }, message));
+      row.appendChild(button);
+    });
+    choices.appendChild(row);
+    toggle.addEventListener("click", () => {
+      choices.hidden = !choices.hidden;
+      toggle.setAttribute("aria-expanded", String(!choices.hidden));
+    });
+    controls.append(toggle, choices);
+  }
+  controls.appendChild(editor);
+  if (step.status !== "completed") {
+    const paused = step.status === "paused";
+    const pause = el("button", paused ? "today-cta" : "experiment-pause", paused ? "Вернуться к шагу" : "Поставить шаг на паузу");
+    pause.type = "button";
+    pause.addEventListener("click", () => commit(paused ? "resume" : "pause", {}, paused
+      ? "Шаг снова открыт. Старые сроки убраны: выбери новые, если захочется."
+      : "Шаг на паузе. Вернуться можно в любой момент."));
+    controls.appendChild(pause);
+  }
+  controls.appendChild(feedback);
+  return controls;
 }
 
 function closeToChat() {
@@ -1773,7 +1961,7 @@ function renderMemoryUpdate(updated, message) {
 }
 
 function hasMemoryDraft() {
-  return Boolean(document.querySelector('.memory-form[data-dirty="true"]'));
+  return Boolean(document.querySelector('.memory-form[data-dirty="true"], .experiment-form[data-dirty="true"], .experiment-controls[data-busy="true"]'));
 }
 
 function protectMemoryDraft(form) {
@@ -3411,9 +3599,10 @@ function refreshProfileView() {
   }
 
   refreshInFlight = (async () => {
+    const epoch = experimentMutationEpoch;
     try {
       const profile = await fetchProfile(true);
-      renderFetchedProfile(profile);
+      if (epoch === experimentMutationEpoch) renderFetchedProfile(profile);
       scheduleRefresh(profile);
     } catch (error) {
       if (error && (error.message === "unauthorized" || error.message === "no-init-data")) {

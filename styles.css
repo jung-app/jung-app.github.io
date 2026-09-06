@@ -501,6 +501,30 @@ a {
   line-height: 1.55;
 }
 
+.experiment-controls { margin-top: 12px; }
+.experiment-form { display: grid; gap: 8px; padding: 8px 0 12px; }
+.experiment-form textarea { min-height: 104px; resize: vertical; }
+.experiment-form .memory-input { font-size: 16px; }
+.experiment-form .memory-field-label { font-size: 14px; }
+.experiment-hint, .experiment-feedback { margin: 8px 0 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.experiment-feedback:empty { display: none; }
+.experiment-edit-toggle, .experiment-pause, .experiment-chat {
+  min-height: 48px;
+  padding: 12px 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.experiment-pause, .experiment-chat { display: block; width: 100%; border: 0; background: transparent; text-align: left; }
+.experiment-chat { border-top: 1px solid var(--line); }
+.experiment-editor[open] { margin-top: 8px; border-top: 1px solid var(--line); }
+.experiment-check-in[hidden] { display: none; }
+.experiment-check-in { margin-top: 12px; }
+.experiment-controls [disabled] { opacity: .6; cursor: wait; }
+
 .today-sync {
   margin: 12px 0 0;
   padding: 10px 12px;

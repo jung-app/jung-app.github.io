@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
-const files = new Set(["app.js", "styles.css", "today-prompt.js", "favicon.svg"]);
+const files = new Set(["app.js", "styles.css", "today-prompt.js", "favicon.svg", "admin.js", "admin.css"]);
 const mime = { js: "text/javascript", css: "text/css", svg: "image/svg+xml" };
 let revision = 0;
 
@@ -39,7 +39,7 @@ const runtime = `
     BackButton: {show(){}, hide(){}, onClick(){}}, HapticFeedback: {selectionChanged(){}},
     openInvoice(url, done) {done('cancelled');}
   }};
-  document.getElementById('preview-refresh').onclick = () => refreshProfileView();
+  if (document.getElementById('preview-refresh')) document.getElementById('preview-refresh').onclick = () => refreshProfileView();
 `;
 
 createServer(async (req, res) => {
@@ -48,6 +48,27 @@ createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith("/fixture/")) {
       res.setHeader("Content-Type", "application/json");
+      if (url.pathname === "/fixture/admin/api/admin/overview") {
+        res.end(JSON.stringify({outcomes: {step_attempt: {done: 2, partly: 1, not_yet: 3}}})); return;
+      }
+      if (url.pathname.startsWith("/fixture/step")) {
+        if (req.method === "POST" && url.pathname.startsWith("/fixture/step-offline/")) {
+          res.writeHead(503); res.end('{}'); return;
+        }
+        if (req.method === "POST" && url.pathname.startsWith("/fixture/step-conflict/")) {
+          res.writeHead(409); res.end('{}'); return;
+        }
+        // Real local API + in-memory synthetic profile. Never proxy production.
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const backend = await fetch("http://127.0.0.1:8766" + url.pathname.replace(/^\/fixture\/[^/]+/, "") + url.search, {
+          method: req.method,
+          headers: {Authorization: "tma synthetic", "Content-Type": "application/json"},
+          body: req.method === "POST" ? Buffer.concat(chunks) : undefined,
+        });
+        res.writeHead(backend.status);
+        res.end(await backend.text()); return;
+      }
       if (url.pathname.includes("/error/")) { res.writeHead(503); res.end('{}'); return; }
       if (url.pathname.includes("/unauthorized/")) { res.writeHead(401); res.end('{}'); return; }
       if (url.pathname.includes("/empty/")) { res.end('{"profile":null}'); return; }
@@ -61,6 +82,15 @@ createServer(async (req, res) => {
     }
     if (url.pathname === "/preview-runtime.js") {
       res.setHeader("Content-Type", "text/javascript"); res.end(runtime); return;
+    }
+    if (url.pathname === "/admin-preview") {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      const html = (await readFile(new URL("admin.html", root), "utf8"))
+        .replace(/<link[\s\S]*?>/g, match => match.includes("fonts.google") ? "" : match)
+        .replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', "")
+        .replace(/\.\/config\.js\?v=[^\"]+/, "/preview-runtime.js")
+        .replace('<body>', '<body><aside style="padding:8px">Синтетический стенд. Все числа вымышлены.</aside>');
+      res.end(html); return;
     }
     if (url.pathname === "/" || url.pathname === "/index.html") {
       res.setHeader("Content-Type", "text/html; charset=utf-8");

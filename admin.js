@@ -241,10 +241,11 @@
     retention.appendChild(retentionGrid);
     side.appendChild(retention);
 
-    var outcomes = sectionCard("Проверка пользы", "За всё время, только варианты ответа без темы разговора");
+    var outcomes = sectionCard("Проверка пользы", "Первые ответы за всё время. Попытка не доказывает пользу; текущая отметка шага могла быть исправлена.");
     var outcomeGrid = element("div", "metric-grid");
-    outcomeGrid.appendChild(metricCard("Шаг сделан", outcomeCount(body.outcomes, "step_attempt", "done")));
+    outcomeGrid.appendChild(metricCard("Попробовали шаг", outcomeCount(body.outcomes, "step_attempt", "done")));
     outcomeGrid.appendChild(metricCard("Частично", outcomeCount(body.outcomes, "step_attempt", "partly")));
+    outcomeGrid.appendChild(metricCard("Пока не пробовали", outcomeCount(body.outcomes, "step_attempt", "not_yet")));
     outcomeGrid.appendChild(metricCard("Стало яснее", outcomeCount(body.outcomes, "next_step_clarity", "clearer")));
     outcomeGrid.appendChild(metricCard("Полезный инсайт", outcomeCount(body.outcomes, "conversation_insight", "yes")));
     outcomes.appendChild(outcomeGrid);
