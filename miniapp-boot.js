@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260906-step-control";
+  var assetVersion = "20260909-movement";
   var timer;
   var failed = false;
 

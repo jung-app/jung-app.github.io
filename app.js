@@ -1757,6 +1757,7 @@ function experimentControls(p, section) {
     try {
       const updated = await controlExperiment(operation, step.revision, payload);
       p.change_experiment = updated;
+      if (p.movement) window.setTimeout(refreshProfileView, 0);
       const replacement = todayBlock(p);
       section.replaceWith(replacement);
       const readout = replacement.querySelector(".experiment-feedback");
@@ -1802,7 +1803,8 @@ function experimentControls(p, section) {
     commit("edit", payload, "План сохранён. Можно пробовать в своём темпе.");
   });
 
-  if (!["paused", "completed"].includes(step.status)) {
+  if (!["paused", "completed"].includes(step.status) &&
+      !(p.movement && p.movement.entries.some(entry => entry.linked))) {
     const toggle = el("button", "today-cta", step.outcome ? "Уточнить результат" : "Отметить результат");
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", "false");
@@ -1961,7 +1963,7 @@ function renderMemoryUpdate(updated, message) {
 }
 
 function hasMemoryDraft() {
-  return Boolean(document.querySelector('.memory-form[data-dirty="true"], .experiment-form[data-dirty="true"], .experiment-controls[data-busy="true"]'));
+  return Boolean(document.querySelector('.memory-form[data-dirty="true"], .experiment-form[data-dirty="true"], .experiment-controls[data-busy="true"], .movement-form[data-dirty="true"], .movement-card[data-busy="true"]'));
 }
 
 function protectMemoryDraft(form) {
@@ -3483,6 +3485,224 @@ function morePanel(p) {
   return panel;
 }
 
+// Movement is an optional entry into the existing single-step loop.
+const MOVEMENT_KINDS = {
+  walk: ["Прогулка", "В удобном темпе, если место и самочувствие позволяют."],
+  mobility: ["Мягкое движение", "Привычные удобные движения, можно сидя. Без боли и усилия."],
+  break: ["Подвижная пауза", "Сменить положение и немного подвигаться, как сейчас удобно."],
+  rest: ["Отдых", "Можно просто дать себе паузу. Двигаться не обязательно."],
+};
+const MOVEMENT_STATUS = {chosen: "Выбрано", attempted: "Попробовал", completed: "Завершено", declined: "Решил не пробовать"};
+
+function movementBlock(p) {
+  let m = p.movement;
+  if (!m || !m.revision || (!m.enabled && !m.entries.length)) return null;
+  const card = el("section", "movement-card");
+  card.id = "movement";
+  card.append(el("span", "section-eyebrow", "Небольшая пауза для себя"),
+    el("h2", "serif", "Движение по силам"),
+    el("p", "movement-intro", "Выбрать посильное движение и заметить, как тебе после. Без нормы и обязательных отметок."));
+  const feedback = el("p", "movement-feedback");
+  feedback.setAttribute("role", "status");
+  feedback.setAttribute("aria-live", "polite");
+  const button = (label, action, primary = false) => {
+    const b = el("button", primary ? "memory-primary" : "memory-secondary", label);
+    b.type = "button"; b.addEventListener("click", action); return b;
+  };
+  const select = (form, key, label, options, value) => {
+    const wrap = el("label", "movement-field");
+    wrap.appendChild(el("span", "memory-field-label", label));
+    const input = el("select", "memory-input"); input.name = key;
+    for (const [v, title] of options) { const o = el("option", null, title); o.value = v; o.defaultSelected = String(v) === String(value); input.appendChild(o); }
+    input.value = value; wrap.appendChild(input); form.appendChild(wrap); return input;
+  };
+  const energyOptions = [["", "Пропустить"], ["1", "1 · Совсем мало"], ["2", "2 · Мало"], ["3", "3 · Средне"], ["4", "4 · Достаточно"], ["5", "5 · Много"]];
+  const rating = input => input.value === "" ? null : Number(input.value);
+  const dirty = form => {
+    form.classList.add("movement-form");
+    form.addEventListener("input", () => {form.dataset.dirty = "true";});
+    form.addEventListener("change", () => {form.dataset.dirty = "true";});
+  };
+  let pending = null;
+  async function commit(operation, payload) {
+    if (card.dataset.busy === "true") return;
+    if (document.querySelector('.memory-form[data-dirty="true"], .experiment-form[data-dirty="true"]')) {
+      feedback.textContent = "Сначала сохрани или отмени правки текущего шага или памяти. Этот черновик останется здесь."; return;
+    }
+    const signature = JSON.stringify([operation, payload]);
+    if (!pending || pending.signature !== signature) pending = {signature, id: crypto.randomUUID(), revision: m.revision};
+    card.dataset.busy = "true"; card.setAttribute("aria-busy", "true"); experimentMutationEpoch++;
+    const controls = Array.from(card.querySelectorAll("button, input, select"));
+    const wasDisabled = controls.map(n => n.disabled); controls.forEach(n => {n.disabled = true;});
+    feedback.textContent = "Сохраняю…";
+    try {
+      const res = await fetchWithDeadline(freshApiUrl("/api/movement/control"), {
+        method: "POST", headers: apiHeaders(tg && tg.initData || "", true), cache: "no-store",
+        body: JSON.stringify({operation, payload, revision: pending.revision, request_id: pending.id}),
+      });
+      if (!res.ok) throw new Error("http-" + res.status);
+      const body = await res.json();
+      if (!body.movement || !body.movement.revision) throw new Error("invalid-response");
+      p.movement = body.movement; p.change_experiment = body.change_experiment || {};
+      // Reconcile the existing plan/dates too, so the next quiet poll does not remount
+      // an otherwise unchanged movement form while the person is reading it.
+      const refreshed = await fetchProfile(true).catch(() => null);
+      delete card.dataset.busy; card.querySelectorAll(".movement-form").forEach(f => {delete f.dataset.dirty;});
+      renderFetchedProfile(refreshed || p, true);
+      const next = document.getElementById("movement");
+      if (next) {
+        next.querySelector(".movement-feedback").textContent = "Сохранено. Можно изменить решение в любой момент.";
+        const focus = next.querySelector("button"); if (focus) focus.focus({preventScroll: true});
+        next.scrollIntoView({block: "nearest", behavior: "instant"});
+      }
+      announceAction("Сохранено");
+    } catch (error) {
+      feedback.textContent = error.message === "http-401"
+        ? "Сессия завершилась. Скопируй нужные правки и открой мини-апп из чата заново."
+        : error.message === "http-409"
+          ? "Данные уже изменились. Черновик остался здесь. Проверь актуальный шаг перед повторным сохранением."
+          : error.message === "http-400"
+            ? "Не удалось сохранить эти поля. Проверь выбор. Если журнал заполнен, выгрузи данные и удали ненужные записи."
+            : "Не удалось подтвердить сохранение. Черновик остался здесь. Проверь связь и повтори: дубликата не будет.";
+      if (error.message === "http-409") feedback.appendChild(button("Проверить актуальный шаг", async () => {
+        try {
+          const fresh = await fetchProfile(true);
+          if (!fresh || !fresh.movement) return;
+          m = fresh.movement; p.change_experiment = fresh.change_experiment; pending = null;
+          feedback.textContent = "Сейчас: " + (fresh.change_experiment.action || "текущий шаг не выбран") + ". Проверь черновик и сохрани ещё раз, если решение подходит.";
+        } catch (_) { feedback.textContent = "Не удалось загрузить актуальные данные. Черновик сохранён в открытом мини-аппе."; }
+      }));
+    } finally {
+      delete card.dataset.busy; card.removeAttribute("aria-busy"); experimentMutationEpoch++;
+      controls.forEach((n, i) => {n.disabled = wasDisabled[i];});
+    }
+  }
+  const cancel = form => button("Отменить изменения", () => {
+    delete form.dataset.dirty; pending = null; form.closest("details").open = false;
+    form.reset(); refreshProfileView();
+  });
+  function entryEditor(entry) {
+    const details = el("details", "movement-entry");
+    details.appendChild(el("summary", null, `${MOVEMENT_KINDS[entry.kind][0]} · до ${entry.minutes} мин · ${fmtDateOnly(entry.local_date)}`));
+    details.appendChild(el("p", "movement-meta", MOVEMENT_STATUS[entry.status] + (entry.corrected ? " · исправлено" : "") + (entry.paused ? " · шаг на паузе" : "")));
+    if (entry.before !== null || entry.after !== null) details.appendChild(el("p", "movement-pair", `Энергия: ${entry.before === null ? "без отметки" : entry.before + "/5"} → ${entry.after === null ? "без отметки" : entry.after + "/5"}`));
+    details.addEventListener("toggle", () => {
+      if (!details.open || details.dataset.built) return; details.dataset.built = "true";
+      const form = el("form", "movement-form"); dirty(form);
+      if (entry.paused) form.appendChild(el("p", "movement-hint", "Шаг на паузе. Вернуться к нему можно в разделе «Текущий шаг, сроки и пауза»."));
+      const status = select(form, "status", "Что фактически получилось", Object.entries(MOVEMENT_STATUS), entry.status);
+      const after = select(form, "after", "Энергия после, необязательно", energyOptions, entry.after == null ? "" : String(entry.after));
+      const effect = select(form, "effect", "Помогло ли это тебе сейчас, необязательно", [["skip", "Пропустить"], ["helped", "Да, помогло"], ["same", "Ничего не изменилось"], ["worse", "Стало хуже"], ["unsure", "Не уверен"]], entry.effect);
+      const edit = el("details", "movement-more"); edit.appendChild(el("summary", null, "Исправить отметку до"));
+      const before = select(edit, "before", "Энергия до", energyOptions, entry.before == null ? "" : String(entry.before));
+      edit.appendChild(el("p", "movement-hint", "Поздняя отметка «до» сохранится в журнале, но не создаст пару для наблюдений.")); form.appendChild(edit);
+      const notice = el("p", "movement-hint"); form.appendChild(notice);
+      const update = () => {
+        const tried = status.value === "attempted" || status.value === "completed";
+        after.disabled = effect.disabled = !tried;
+        notice.textContent = tried && effect.value === "worse"
+          ? "Можно остановиться и выбрать отдых. При боли или недомогании не продолжай нагрузку; обратись за медицинской помощью по ситуации."
+          : "Пропуск отметки ничего не говорит о самочувствии. Любой исход подходит.";
+      }; status.addEventListener("change", update); effect.addEventListener("change", update); update();
+      const save = el("button", "memory-primary", "Сохранить отметку"); save.type = "submit";
+      form.append(save, cancel(form));
+      form.addEventListener("submit", e => {e.preventDefault(); const tried = ["attempted", "completed"].includes(status.value);
+        commit("report", {id: entry.id, status: status.value, before: rating(before), after: tried ? rating(after) : null, effect: tried ? effect.value : "skip"});
+      });
+      const deletion = el("details", "movement-delete"); deletion.appendChild(el("summary", null, "Удалить запись"));
+      deletion.appendChild(el("p", "movement-hint", "Запись и связанный с ней текущий шаг будут удалены. Сначала можно выгрузить свои данные."));
+      deletion.append(button("Удалить эту запись", () => commit("delete", {id: entry.id})), button("Оставить запись", () => {deletion.open = false;}));
+      form.appendChild(deletion); details.appendChild(form);
+    });
+    return details;
+  }
+  const active = m.entries.find(e => e.linked);
+  if (active) {
+    if (active.paused) card.appendChild(el("p", "movement-hint", "Шаг на паузе. Можно отдыхать; исправление записей остаётся доступным."));
+    const pendingEntry = entryEditor(active); card.appendChild(pendingEntry);
+    card.appendChild(button(active.status === "chosen" && !active.paused ? "Отметить, как прошло" : "Посмотреть или исправить отметку", () => {pendingEntry.open = true;}, true));
+  }
+  if (m.enabled && !m.safety_pause) {
+    const composer = el("details", "movement-composer");
+    composer.appendChild(el("summary", "movement-open", active ? "Выбрать другое движение" : "Подобрать движение"));
+    const form = el("form", "movement-form"); dirty(form);
+    const offerId = crypto.randomUUID(); let offered = false;
+    composer.addEventListener("toggle", () => {if (composer.open && !offered) {offered = true; submitOutcome("movement_offer", "shown", "movement", offerId).catch(() => {});}});
+    const need = select(form, "need", "Чего сейчас хочется", [["switch", "Переключиться"], ["calm", "Успокоиться"], ["energy", "Почувствовать больше энергии"]], "switch");
+    const minutes = select(form, "minutes", "Сколько времени посильно", [["1", "Около минуты"], ["3", "До 3 минут"], ["5", "До 5 минут"], ["10", "До 10 минут"], ["15", "До 15 минут"], ["30", "До 30 минут"]], "3");
+    const more = el("details", "movement-more"); more.appendChild(el("summary", null, "Уточнить под себя, необязательно"));
+    const before = select(more, "before", "Сколько энергии сейчас", energyOptions, "");
+    const healthLabel = el("label", "movement-check"); const health = el("input"); health.type = "checkbox"; health.name = "unwell";
+    healthLabel.append(health, document.createTextNode("Есть боль, недомогание или сомнения, можно ли двигаться")); more.appendChild(healthLabel);
+    form.appendChild(more);
+    const choices = el("fieldset", "movement-options"); choices.appendChild(el("legend", null, "Что тебе подходит"));
+    const radios = {};
+    for (const [kind, [label, description]] of Object.entries(MOVEMENT_KINDS)) {
+      const row = el("label", "movement-option"); const input = el("input"); input.type = "radio"; input.name = "kind"; input.value = kind;
+      radios[kind] = input; const text = el("span"); text.append(el("strong", null, label), el("span", null, description)); row.append(input, text); choices.appendChild(row);
+    }
+    const hint = el("p", "movement-hint"); let manualKind = false;
+    choices.addEventListener("change", () => {manualKind = true; refreshChoice();});
+    const replaceLabel = el("label", "movement-check"); const replace = el("input"); replace.type = "checkbox"; replace.name = "replace";
+    replaceLabel.append(replace, document.createTextNode("Заменить мой текущий шаг этим движением"));
+    function refreshChoice() {
+      const preferred = m.preferences.personalize && m.preferences.preferred !== "any" ? m.preferences.preferred : null;
+      const suggested = health.checked ? "rest" : preferred || (rating(before) !== null && rating(before) <= 2 ? "break" : Number(minutes.value) >= 10 ? "walk" : need.value === "calm" ? "mobility" : "break");
+      if (!manualKind || health.checked) radios[suggested].checked = true;
+      Object.entries(radios).forEach(([k, input]) => {input.disabled = health.checked && k !== "rest";});
+      const selected = Object.keys(radios).find(k => radios[k].checked);
+      replaceLabel.hidden = !p.change_experiment.action || p.change_experiment.status === "completed" || selected === "rest";
+      hint.textContent = health.checked
+        ? "Сейчас можно выбрать отдых. Нагрузку при боли или недомогании не подбираем. Обсуди ограничения с врачом; при сильной боли в груди, обмороке или выраженной одышке нужна срочная помощь. Этот ответ не сохраняется."
+        : "Это вариант для пробы, а не обещание улучшения. Можно сократить время, остановиться или выбрать отдых.";
+    }
+    [need, minutes, before, health].forEach(input => input.addEventListener("change", refreshChoice)); refreshChoice();
+    form.append(choices, hint, replaceLabel);
+    const save = el("button", "memory-primary", "Выбрать этот шаг"); save.type = "submit";
+    form.append(save, button("Свернуть, оставив черновик", () => {form.dataset.dirty = "true"; composer.open = false;}), cancel(form));
+    form.addEventListener("submit", e => {e.preventDefault(); const kind = Object.keys(radios).find(k => radios[k].checked);
+      if (!replaceLabel.hidden && !replace.checked) {feedback.textContent = "У тебя уже есть шаг. Для замены отметь своё решение выше; можно оставить прежний шаг."; replace.focus(); return;}
+      commit("choose", {id: offerId, kind, minutes: Number(minutes.value), need: need.value, before: rating(before), ...practiceClockMetadata(), replace: replace.checked});
+    });
+    composer.appendChild(form); card.appendChild(composer);
+    if (active && !active.paused) card.appendChild(button("Выбрать отдых и паузу", () => commit("choose", {
+      id: offerId, kind: "rest", minutes: 1, need: "switch", before: null, ...practiceClockMetadata(), replace: false,
+    })));
+    else card.appendChild(button("Сейчас без движения", () => {submitOutcome("movement_choice", "declined", "movement", offerId + ":declined").catch(() => {}); composer.open = false; feedback.textContent = "Можно оставить всё как есть. Отдых не обнуляет твой опыт.";}));
+  } else card.appendChild(el("p", "movement-hint", "Подбор движения сейчас на паузе. Записи и управление данными доступны."));
+  const history = el("details", "movement-history"); history.appendChild(el("summary", null, "Мои наблюдения и записи"));
+  if (!m.observations.length) history.appendChild(el("p", "movement-hint", "Для личных наблюдений пока недостаточно сопоставимых отметок. Не нужно заполнять их специально: движение возможно и без дневника."));
+  for (const observation of m.observations) {
+    const row = el("div", "movement-observation");
+    row.append(el("h3", null, `${MOVEMENT_KINDS[observation.kind][0]} · выбор ${observation.duration}`),
+      el("p", "movement-pair", `В ${observation.higher} из ${observation.pairs} случаев энергии после было больше.`),
+      el("p", "movement-hint", `Столько же: ${observation.same}. Меньше: ${observation.lower}. Энергии до: ${observation.baseline}. Это совпадение в твоих отметках, а не доказательство причины.`)); history.appendChild(row);
+  }
+  history.appendChild(el("p", "movement-hint", "Окно 28 дней. Нужны 6 пар на 3 разных днях: одно движение, похожая выбранная длительность и энергия до; между отметками до 2 часов. Пропуски не считаются ни успехом, ни ухудшением."));
+  if (!m.entries.length) history.appendChild(el("p", null, "Записей пока нет."));
+  let shown = 0; const list = el("div"); history.appendChild(list);
+  const loadMore = button("Показать ещё записи", () => appendEntries());
+  function appendEntries() {m.entries.slice(shown, shown + 10).forEach(e => list.appendChild(entryEditor(e))); shown += 10; loadMore.hidden = shown >= m.entries.length;}
+  appendEntries(); history.appendChild(loadMore); card.appendChild(history);
+  const settings = el("details", "movement-settings"); settings.appendChild(el("summary", null, "Предпочтения и мои данные"));
+  const settingsForm = el("form", "movement-form"); dirty(settingsForm);
+  const personalLabel = el("label", "movement-check"); const personal = el("input"); personal.type = "checkbox"; personal.checked = personal.defaultChecked = m.preferences.personalize;
+  personalLabel.append(personal, document.createTextNode("Учитывать мои предпочтения и наблюдения о движении в подборе и ИИ-чате")); settingsForm.appendChild(personalLabel);
+  const preferred = select(settingsForm, "preferred", "Обычно мне удобнее", [["any", "Без предпочтения"], ...Object.entries(MOVEMENT_KINDS).map(([k, v]) => [k, v[0]])], m.preferences.preferred);
+  settingsForm.appendChild(el("p", "movement-hint", "Записи остаются твоими данными. Они не становятся психологическими фактами. Новые напоминания не включаются; срок и пауза настраиваются у текущего шага."));
+  const settingsSave = el("button", "memory-primary", "Сохранить предпочтения"); settingsSave.type = "submit";
+  settingsForm.append(settingsSave, cancel(settingsForm)); settingsForm.addEventListener("submit", e => {e.preventDefault(); commit("preferences", {personalize: personal.checked, preferred: preferred.value});});
+  settings.appendChild(settingsForm);
+  settings.appendChild(button("Выгрузить мои данные", () => {const tab = document.getElementById("tab-memory"); if (tab) tab.click(); announceAction("Экспорт доступен во вкладке памяти, в управлении данными.");}));
+  const clear = el("details", "movement-delete"); clear.append(el("summary", null, "Удалить все записи движения"), el("p", "movement-hint", "Удалятся журнал, предпочтения и связанный текущий шаг. Это нельзя отменить."), button("Удалить всё движение", () => commit("clear", {})), button("Оставить данные", () => {clear.open = false;})); settings.appendChild(clear);
+  const frictionId = crypto.randomUUID();
+  const friction = el("fieldset", "movement-friction"); friction.appendChild(el("legend", null, "Что мешает, если хочется сказать"));
+  for (const [value, label] of [["pressure", "Чувствую давление"], ["complexity", "Слишком сложно"], ["reminders", "Мешают напоминания"], ["none", "Всё подходит"]]) friction.appendChild(button(label, async () => {
+    try {await submitOutcome("movement_friction", value, "movement", frictionId); feedback.textContent = value === "reminders" ? "Замечание записано. В чате: /menu → Мои данные → Не писать мне первым. Там же можно выключить ежедневные напоминания." : "Спасибо, замечание записано."; friction.disabled = true;}
+    catch (_) {feedback.textContent = "Замечание не сохранилось. Можно повторить.";}
+  })); settings.appendChild(friction); card.append(settings, feedback); return card;
+}
+
 function pathPanel(p) {
   const panel = el("section", "path-panel");
   const header = el("header", "panel-header path-panel-header");
@@ -3490,7 +3710,17 @@ function pathPanel(p) {
   header.appendChild(el("h2", "panel-title serif", "Что поможет сегодня"));
   header.appendChild(el("p", "panel-intro", "Продолжить разговор или вернуться к выбранному шагу."));
   panel.appendChild(header);
-  panel.appendChild(todayBlock(p));
+  const movement = movementBlock(p);
+  if (movement && p.movement.entries.some(entry => entry.linked)) {
+    panel.appendChild(movement);
+    const stepDetails = el("details", "movement-step");
+    stepDetails.appendChild(el("summary", null, "Текущий шаг, сроки и пауза"));
+    stepDetails.appendChild(todayBlock(p));
+    panel.appendChild(stepDetails);
+  } else {
+    panel.appendChild(todayBlock(p));
+    if (movement) panel.appendChild(movement);
+  }
   const stepOutcome = stepAttemptBlock(p);
   if (stepOutcome) panel.appendChild(stepOutcome);
   const practiceProgress = practiceProgressBlock(p);
@@ -3564,6 +3794,7 @@ function profileRenderFingerprint(profile) {
   // Dynamics timestamps are presentation-only and must not remount the whole page.
   const stable = { ...profile };
   delete stable.dynamics;
+  if (stable.outcome_feedback) stable.outcome_feedback = stable.outcome_feedback.filter(row => row.measurement_point !== "movement");
   return JSON.stringify(stable);
 }
 
@@ -3578,6 +3809,9 @@ function renderFetchedProfile(profile, replaceDrafts = false) {
   if (fingerprint === renderedProfileFingerprint) return false;
   renderedProfileFingerprint = fingerprint;
   setView(profile ? renderProfile(profile) : renderEmpty());
+  if (window.location.hash === "#movement" && document.getElementById("movement")) {
+    document.getElementById("movement").scrollIntoView({block: "start", behavior: "instant"});
+  }
   return true;
 }
 
