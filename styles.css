@@ -3129,3 +3129,36 @@ summary.stars-guide-title:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 3px;
 }
+
+/* A quiet entry into the existing step, with optional detail. */
+.movement-card { margin: 20px 0; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); min-width: 0; scroll-margin-top: 64px; }
+.movement-card h2 { font-size: clamp(25px, 7vw, 32px); line-height: 1.15; margin: 8px 0 12px; }
+.movement-card h3 { font-size: 17px; margin: 0 0 10px; }
+.movement-intro { margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
+.movement-card summary { cursor: pointer; min-height: 48px; padding: 14px 0; font-weight: 600; overflow-wrap: anywhere; }
+.movement-open { color: var(--link); }
+.movement-composer > .movement-open { padding: 15px 16px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-alt); }
+.movement-composer[open] > .movement-open { margin-bottom: 18px; }
+.movement-field { display: grid; gap: 6px; margin: 0 0 16px; min-width: 0; }
+.movement-card .memory-input { width: 100%; max-width: 100%; font-size: 16px; min-height: 48px; }
+.movement-card .memory-primary, .movement-card .memory-secondary { width: 100%; min-height: 48px; margin: 5px 0; padding: 12px; white-space: normal; line-height: 1.4; }
+.movement-options, .movement-friction { border: 0; padding: 0; margin: 16px 0; min-width: 0; }
+.movement-options legend, .movement-friction legend { font-weight: 600; margin-bottom: 10px; }
+.movement-option { display: flex; align-items: start; gap: 12px; padding: 14px 12px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; cursor: pointer; }
+.movement-option:has(input:checked) { border-color: var(--action); box-shadow: inset 0 0 0 1px var(--action); background: var(--ok-soft); }
+.movement-option:has(input:disabled) { opacity: .6; }
+.movement-option input, .movement-check input { width: 20px; height: 20px; flex: 0 0 20px; accent-color: var(--action); margin: 2px 0; }
+.movement-option span span { display: block; color: var(--muted); font-size: 14px; line-height: 1.5; margin-top: 5px; }
+.movement-check { display: flex; gap: 12px; padding: 12px 0; min-height: 48px; font-size: 15px; line-height: 1.5; }
+.movement-check[hidden] { display: none; }
+.movement-hint, .movement-meta { font-size: 14px; line-height: 1.55; color: var(--muted); margin: 10px 0 16px; }
+.movement-pair { font-size: 17px; line-height: 1.5; margin: 10px 0; }
+.movement-history, .movement-settings, .movement-entry { border-top: 1px solid var(--line); margin-top: 12px; }
+.movement-more { margin: 0 0 12px; }
+.movement-observation { margin: 14px 0; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.movement-delete > summary { color: var(--danger); font-size: 14px; }
+.movement-feedback { font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.movement-feedback:empty { margin: 0; }
+.movement-card :focus-visible { outline: 3px solid var(--action); outline-offset: 3px; }
+@media (max-width: 360px) { .movement-card { padding: 16px; } }
+.movement-step > summary { min-height: 48px; padding: 14px 4px; font-weight: 600; cursor: pointer; }

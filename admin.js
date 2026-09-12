@@ -250,6 +250,26 @@
     outcomeGrid.appendChild(metricCard("Полезный инсайт", outcomeCount(body.outcomes, "conversation_insight", "yes")));
     outcomes.appendChild(outcomeGrid);
     side.appendChild(outcomes);
+    var movement = sectionCard("Движение: первые самоотчёты", "Количество записей, не людей. Ответ об эффекте добровольный; отсутствие ответа не означает пользу. Исправления видны в личном журнале.");
+    var movementGrid = element("div", "metric-grid");
+    [
+      ["Показано предложений", "movement_offer", "shown"],
+      ["Выбрано шагов", "movement_choice", "chosen"],
+      ["Выбран отдых", "movement_choice", "rest"],
+      ["Отказ", "movement_choice", "declined"],
+      ["Была попытка", "movement_attempt", "attempted"],
+      ["Завершено", "movement_completion", "completed"],
+      ["Помогло по самооценке", "movement_effect", "helped"],
+      ["Без изменений", "movement_effect", "same"],
+      ["Стало хуже", "movement_effect", "worse"],
+      ["Не уверены", "movement_effect", "unsure"],
+      ["Давление", "movement_friction", "pressure"],
+      ["Слишком сложно", "movement_friction", "complexity"],
+      ["Мешают напоминания", "movement_friction", "reminders"]
+    ].forEach(function (row) { movementGrid.appendChild(metricCard(row[0], outcomeCount(body.outcomes, row[1], row[2]))); });
+    movement.appendChild(movementGrid);
+    side.appendChild(movement);
+
     columns.appendChild(side);
     root.appendChild(columns);
 
