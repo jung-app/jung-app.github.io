@@ -7,7 +7,7 @@ const files = new Set(["app.js", "styles.css", "today-prompt.js", "favicon.svg",
 const mime = { js: "text/javascript", css: "text/css", svg: "image/svg+xml" };
 let revision = 0;
 
-function fixture() {
+function fixture(paid = false) {
   return {
     pseudonym: "Тестовый профиль",
     updated_at: new Date(Date.now() + revision++ * 1000).toISOString(),
@@ -23,7 +23,8 @@ function fixture() {
           content: "После обеда попробовать короткую прогулку", editable: true,
           source: "Добавлено тобой", why: "Явное сохранение", recorded_on: "2026-09-05" }] }],
     },
-    show_upgrade: true,
+    show_upgrade: !paid,
+    is_paid: paid,
     billing: { monthly_xtr: 500, annual_xtr: 5000, annual_available: true, payments_available: true },
     access: { mode: "free" },
   };
@@ -74,11 +75,11 @@ createServer(async (req, res) => {
       if (url.pathname.includes("/empty/")) { res.end('{"profile":null}'); return; }
       if (req.method === "POST") {
         if (url.pathname.endsWith("/invoice")) {
-          res.end(JSON.stringify({invoice_url: "https://t.me/$synthetic-invoice"})); return;
+          res.end(JSON.stringify({url: "https://t.me/$synthetic-invoice"})); return;
         }
         res.end(JSON.stringify({profile: fixture(), recorded: true})); return;
       }
-      res.end(JSON.stringify({profile: fixture()})); return;
+      res.end(JSON.stringify({profile: fixture(url.pathname.includes("/paid/"))})); return;
     }
     if (url.pathname === "/preview-runtime.js") {
       res.setHeader("Content-Type", "text/javascript"); res.end(runtime); return;
