@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260909-movement";
+  var assetVersion = "20260913-calm-core";
   var timer;
   var failed = false;
 

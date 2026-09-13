@@ -326,9 +326,7 @@ a {
 
 .section-eyebrow,
 .today-label,
-.dynamics-label,
 .memory-label,
-.sky-label,
 .upgrade-label,
 .referral-label,
 .hyp-label,
@@ -362,8 +360,7 @@ a {
 .upgrade-text,
 .referral-text,
 .group-sub,
-.profile-details-intro,
-.sky-sub {
+.profile-details-intro{
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 15px;
@@ -450,9 +447,7 @@ a {
 
 .today,
 .practice-progress,
-.change-path,
 .outcome-card,
-.dynamics,
 .profile-details,
 .session-prep,
 .deep-session-card,
@@ -545,7 +540,6 @@ a {
 .premiumbot-btn,
 .command-action,
 .memory-cta,
-.sky-readout-cta,
 .topic-handoff-back {
   min-height: 48px;
   border-radius: 13px;
@@ -559,8 +553,7 @@ a {
 .memory-chat,
 .subscription-chat,
 .share-btn,
-.upgrade-btn,
-.sky-readout-cta {
+.upgrade-btn{
   width: 100%;
   margin-top: 16px;
   padding: 11px 16px;
@@ -578,11 +571,6 @@ a {
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
-}
-
-.change-path {
-  margin-top: 14px;
-  padding: 19px;
 }
 
 .practice-progress {
@@ -1158,120 +1146,6 @@ a {
   margin-top: 0;
 }
 
-.change-path-intro {
-  margin: 0 0 17px;
-  color: var(--muted);
-  font-size: 15px;
-}
-
-.change-path-list {
-  display: grid;
-  gap: 0;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.change-path-step {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 11px;
-  min-height: 62px;
-}
-
-.change-path-step:not(:last-child)::after {
-  position: absolute;
-  top: 31px;
-  bottom: -1px;
-  left: 16px;
-  width: 2px;
-  background: var(--line);
-  content: "";
-}
-
-.change-path-step[data-state="done"]:not(:last-child)::after {
-  background: color-mix(in srgb, var(--ok) 55%, var(--line));
-}
-
-.change-path-marker {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.change-path-step[data-state="done"] .change-path-marker {
-  border-color: var(--ok);
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-
-.change-path-step[data-state="current"] .change-path-marker {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.change-path-copy {
-  display: block;
-  min-width: 0;
-  padding: 2px 0 13px;
-}
-
-.change-path-copy strong,
-.change-path-copy small {
-  display: block;
-  overflow-wrap: anywhere;
-}
-
-.change-path-copy strong {
-  font-size: 15px;
-}
-
-.change-path-copy small {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.42;
-}
-
-.dynamics {
-  margin-top: 14px;
-  padding: 18px;
-}
-
-.dynamics-summary {
-  display: grid;
-  gap: 8px;
-}
-
-.dynamics-title,
-.dynamics-text,
-.dynamics-preview {
-  margin: 0;
-}
-
-.dynamics-title {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.dynamics-text,
-.dynamics-preview {
-  color: var(--muted);
-  font-size: 14px;
-}
-
 .delta {
   width: fit-content;
   padding: 5px 9px;
@@ -1281,12 +1155,6 @@ a {
   font-size: 12px;
   font-weight: 750;
 }
-
-.dynamics-details {
-  margin-top: 10px;
-}
-
-.dynamics-more,
 .card-guide-q,
 .topic-map-growth-toggle {
   min-height: 44px;
@@ -1295,32 +1163,6 @@ a {
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-}
-
-.dynamics-list {
-  display: grid;
-  gap: 8px;
-  margin: 7px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dynamics-item {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  font-size: 14px;
-}
-
-.dynamics-kind {
-  flex: 0 0 auto;
-  color: var(--ok);
-  font-size: 12px;
-  font-weight: 750;
-}
-
-.dynamics-kind--refined {
-  color: var(--accent);
 }
 
 /* Profile topics */
@@ -1374,17 +1216,9 @@ a {
 .profile-details-intro {
   padding: 14px 3px 0;
 }
-
-.sky,
 .group {
   min-width: 0;
 }
-
-.sky {
-  padding-top: 2px;
-}
-
-.sky-label,
 .group-title {
   margin: 0;
 }
@@ -2811,9 +2645,7 @@ a {
 
   .today,
   .practice-progress,
-  .change-path,
   .outcome-card,
-  .dynamics,
   .session-prep,
   .deep-session-card,
   .session-empty,
@@ -2975,8 +2807,6 @@ a {
 }
 
 .practice-progress,
-.change-path,
-.dynamics,
 .profile-details {
   padding-right: 0;
   padding-left: 0;
@@ -2987,54 +2817,9 @@ a {
   box-shadow: none;
 }
 
-.change-path {
-  padding-top: 18px;
-  padding-bottom: 7px;
-}
-
 .practice-progress {
   padding-top: 18px;
   padding-bottom: 4px;
-}
-
-.change-path-intro {
-  margin-bottom: 10px;
-}
-
-.change-path-step {
-  grid-template-columns: 27px minmax(0, 1fr);
-  gap: 10px;
-  min-height: 0;
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
-}
-
-.change-path-step:not(:last-child)::after {
-  display: none;
-}
-
-.change-path-marker,
-.change-path-step[data-state="done"] .change-path-marker,
-.change-path-step[data-state="current"] .change-path-marker {
-  width: auto;
-  height: auto;
-  display: block;
-  padding-top: 2px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--accent);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.change-path-copy {
-  padding: 0;
-}
-
-.dynamics {
-  padding-top: 17px;
-  padding-bottom: 17px;
 }
 
 .profile-details {
@@ -3058,7 +2843,6 @@ a {
 .premiumbot-btn,
 .command-action,
 .memory-cta,
-.sky-readout-cta,
 .topic-handoff-back,
 .state-action {
   border-radius: 10px;
@@ -3083,10 +2867,6 @@ a {
 }
 
 @media (max-width: 359px) {
-  .change-path {
-    padding-right: 0;
-    padding-left: 0;
-  }
 
   .memory-pause,
   .memory-group-head {
@@ -3117,15 +2897,6 @@ summary.stars-guide-title {
   padding-block: 10px;
 }
 summary.stars-guide-title:focus-visible {
-  outline: 2px solid var(--action);
-  outline-offset: 3px;
-}
-.change-path > summary {
-  cursor: pointer;
-  min-height: 44px;
-  padding-block: 10px;
-}
-.change-path > summary:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 3px;
 }
@@ -3162,3 +2933,11 @@ summary.stars-guide-title:focus-visible {
 .movement-card :focus-visible { outline: 3px solid var(--action); outline-offset: 3px; }
 @media (max-width: 360px) { .movement-card { padding: 16px; } }
 .movement-step > summary { min-height: 48px; padding: 14px 4px; font-weight: 600; cursor: pointer; }
+
+/* Calm core: conversation first, tools on request. */
+.optional-tool { margin: 16px 0; border-top: 1px solid var(--line, #ccc); }
+.optional-tool > summary { cursor: pointer; padding: 16px 0; min-height: 48px; font-size: 16px; line-height: 1.5; }
+.optional-tool > summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.conversation-home { padding: 20px 0 28px; }
+.conversation-home .today-cta { width: 100%; margin-top: 20px; }
+.aura { display: none; }
