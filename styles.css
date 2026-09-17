@@ -2070,7 +2070,8 @@ a {
 }
 
 .memory-kind,
-.memory-pending {
+.memory-pending,
+.memory-guess {
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 11px;
@@ -2085,6 +2086,14 @@ a {
 .memory-pending {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* Догадка Проводника читается иначе, чем сказанное человеком: приглушённо,
+   без цвета подтверждения. Контраст держим на уровне обычного текста. */
+.memory-guess {
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-style: italic;
 }
 
 .memory-record-text {
@@ -3012,4 +3021,89 @@ summary.stars-guide-title:focus-visible {
 
 .profile-tab {
   transition: color 140ms ease, box-shadow 140ms ease;
+}
+
+/* --- Главная: что осталось между разговорами ------------------------------ */
+/* Не счётчик и не достижение: ни чисел, ни серий, только слова памяти. */
+.memory-glance {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.memory-glance-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.memory-glance-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+/* Метка относится ко всей записи, поэтому она идёт после текста, а не рядом с
+   первой строкой. Значок и текст выравниваем по началу строки. */
+.memory-glance-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 4px 6px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* --ok на --ok-soft даёт 3.98:1 в светлой теме, ниже порога для мелкого текста.
+   Подложка плотнее, текст темнее: измерено 4.9:1 light, 8.7:1 dark. */
+.memory-glance-kind {
+  justify-self: start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 18%, var(--surface));
+  color: color-mix(in srgb, var(--ok) 82%, var(--text));
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.memory-glance-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.memory-glance-flag {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* Ссылка остаётся текстовой, но цель нажатия не меньше 44px по высоте:
+   отрицательный внешний отступ держит прежний визуальный ритм карточки. */
+.memory-glance-link {
+  margin-top: 6px;
+  padding: 11px 0;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.memory-glance-link:hover {
+  text-decoration: underline;
+}
+
+.memory-glance-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
 }

@@ -364,6 +364,8 @@ function normalizeProfile(raw) {
         recorded_on: typeof item.recorded_on === "string" ? item.recorded_on : "",
         expires_on: typeof item.expires_on === "string" ? item.expires_on : "",
         needs_confirmation: Boolean(item.needs_confirmation),
+        // Догадка Проводника должна доезжать до экрана, иначе она выглядит как факт.
+        is_guess: Boolean(item.is_guess),
         editable: Boolean(item.editable),
       })).filter((item) => item.key && item.content),
     })).filter((group) => group.class && group.label),
@@ -1919,7 +1921,9 @@ function memoryRecord(item, types) {
   const card = el("article", "memory-record");
   const head = el("div", "memory-record-head");
   head.appendChild(el("span", "memory-kind", item.type_label));
-  if (item.needs_confirmation) head.appendChild(el("span", "memory-pending", "ждёт решения"));
+  // Догадка Проводника никогда не выглядит как сказанное человеком.
+  if (item.is_guess) head.appendChild(el("span", "memory-guess", "догадка"));
+  else if (item.needs_confirmation) head.appendChild(el("span", "memory-pending", "ждёт решения"));
   card.appendChild(head);
   card.appendChild(el("p", "memory-record-text", item.content));
 
@@ -2143,11 +2147,13 @@ function profileTabShell(panels) {
   nav.setAttribute("aria-label", "Разделы профиля");
   nav.setAttribute("role", "tablist");
   const buttons = [];
+  // Вкладка без панели не рисуется: раздел без содержимого не занимает навигацию.
+  const tabs = PROFILE_TABS.filter((item) => panels[item.key]);
 
   const select = (key, moveFocus) => {
     if (!panels[key]) key = "path";
     activeProfileTab = key;
-    PROFILE_TABS.forEach((item) => {
+    tabs.forEach((item) => {
       const selected = item.key === key;
       const button = buttons.find((candidate) => candidate.dataset.tabKey === item.key);
       const panel = panels[item.key];
@@ -2167,7 +2173,7 @@ function profileTabShell(panels) {
   };
   switchProfileTab = select;
 
-  PROFILE_TABS.forEach((item, index) => {
+  tabs.forEach((item, index) => {
     const button = el("button", "profile-tab", item.label);
     button.type = "button";
     button.id = "tab-" + item.key;
@@ -2179,18 +2185,18 @@ function profileTabShell(panels) {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
       let next = index;
-      if (event.key === "ArrowLeft") next = (index - 1 + PROFILE_TABS.length) % PROFILE_TABS.length;
-      if (event.key === "ArrowRight") next = (index + 1) % PROFILE_TABS.length;
+      if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
       if (event.key === "Home") next = 0;
-      if (event.key === "End") next = PROFILE_TABS.length - 1;
-      select(PROFILE_TABS[next].key, true);
+      if (event.key === "End") next = tabs.length - 1;
+      select(tabs[next].key, true);
     });
     buttons.push(button);
     nav.appendChild(button);
   });
   shell.appendChild(nav);
 
-  PROFILE_TABS.forEach((item) => {
+  tabs.forEach((item) => {
     const panel = panels[item.key];
     panel.id = "panel-" + item.key;
     panel.classList.add("profile-panel");
@@ -2202,7 +2208,7 @@ function profileTabShell(panels) {
     shell.appendChild(panel);
   });
 
-  select(PROFILE_TABS.some((item) => item.key === activeProfileTab) ? activeProfileTab : "path", false);
+  select(tabs.some((item) => item.key === activeProfileTab) ? activeProfileTab : "path", false);
   return shell;
 }
 
@@ -3437,18 +3443,64 @@ function optionalBlock(title, node, key) {
 }
 
 function practicesPanel(p) {
-  const panel = el("section", "practices-panel");
-  panel.append(el("h2", "panel-title serif", "Если нужен другой формат"),
-    el("p", "panel-intro", "Всё здесь по желанию. Для поддержки достаточно обычного разговора."));
   const blocks = [
     optionalBlock("Привычки и сохранённые практики", practiceProgressBlock(p)),
     optionalBlock("Движение по силам", movementBlock(p), "movement-tool"),
     optionalBlock("Глубинные сессии и их итоги", deepSessionsPanel(p)),
-  ];
-  blocks.filter(Boolean).forEach(block => panel.appendChild(block));
+  ].filter(Boolean);
+  // Нет сохранённых записей — нет и вкладки. Пустой раздел не должен занимать
+  // первый уровень и намекать, что здесь чего-то не хватает.
+  if (!blocks.length) return null;
+  const panel = el("section", "practices-panel");
+  panel.append(el("h2", "panel-title serif", "Сохранённое тобой"),
+    el("p", "panel-intro", "Всё здесь по желанию. Для поддержки достаточно обычного разговора."));
+  blocks.forEach(block => panel.appendChild(block));
   const hint = el("p", "panel-intro", "Другие форматы можно открыть в чате: /menu → Практики. Можно остановиться в любой момент.");
   panel.appendChild(hint);
   return panel;
+}
+
+// Главная показывает то, ради чего сюда возвращаются: что осталось между
+// разговорами. Раньше здесь были только заголовок и кнопка «в чат», то есть
+// экран уводил с себя, ничего не показав. Это НЕ счётчик активности и не
+// достижение: ни цифр, ни серий, ни прогресса, только сами слова памяти.
+function memoryGlanceBlock(p) {
+  const center = p.memory_center;
+  if (!center || !Array.isArray(center.groups)) return null;
+  const items = [];
+  // Порядок разделов = порядок важности для узнавания себя.
+  ["semantic", "working", "episodic"].forEach((cls) => {
+    const group = center.groups.find((g) => g.class === cls);
+    if (!group || !Array.isArray(group.items)) return;
+    group.items.forEach((item) => items.push(item));
+  });
+  if (!items.length) return null;
+  // Сначала то, что человек подтвердил: догадки не должны представлять его себе.
+  const ordered = items
+    .slice()
+    .sort((a, b) => (a.is_guess ? 1 : 0) - (b.is_guess ? 1 : 0)
+      || (a.needs_confirmation ? 1 : 0) - (b.needs_confirmation ? 1 : 0));
+  const shown = ordered.slice(0, 3);
+
+  const section = el("section", "memory-glance");
+  section.append(el("h3", "memory-glance-title serif", "Что я помню о тебе"));
+  const list = el("ul", "memory-glance-list");
+  shown.forEach((item) => {
+    const row = el("li", "memory-glance-item");
+    row.appendChild(el("span", "memory-glance-kind", item.type_label));
+    row.appendChild(el("span", "memory-glance-text", item.content));
+    if (item.is_guess) row.appendChild(el("span", "memory-glance-flag", "догадка"));
+    else if (item.needs_confirmation) row.appendChild(el("span", "memory-glance-flag", "ждёт решения"));
+    list.appendChild(row);
+  });
+  section.appendChild(list);
+  const open = el("button", "memory-glance-link", "Посмотреть и поправить");
+  open.type = "button";
+  open.addEventListener("click", () => {
+    if (typeof switchProfileTab === "function") switchProfileTab("memory", true);
+  });
+  section.appendChild(open);
+  return section;
 }
 
 function pathPanel(p) {
@@ -3461,6 +3513,8 @@ function pathPanel(p) {
   chat.addEventListener("click", closeToChat);
   intro.appendChild(chat);
   panel.appendChild(intro);
+  const glance = memoryGlanceBlock(p);
+  if (glance) panel.appendChild(glance);
   const step = todayBlock(p);
   if (step) {
     const saved = optionalBlock("Твой сохранённый шаг", step, "saved-step");
@@ -3481,12 +3535,13 @@ function pathPanel(p) {
 }
 
 function openMovement() {
-  if (typeof switchProfileTab === "function") switchProfileTab("sessions", true);
+  // Вкладки может не быть, если сохранённых записей нет. Тогда и открывать нечего,
+  // а переключение на несуществующий раздел вернуло бы человека на главную молча.
   const details = document.getElementById("movement-tool");
-  if (details) {
-    details.open = true;
-    details.scrollIntoView({block: "start", behavior: "instant"});
-  }
+  if (!details) return;
+  if (typeof switchProfileTab === "function") switchProfileTab("sessions", true);
+  details.open = true;
+  details.scrollIntoView({block: "start", behavior: "instant"});
 }
 
 // --- сборка профиля ---------------------------------------------------------
@@ -3510,14 +3565,14 @@ function renderProfile(p) {
   if (updated) top.appendChild(el("div", "datepill", "обновлено " + updated));
   root.appendChild(top);
 
-  root.appendChild(
-    profileTabShell({
-      path: pathPanel(p),
-      sessions: practicesPanel(p),
-      memory: memoryPanel(p),
-      more: morePanel(p),
-    }),
-  );
+  // Вкладка практик показывается только тем, у кого там что-то есть. Измерено
+  // 17.09: каждая практика запускалась ровно один раз и не повторялась ни разу,
+  // а пустая вкладка первого уровня просит заполнить себя. Ничего не удаляется:
+  // у кого есть сохранённые записи, тот видит их ровно как раньше.
+  const panels = { path: pathPanel(p), memory: memoryPanel(p), more: morePanel(p) };
+  const practices = practicesPanel(p);
+  if (practices) panels.sessions = practices;
+  root.appendChild(profileTabShell(panels));
   return root;
 }
 function fmtDate(iso) {

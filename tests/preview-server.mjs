@@ -18,10 +18,31 @@ function fixture(paid = false) {
     memory_center: {
       writes_paused: false,
       manual_types: [{ value: "goal", label: "Цель" }, { value: "preference", label: "Предпочтение" }],
-      groups: [{ class: "semantic", label: "Важное", description: "Синтетическая запись для проверки",
-        items: [{ key: "synthetic-memory-01", type: "goal", type_label: "Цель",
-          content: "После обеда попробовать короткую прогулку", editable: true,
-          source: "Добавлено тобой", why: "Явное сохранение", recorded_on: "2026-09-05" }] }],
+      groups: [
+        { class: "semantic", label: "Важное о тебе", description: "Синтетическая запись для проверки",
+          items: [
+            { key: "synthetic-memory-01", type: "goal", type_label: "Цель",
+              content: "После обеда попробовать короткую прогулку", editable: true,
+              source: "Добавлено тобой", why: "Явное сохранение", recorded_on: "2026-09-05" },
+            { key: "synthetic-memory-02", type: "boundary", type_label: "Граница",
+              content: "Не писать по выходным, это время семьи", editable: true,
+              needs_confirmation: true,
+              source: "Ты прямо сказал это в разговоре.", why: "Чтобы учитывать обозначенную границу.",
+              recorded_on: "2026-09-12" },
+            { key: "synthetic-memory-03", type: "preference", type_label: "Предпочтение",
+              content: "Похоже, тебе легче начинать с самого маленького шага", editable: true,
+              is_guess: true,
+              source: "Это догадка Проводника, а не твои слова.", why: "Чтобы помнить, что уже помогало.",
+              recorded_on: "2026-09-15" },
+          ] },
+        { class: "working", label: "Открытые нити", description: "Незавершённые темы",
+          items: [
+            { key: "synthetic-memory-04", type: "open_thread", type_label: "Открытая тема",
+              content: "Решить, продолжать ли проект после отпуска",
+              source: "Ты прямо сказал это в разговоре.", why: "Чтобы вернуться к незавершённой теме.",
+              recorded_on: "2026-09-16", expires_on: "2026-12-15" },
+          ] },
+      ],
     },
     show_upgrade: !paid,
     is_paid: paid,
@@ -100,7 +121,7 @@ createServer(async (req, res) => {
         <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
         <title>Синтетическая проверка MindCoach</title><link rel="icon" href="/favicon.svg">
         <link rel="stylesheet" href="/styles.css"></head><body>
-        <aside style="font:12px system-ui;padding:8px">Синтетический стенд. Все данные вымышлены.
+        <aside style="font:12px system-ui;padding:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">Синтетический стенд. Все данные вымышлены.
         <button type="button" id="preview-refresh">Смоделировать обновление</button>
         <span id="preview-status" role="status"></span></aside>
         <main class="app" id="app"></main><p id="action-status" class="sr-only" role="status" aria-live="polite"></p>

@@ -11,18 +11,26 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260917-quiet-memory/);
+assert.match(html, /styles\.css\?v=20260917-living-memory/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260917-quiet-memory"/);
+assert.match(boot, /assetVersion = "20260917-living-memory"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
 assert.match(app, /NETWORK_TIMEOUT_MS = 10000/);
 assert.match(app, /\/api\/profile\?refresh=1/);
 assert.match(app, /function normalizeProfile\(raw\)/);
+// normalizeProfile is an allow-list: a field it forgets silently never reaches the
+// screen. is_guess was dropped once, which made a model's guess look like a stated
+// fact on the home screen. Every flag the UI reads must survive the copy.
+const memoryFields = app.match(/items: arrayOfObjects\(group\.items\)\.map\(\(item\) => \(\{[^}]*\}\)\)/s);
+assert.ok(memoryFields, 'memory item allow-list must stay findable');
+for (const field of ['needs_confirmation', 'is_guess', 'editable', 'expires_on']) {
+  assert.ok(memoryFields[0].includes(field), 'allow-list must carry ' + field);
+}
 const reminderNormalizerSource = app.match(/function reminderHourOrNull\(value\) \{[\s\S]*?\n\}/)?.[0];
 assert.ok(reminderNormalizerSource, "reminder normalizer must stay independently testable");
 const reminderHourOrNull = vm.runInNewContext("(" + reminderNormalizerSource + ")");
