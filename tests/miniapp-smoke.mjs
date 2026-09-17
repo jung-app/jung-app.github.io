@@ -229,4 +229,25 @@ assert.match(app, /memory-manage-toggle", "Удалить весь раздел"
 assert.match(styles, /\.memory-manage \{/);
 assert.match(styles, /\.memory-manage-toggle \{/);
 
+// Вся цепочка загрузки должна нести ОДНУ версию.
+// index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.
+// Если поднять версию только в конце цепочки, телефон возьмёт из кэша старый
+// root-redirect.js, тот подтянет старый boot, и новый код не доедет никогда.
+const rootRedirect = await readFile(new URL("../root-redirect.js", import.meta.url), "utf8");
+const chainVersions = new Set();
+for (const [label, text, re] of [
+  ["index.html -> root-redirect.js", html, /root-redirect\.js\?v=([\w.-]+)/],
+  ["index.html -> styles.css", html, /styles\.css\?v=([\w.-]+)/],
+  ["root-redirect.js -> miniapp-boot.js", rootRedirect, /miniapp-boot\.js\?v=([\w.-]+)/],
+  ["miniapp-boot.js assetVersion", boot, /assetVersion = "([\w.-]+)"/],
+]) {
+  const found = text.match(re);
+  assert.ok(found, label + " must carry a version");
+  chainVersions.add(found[1]);
+}
+assert.equal(
+  chainVersions.size, 1,
+  "every step of the load chain must use one version, got: " + [...chainVersions].join(", "),
+);
+
 console.log("Mini App redesign smoke passed");
