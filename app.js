@@ -100,12 +100,6 @@ const HABIT_GUIDE =
   "В этой работе мы вслушиваемся, чему именно, — и ищем ритуал замещения, который кормит " +
   "ту же потребность честнее. Срыв — не провал, а материал для следующего шага.";
 
-function archetypeGuide(name) {
-  for (const [re, text] of ARCHETYPE_GUIDE) {
-    if (re.test(name || "")) return text;
-  }
-  return ARCHETYPE_FALLBACK;
-}
 
 function pluralRu(n, one, few, many) {
   const m10 = n % 10;
@@ -212,12 +206,6 @@ function practiceKeyOrNull(value) {
   return /^[0-9a-f]{24}$/.test(key) ? key : null;
 }
 
-function currentRitualHabit(habits) {
-  const candidates = arrayOfObjects(habits).filter((habit) => cleanText(habit.ritual));
-  const current = candidates.filter((habit) => habit.is_current_practice === true);
-  if (current.length === 1) return current[0];
-  return candidates.length === 1 ? candidates[0] : null;
-}
 
 function reminderHourOrNull(value) {
   // Number(null) and Number("") are both 0. Treating either as a real hour invents a
@@ -537,28 +525,6 @@ async function submitOutcome(event, value, measurementPoint, subjectKey) {
   return res.json();
 }
 
-async function submitPracticeCheckIn(kind, practiceKey) {
-  const initData = tg && tg.initData ? tg.initData : "";
-  if (!initData) throw new Error("no-init-data");
-  const res = await fetchWithDeadline(freshApiUrl("/api/practice/check-in"), {
-    method: "POST",
-    headers: apiHeaders(initData, true),
-    cache: "no-store",
-    body: JSON.stringify({
-      kind,
-      ...(kind === "ritual" && practiceKey ? { practice_key: practiceKey } : {}),
-    }),
-  });
-  if (res.status === 401) throw new Error("unauthorized");
-  if (!res.ok) throw new Error("http-" + res.status);
-  const body = await res.json();
-  if (
-    !body || body.kind !== kind ||
-    !Number.isInteger(Number(body.count)) || typeof body.counted !== "boolean" ||
-    (kind === "ritual" && practiceKey && body.practice_key !== practiceKey)
-  ) throw new Error("invalid-response");
-  return body;
-}
 
 let experimentMutationEpoch = 0;
 
@@ -596,32 +562,6 @@ function practiceClockMetadata() {
   return { timezone, utc_offset_minutes: utcOffsetMinutes };
 }
 
-async function submitPracticeReminder(kind, hour, practiceKey) {
-  const initData = tg && tg.initData ? tg.initData : "";
-  if (!initData) throw new Error("no-init-data");
-  const clock = practiceClockMetadata();
-  const res = await fetchWithDeadline(freshApiUrl("/api/practice/reminder"), {
-    method: "POST",
-    headers: apiHeaders(initData, true),
-    cache: "no-store",
-    body: JSON.stringify({
-      kind,
-      hour,
-      timezone: clock.timezone,
-      utc_offset_minutes: clock.utc_offset_minutes,
-      ...(kind === "ritual" && practiceKey ? { practice_key: practiceKey } : {}),
-    }),
-  });
-  if (res.status === 401) throw new Error("unauthorized");
-  if (!res.ok) throw new Error("http-" + res.status);
-  const body = await res.json();
-  if (
-    !body || body.kind !== kind ||
-    reminderHourOrNull(body.reminder_hour) !== hour ||
-    (kind === "ritual" && hour !== null && practiceKey && body.practice_key !== practiceKey)
-  ) throw new Error("invalid-response");
-  return body;
-}
 
 function newRequestId() {
   const cryptoApi = window.crypto;
@@ -637,22 +577,6 @@ function newRequestId() {
   ).slice(0, 80);
 }
 
-async function postChatIntent(topicKey, requestId) {
-  const base = (window.JUNG_CONFIG && window.JUNG_CONFIG.API_BASE) || "";
-  const initData = tg && tg.initData ? tg.initData : "";
-  if (!initData) throw new Error("no-init-data");
-  const res = await fetchWithDeadline(base.replace(/\/$/, "") + "/api/chat-intent", {
-    method: "POST",
-    headers: apiHeaders(initData, true),
-    cache: "no-store",
-    body: JSON.stringify({ topic_key: topicKey, request_id: requestId }),
-  });
-  if (res.status === 401) throw new Error("unauthorized");
-  if (!res.ok) throw new Error("http-" + res.status);
-  const body = await res.json();
-  if (!body || body.status !== "ready") throw new Error("invalid-response");
-  return body;
-}
 
 // Подтверждение действия: нативное у Telegram, иначе обычный confirm.
 function confirmAction(message) {
@@ -684,95 +608,8 @@ function stat(value, label) {
   return s;
 }
 
-function confidence(level) {
-  // Луна-уверенность: золотой диск, из-за которого уходит тень. Чем увереннее
-  // гипотеза, тем больше диска «вышло из тени». Подпись — человеческим языком.
-  const m = CONFIDENCE_MOON[level];
-  const wrap = el("span", "conf");
-  wrap.title = "насколько гипотеза проявилась в наших разговорах";
-  const moon = el("span", "moon");
-  const shift = m ? m.shift : 0;
-  const clipId = "mc" + Math.random().toString(36).slice(2, 8);
-  moon.innerHTML = `
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <defs><clipPath id="${clipId}"><circle cx="10" cy="10" r="8.5" /></clipPath></defs>
-      <circle cx="10" cy="10" r="8.5" fill="currentColor" />
-      <circle cx="${(10 - shift).toFixed(1)}" cy="10" r="8.5" fill="var(--surface)" clip-path="url(#${clipId})" />
-      <circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1" />
-    </svg>`;
-  wrap.appendChild(moon);
-  wrap.appendChild(el("span", "conf-cap", m ? m.cap : "уверенность —"));
-  return wrap;
-}
 
-function guideBlock(title, text) {
-  // Обучающий слой «что это» — нативный <details>: компактно, доступно, без JS.
-  const d = el("details", "card-guide");
-  const s = el("summary", "card-guide-q", title);
-  d.appendChild(s);
-  d.appendChild(el("p", "card-guide-a", text));
-  return d;
-}
 
-function insightCard(item) {
-  const card = el("article", "card");
-  if (item.user_confirmed) card.classList.add("card--confirmed");
-
-  const isArchetype = !item.key;
-  const facet = item.key ? FACET_GUIDE[item.key] : null;
-  const title = item.label || item.name;
-
-  const head = el("div", "card-head");
-  const heading = el("div", "card-heading");
-  const glyph = el("span", "facet-glyph", isArchetype ? "✧" : facet ? facet.glyph : "✦");
-  heading.appendChild(glyph);
-  heading.appendChild(el("h3", "card-title", title));
-  head.appendChild(heading);
-  const st = el("span", "pill pill--status", STATUS_LABELS[item.status] || item.status);
-  st.dataset.status = item.status;
-  head.appendChild(st);
-  card.appendChild(head);
-
-  // (б) что это такое по Юнгу — раскрывается по касанию, не съедая экран
-  const guideText = isArchetype ? archetypeGuide(item.name) : facet ? facet.guide : null;
-  if (guideText) {
-    card.appendChild(guideBlock(isArchetype ? "Что это за архетип?" : "Что это — " + title + "?", guideText));
-  }
-
-  // (в) персональная гипотеза — с явной эпистемической рамкой в самом ярлыке
-  card.appendChild(
-    el("div", "hyp-label", item.user_confirmed ? "гипотеза, подтверждённая тобой" : "гипотеза о тебе"),
-  );
-  card.appendChild(el("p", "card-summary", item.summary));
-
-  // (г) уверенность + опора на наши разговоры
-  const meta = el("div", "card-meta");
-  meta.appendChild(confidence(item.confidence));
-  if (item.evidence_count) {
-    const n = item.evidence_count;
-    meta.appendChild(
-      el(
-        "span",
-        "tag-evidence",
-        "опора: " + n + " " + pluralRu(n, "наблюдение", "наблюдения", "наблюдений") + " из разговоров",
-      ),
-    );
-  }
-  if (item.user_confirmed) meta.appendChild(el("span", "pill pill--ok", "✓ ты подтвердил"));
-  card.appendChild(meta);
-
-  // «Это не про меня» — только для insight-разделов (у них есть key); архетипы без key.
-  // Профиль обязан уметь ошибаться: человек вправе снять гипотезу, и она не вернётся.
-  if (item.key) card.appendChild(dismissRow(item.key, item.label, item.user_confirmed));
-  const discuss = el("button", "command-action", "Обсудить в чате");
-  discuss.type = "button";
-  const requestId = newRequestId();
-  discuss.addEventListener("click", () => handoffTopicToChat(
-    {...item, itemType: item.key ? "facet" : "archetype"}, discuss, card, requestId,
-  ));
-  card.appendChild(discuss);
-  return card;
-}
 
 // Поле карточки привычки: подписанный блок «чему служит» / «ритуал замещения».
 function habitField(label, text, extraClass) {
@@ -784,89 +621,7 @@ function habitField(label, text, extraClass) {
 
 // Карточка привычки: {триггер, потребность, замена, минимальная версия, прогресс}.
 // Прогресс — луна-уверенность + опора наблюдений, НЕ стрики (бот — спутник, не надзиратель).
-function habitCard(item) {
-  const card = el("article", "card");
-  if (item.user_confirmed) card.classList.add("card--confirmed");
 
-  const head = el("div", "card-head");
-  const heading = el("div", "card-heading");
-  heading.appendChild(el("span", "facet-glyph", "⟳"));
-  heading.appendChild(el("h3", "card-title", item.name));
-  head.appendChild(heading);
-  const st = el("span", "pill pill--status", STATUS_LABELS[item.status] || item.status);
-  st.dataset.status = item.status;
-  head.appendChild(st);
-  card.appendChild(head);
-
-  card.appendChild(guideBlock("Что это — работа с привычкой?", HABIT_GUIDE));
-
-  card.appendChild(
-    el("div", "hyp-label", item.user_confirmed ? "гипотеза, подтверждённая тобой" : "гипотеза о тебе"),
-  );
-  card.appendChild(el("p", "card-summary", item.summary));
-
-  if (item.trigger) card.appendChild(habitField("когда включается", item.trigger));
-  if (item.serves) card.appendChild(habitField("чему служит", item.serves));
-  if (item.ritual) card.appendChild(habitField("ритуал замещения", item.ritual, "habit-field--ritual"));
-  if (item.fallback) card.appendChild(habitField("минимум на трудный день", item.fallback));
-
-  const meta = el("div", "card-meta");
-  meta.appendChild(confidence(item.confidence));
-  if (item.evidence_count) {
-    const n = item.evidence_count;
-    meta.appendChild(
-      el(
-        "span",
-        "tag-evidence",
-        "опора: " + n + " " + pluralRu(n, "наблюдение", "наблюдения", "наблюдений") + " из разговоров",
-      ),
-    );
-  }
-  if (item.user_confirmed) meta.appendChild(el("span", "pill pill--ok", "✓ ты подтвердил"));
-  card.appendChild(meta);
-  return card;
-}
-
-function dismissRow(key, label, alreadyConfirmed) {
-  const row = el("div", "card-actions");
-  const confirm = el("button", "card-confirm", "Да, это про меня");
-  confirm.type = "button";
-  confirm.addEventListener("click", async () => {
-    confirm.disabled = true;
-    confirm.textContent = "Подтверждаю…";
-    try {
-      const updated = await confirmSection(key);
-      announceAction("Гипотеза подтверждена тобой.");
-      renderedProfileFingerprint = null;
-      renderFetchedProfile(updated);
-    } catch (_) {
-      confirm.disabled = false;
-      confirm.textContent = "Повторить подтверждение";
-      announceAction("Не удалось подтвердить гипотезу. Проверь связь.");
-    }
-  });
-  const btn = el("button", "card-dismiss", "Это не про меня");
-  btn.type = "button";
-  btn.addEventListener("click", async () => {
-    const ok = await confirmAction(
-      "Убрать «" + (label || "эту грань") + "» из профиля? Я больше не буду к ней возвращаться.",
-    );
-    if (!ok) return;
-    btn.disabled = true;
-    btn.textContent = "Убираю…";
-    try {
-      const updated = await dismissSection(key);
-      renderedProfileFingerprint = null;
-      renderFetchedProfile(updated);
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = "Не вышло — ещё раз";
-    }
-  });
-  if (!alreadyConfirmed) row.appendChild(confirm);
-  row.appendChild(btn);
-  return row;
-}
 
 // Блок «что изменилось с прошлого визита». d приходит в payload.dynamics с бэкенда:
 // первый визит → тёплое приветствие; есть изменения → дельта глубины + новые грани;
@@ -1225,13 +980,6 @@ function upgradeSection(billing, access) {
   return sec;
 }
 
-function groupBlock(title, items, sub) {
-  const sec = el("section", "group");
-  sec.appendChild(el("h2", "group-title", title));
-  if (sub) sec.appendChild(el("p", "group-sub", sub));
-  items.forEach((it) => sec.appendChild(insightCard(it)));
-  return sec;
-}
 
 // --- блок «Сегодня» ---------------------------------------------------------
 
@@ -1438,69 +1186,7 @@ function outcomeQuestion({
   return group;
 }
 
-function conversationOutcomeBlock(p) {
-  const hasStep = Boolean(changeExperimentView(p.change_experiment));
-  const key = typeof p.outcome_prompts.conversation_key === "string"
-    ? p.outcome_prompts.conversation_key
-    : "";
-  if (
-    !key ||
-    (p.live_sync && p.live_sync.pending_profile_update) ||
-    (hasOutcome(p.outcome_feedback, "conversation_insight") &&
-      (!hasStep || hasOutcome(p.outcome_feedback, "next_step_clarity")))
-  ) return null;
 
-  const section = el("section", "outcome-card");
-  labelSection(section, "conversation-outcome-heading", "Короткая сверка", "section-eyebrow");
-  section.appendChild(el(
-    "p",
-    "outcome-intro",
-    "Помоги проверить пользу разговора. В аналитику уйдут только выбранные варианты, без текста и темы.",
-  ));
-  if (!hasOutcome(p.outcome_feedback, "conversation_insight")) {
-    section.appendChild(outcomeQuestion({
-      label: "Разговор помог увидеть что-то новое?",
-      event: "conversation_insight",
-      point: "first_result",
-      subjectKey: key,
-      options: [["yes", "Да"], ["partly", "Частично"], ["no", "Нет"]],
-      feedback: p.outcome_feedback,
-    }));
-  }
-  if (hasStep && !hasOutcome(p.outcome_feedback, "next_step_clarity")) {
-    section.appendChild(outcomeQuestion({
-      label: "Следующий шаг стал понятнее?",
-      event: "next_step_clarity",
-      point: "first_result",
-      subjectKey: key,
-      options: [["clearer", "Понятнее"], ["same", "Так же"], ["less_clear", "Менее ясно"]],
-      feedback: p.outcome_feedback,
-    }));
-  }
-  return section;
-}
-
-function stepAttemptBlock(p) {
-  if (p.change_experiment && p.change_experiment.revision) return null;
-  const experiment = changeExperimentView(p.change_experiment);
-  if (!experiment || !experiment.feedbackDue || !experiment.measurementKey) return null;
-  const section = el("section", "outcome-card outcome-card--step");
-  labelSection(section, "step-outcome-heading", "Фактический результат", "section-eyebrow");
-  section.appendChild(el(
-    "p",
-    "outcome-intro",
-    "Любой исход подходит. Это помогает скорректировать план, а не оценить тебя.",
-  ));
-  section.appendChild(outcomeQuestion({
-    label: "Удалось попробовать выбранный шаг?",
-    event: "step_attempt",
-    point: "change_checkin",
-    subjectKey: experiment.measurementKey,
-    options: [["done", "Да"], ["partly", "Частично"], ["not_yet", "Пока нет"]],
-    feedback: p.outcome_feedback,
-  }));
-  return section;
-}
 
 // Один следующий шаг вместо двух слабых блоков «Сегодня» и «Мой путь».
 // Показываем состояние реального цикла изменения, а не общий вопрос ради ежедневности.
@@ -1709,8 +1395,6 @@ function closeToChat() {
       if (ancestor.tagName === "DETAILS") ancestor.open = true;
       ancestor = ancestor.parentElement;
     }
-    const panel = draft && draft.closest('[role="tabpanel"]');
-    if (panel && typeof switchProfileTab === "function") switchProfileTab(panel.id.replace("panel-", ""), true);
     const notice = "Сначала сохрани или отмени ввод. Если сохранение уже идёт, дождись результата.";
     announceAction(notice);
     let feedback = document.getElementById("draft-exit-feedback");
@@ -1751,64 +1435,6 @@ function topicHandoffStatus(readout, text, kind) {
   return status;
 }
 
-async function handoffTopicToChat(item, cta, readout, requestId) {
-  if (cta.dataset.closeOnly === "true") {
-    closeToChat();
-    return;
-  }
-  const topicKey = topicHandoffKey(item);
-  if (!topicKey) {
-    topicHandoffStatus(
-      readout,
-      "Эту новую тему пока нельзя передать автоматически. Вернись в чат и назови её своими словами.",
-      "error",
-    );
-    cta.textContent = "Вернуться в чат без передачи";
-    cta.dataset.closeOnly = "true";
-    return;
-  }
-  if (cta.disabled) return;
-  cta.disabled = true;
-  cta.setAttribute("aria-busy", "true");
-  cta.textContent = "Передаю тему…";
-  const current = readout.querySelector(".topic-handoff-status");
-  if (current) current.remove();
-  try {
-    await postChatIntent(topicKey, requestId);
-    topicHandoffFeedback("success");
-    topicHandoffStatus(
-      readout,
-      "Готово. В чате уже появился вопрос по выбранной теме.",
-      "success",
-    );
-    cta.textContent = "Тема передана";
-    window.setTimeout(() => {
-      closeToChat();
-      cta.disabled = false;
-      cta.removeAttribute("aria-busy");
-      cta.dataset.closeOnly = "true";
-      cta.textContent = "Вернуться в чат";
-    }, 220);
-  } catch (error) {
-    topicHandoffFeedback("error");
-    const expired = error && (error.message === "unauthorized" || error.message === "no-init-data");
-    const status = topicHandoffStatus(
-      readout,
-      expired
-        ? "Сессия мини-аппа завершилась. Вернись в чат и открой «Мой образ» заново."
-        : "Тема осталась здесь. Проверь связь и повтори передачу, либо вернись в чат без неё.",
-      "error",
-    );
-    const back = el("button", "topic-handoff-back", "Вернуться без темы");
-    back.type = "button";
-    back.addEventListener("click", closeToChat);
-    status.appendChild(back);
-    cta.disabled = false;
-    cta.removeAttribute("aria-busy");
-    cta.textContent = expired ? "Открыть чат" : "Повторить передачу";
-    if (expired) cta.dataset.closeOnly = "true";
-  }
-}
 
 async function copyPlainText(text) {
   const clipboard = window.navigator && window.navigator.clipboard;
@@ -1823,13 +1449,8 @@ async function copyPlainText(text) {
 
 function renderMemoryUpdate(updated, message) {
   announceAction(message);
-  activeProfileTab = "memory";
   renderedProfileFingerprint = null;
   renderFetchedProfile(updated, true);
-  queueMicrotask(() => {
-    const tab = document.getElementById("tab-memory");
-    if (tab) tab.focus();
-  });
 }
 
 function hasMemoryDraft() {
@@ -2098,21 +1719,11 @@ function memoryAddBlock(types) {
 
 // Conversation first. Internal tab keys preserve existing links and refresh state.
 
-// «Практики» больше нет как раздела первого уровня. Измерено 18.09: 0 записей
-// движения, 0 глубинных сессий, 0 экспериментов, 1 профиль с привычками, а
-// каждая практика запускалась ровно один раз за всё время. Раздел с формами,
-// оценками сил и статусами существовал ради данных, которых не существует.
-// Сохранённое никуда не делось: привычки и прошлые практики живут в «Памяти»,
-// потому что выбранная человеком привычка — это тоже то, что бот о нём помнит.
-const PROFILE_TABS = [
-  { key: "path", label: "Главная" },
-  { key: "memory", label: "Память" },
-  { key: "more", label: "Доступ" },
-];
-
-let activeProfileTab = "path";
-let switchProfileTab = null;
-let nativeBackBound = false;
+// Вкладок больше нет. Измерено 18.09 в production: мини-апп открывали 3 раза
+// за всю жизнь продукта, а «Практики», «Движение», «Глубинные сессии» и
+// «Сохранённый шаг» рендерили ключи, которых нет ни в одном из шести профилей.
+// Три вкладки делили между собой пустоту. Экран один, и он показывает
+// profiles.sections — единственное, что у людей действительно есть.
 
 function jaguarMark() {
   const mark = el("span", "jaguar-mark");
@@ -2126,596 +1737,13 @@ function jaguarMark() {
   return mark;
 }
 
-function syncNativeBackButton(tabKey) {
-  const back = tg && tg.BackButton;
-  if (!back) return;
-  if (!nativeBackBound && typeof back.onClick === "function") {
-    back.onClick(() => {
-      if (typeof switchProfileTab === "function" && activeProfileTab !== "path") {
-        switchProfileTab("path", true);
-      }
-    });
-    nativeBackBound = true;
-  }
-  if (tabKey === "path") {
-    if (typeof back.hide === "function") back.hide();
-  } else if (typeof back.show === "function") {
-    back.show();
-  }
-}
 
-function profileTabShell(panels) {
-  const shell = el("div", "profile-shell");
-  const nav = el("nav", "profile-tabs");
-  nav.setAttribute("aria-label", "Разделы профиля");
-  nav.setAttribute("role", "tablist");
-  const buttons = [];
-  // Вкладка без панели не рисуется: раздел без содержимого не занимает навигацию.
-  const tabs = PROFILE_TABS.filter((item) => panels[item.key]);
-
-  const select = (key, moveFocus) => {
-    if (!panels[key]) key = "path";
-    activeProfileTab = key;
-    tabs.forEach((item) => {
-      const selected = item.key === key;
-      const button = buttons.find((candidate) => candidate.dataset.tabKey === item.key);
-      const panel = panels[item.key];
-      if (button) {
-        button.setAttribute("aria-selected", selected ? "true" : "false");
-        button.tabIndex = selected ? 0 : -1;
-        if (selected && moveFocus) button.focus();
-      }
-      if (panel) panel.hidden = !selected;
-      if (panel) {
-        panel.inert = !selected;
-        panel.setAttribute("aria-hidden", selected ? "false" : "true");
-      }
-    });
-    syncNativeBackButton(key);
-    window.scrollTo({ top: 0, behavior: "auto" });
-  };
-  switchProfileTab = select;
-
-  tabs.forEach((item, index) => {
-    const button = el("button", "profile-tab", item.label);
-    button.type = "button";
-    button.id = "tab-" + item.key;
-    button.dataset.tabKey = item.key;
-    button.setAttribute("role", "tab");
-    button.setAttribute("aria-controls", "panel-" + item.key);
-    button.addEventListener("click", () => select(item.key, false));
-    button.addEventListener("keydown", (event) => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      let next = index;
-      if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
-      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
-      if (event.key === "Home") next = 0;
-      if (event.key === "End") next = tabs.length - 1;
-      select(tabs[next].key, true);
-    });
-    buttons.push(button);
-    nav.appendChild(button);
-  });
-  shell.appendChild(nav);
-
-  tabs.forEach((item) => {
-    const panel = panels[item.key];
-    panel.id = "panel-" + item.key;
-    panel.classList.add("profile-panel");
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", "tab-" + item.key);
-    panel.querySelectorAll("[data-open-tab]").forEach((button) => {
-      button.addEventListener("click", () => select(button.dataset.openTab, true));
-    });
-    shell.appendChild(panel);
-  });
-
-  select(tabs.some((item) => item.key === activeProfileTab) ? activeProfileTab : "path", false);
-  return shell;
-}
 
 let activePracticeTab = null;
 let openPracticeReminderKind = null;
 let habitQueueOpen = false;
 
-function practiceProgressBlock(p) {
-  const path = p.path || {};
-  let paused = Boolean(path.nudges_paused_at);
-  const remindersAvailable = Boolean(p.is_paid);
-  const growthHour = path.growth_reminder_hour;
-  const ritualHour = p.ritual ? p.ritual.reminder_hour : null;
-  const ritualHabits = (p.habits || []).filter((habit) => cleanText(habit.ritual));
-  const ritualHabit = currentRitualHabit(p.habits);
-  const otherHabits = (p.habits || []).filter((habit) => habit !== ritualHabit);
-  const growthVisible = Boolean(
-    path.growth_name || path.growth_step || path.growth_done_count || growthHour !== null
-  );
-  const ritualVisible = Boolean(
-    ritualHabit || ritualHabits.length || path.ritual_done_count || ritualHour !== null
-  );
-  if (!growthVisible && !ritualVisible) return null;
 
-  const sec = el("section", "practice-progress");
-  labelSection(sec, "practice-progress-heading", "Практика сегодня", "section-eyebrow");
-  sec.appendChild(
-    el(
-      "p",
-      "practice-progress-intro",
-      "Здесь твои сохранённые практики. Их можно менять, приостанавливать или оставлять без отметок.",
-    ),
-  );
-  const cards = el("div", "practice-grid");
-  const refreshReminderBadges = [];
-
-  function reminderState(hour) {
-    if (hour === null) return { state: "off", text: "Напоминание выключено" };
-    if (!remindersAvailable) {
-      return { state: "unavailable", text: "Не отправляется: доступ завершён" };
-    }
-    if (paused) return { state: "paused", text: "Напоминание на паузе" };
-    const personalClock = Boolean(
-      path.practice_timezone || path.practice_utc_offset_minutes !== null
-    );
-    const clockLabel = personalClock
-      ? "местное"
-      : utcOffsetLabel(path.practice_fallback_utc_offset_minutes);
-    return {
-      state: "active",
-      text: "Напоминание " + String(hour).padStart(2, "0") + ":00 · " + clockLabel,
-    };
-  }
-
-  function practiceCard({
-    kind, title, context, name, step, cue, need, fallback, hour, lastDone,
-    configured, practiceKey,
-  }) {
-    let currentHour = hour;
-    const card = el("article", "practice-card");
-    card.dataset.practiceKind = kind;
-    const head = el("div", "practice-card-head");
-    head.appendChild(el("h3", "practice-title", title));
-    const reminder = reminderState(currentHour);
-    const reminderBadge = el("span", "practice-reminder", reminder.text);
-    reminderBadge.dataset.state = reminder.state;
-    const refreshReminder = () => {
-      const next = reminderState(currentHour);
-      reminderBadge.textContent = next.text;
-      reminderBadge.dataset.state = next.state;
-    };
-    refreshReminderBadges.push(refreshReminder);
-    head.appendChild(reminderBadge);
-    card.appendChild(head);
-    if (context) card.appendChild(el("p", "practice-context", context));
-    if (name) card.appendChild(el("strong", "practice-name", name));
-    if (step) card.appendChild(el("p", "practice-step", step));
-    const plan = el("dl", "practice-plan");
-    [
-      ["Сигнал", cue],
-      ["Что поддерживает", need],
-      ["Минимум на трудный день", fallback],
-    ].forEach(([label, value]) => {
-      if (!value) return;
-      const row = el("div", "practice-plan-row");
-      row.appendChild(el("dt", null, label));
-      row.appendChild(el("dd", null, value));
-      plan.appendChild(row);
-    });
-    if (plan.children.length) card.appendChild(plan);
-    const stats = el("dl", "practice-stats");
-    const last = fmtDate(lastDone);
-    const lastRow = el("div", "practice-stat");
-    lastRow.appendChild(el("dt", null, "Последняя отметка"));
-    const lastValue = el("dd", null, last || "Ещё не было");
-    lastRow.appendChild(lastValue);
-    stats.appendChild(lastRow);
-    card.appendChild(stats);
-    if (configured) {
-      const actions = el("div", "practice-actions");
-      const done = el("button", "practice-done", "Отметить попытку");
-      done.type = "button";
-      done.dataset.practiceAction = "done";
-      const discuss = el("button", "practice-discuss", "Обсудить трудный день");
-      discuss.type = "button";
-      discuss.dataset.practiceAction = "discuss";
-      const status = el("p", "practice-action-status");
-      status.setAttribute("role", "status");
-      status.setAttribute("aria-live", "polite");
-      discuss.addEventListener("click", async () => {
-        done.disabled = true;
-        discuss.disabled = true;
-        discuss.setAttribute("aria-busy", "true");
-        discuss.textContent = "Готовлю вопрос…";
-        status.textContent = "";
-        try {
-          await postChatIntent(
-            kind === "growth" ? "growth_practice" : "ritual_practice",
-            newRequestId(),
-          );
-          discuss.removeAttribute("aria-busy");
-          discuss.textContent = "Вопрос уже в чате";
-          status.textContent = "Открываю разговор без передачи текста из профиля.";
-          window.setTimeout(closeToChat, 350);
-        } catch (_) {
-          done.disabled = false;
-          discuss.disabled = false;
-          discuss.removeAttribute("aria-busy");
-          discuss.textContent = "Попробовать открыть разговор снова";
-          status.textContent = "Не удалось подготовить вопрос в чате. Проверь связь и повтори.";
-        }
-      });
-      done.addEventListener("click", async () => {
-        done.disabled = true;
-        discuss.disabled = true;
-        done.setAttribute("aria-busy", "true");
-        done.textContent = "Отмечаю…";
-        status.textContent = "";
-        try {
-          const result = await submitPracticeCheckIn(kind, practiceKey);
-          lastValue.textContent = fmtDate(result.done_at) || "сегодня";
-          done.removeAttribute("aria-busy");
-          done.textContent = result.counted ? "Отмечено сегодня" : "Уже отмечено сегодня";
-          discuss.disabled = false;
-          status.textContent = result.counted
-            ? "Попытка сохранена. Путь вырос ещё на один реальный шаг."
-            : "Повторная отметка не увеличила счётчик.";
-          const haptic = tg && tg.HapticFeedback;
-          if (haptic && typeof haptic.notificationOccurred === "function") {
-            haptic.notificationOccurred("success");
-          }
-        } catch (error) {
-          if (error && error.message === "http-409") {
-            done.removeAttribute("aria-busy");
-            status.textContent = "Практика изменилась после открытия экрана. Обновляю актуальный план…";
-            await refreshProfileView();
-            if (done.isConnected) {
-              done.disabled = false;
-              discuss.disabled = false;
-              done.textContent = "Повторить после обновления";
-              status.textContent = "План пока не обновился. Закрой и снова открой Mini App или повтори чуть позже.";
-            }
-            return;
-          }
-          done.disabled = false;
-          discuss.disabled = false;
-          done.removeAttribute("aria-busy");
-          done.textContent = "Повторить отметку";
-          status.textContent = "Не удалось сохранить отметку. Проверь связь и повтори.";
-        }
-      });
-      actions.appendChild(done);
-      actions.appendChild(discuss);
-      card.appendChild(actions);
-      card.appendChild(status);
-
-      const settings = el("details", "practice-reminder-settings");
-      settings.open = openPracticeReminderKind === kind;
-      settings.addEventListener("toggle", () => {
-        if (settings.open) openPracticeReminderKind = kind;
-        else if (openPracticeReminderKind === kind) openPracticeReminderKind = null;
-      });
-      settings.appendChild(el("summary", "practice-reminder-toggle", "Настроить напоминание"));
-      const settingsBody = el("div", "practice-reminder-body");
-      const field = el("label", "practice-reminder-field");
-      field.appendChild(el("span", null, "Время"));
-      const select = el("select", "practice-reminder-select");
-      select.setAttribute("aria-label", "Время напоминания для практики «" + title + "»");
-      for (let value = 0; value < 24; value += 1) {
-        const label = String(value).padStart(2, "0") + ":00";
-        const option = el("option", null, label);
-        option.value = String(value);
-        select.appendChild(option);
-      }
-      select.value = String(currentHour === null ? (kind === "growth" ? 9 : 21) : currentHour);
-      select.disabled = !remindersAvailable;
-      field.appendChild(select);
-      settingsBody.appendChild(field);
-      const helper = el(
-        "p",
-        "practice-reminder-help",
-        remindersAvailable
-          ? "По местному времени устройства. Часовой пояс нужен только для доставки вовремя."
-          : "Доставка доступна при активной подписке. Текущее напоминание можно выключить.",
-      );
-      settingsBody.appendChild(helper);
-      if (paused && remindersAvailable) {
-        settingsBody.appendChild(
-          el(
-            "p",
-            "practice-reminder-help practice-reminder-help--paused",
-            "Сохранение времени возобновит ежедневные напоминания.",
-          ),
-        );
-      }
-      const settingActions = el("div", "practice-reminder-actions");
-      const saveReminder = el("button", "practice-reminder-save", "Сохранить время");
-      saveReminder.type = "button";
-      saveReminder.disabled = !remindersAvailable;
-      const disableReminder = el("button", "practice-reminder-disable", "Выключить");
-      disableReminder.type = "button";
-      disableReminder.disabled = currentHour === null;
-      const settingStatus = el("p", "practice-reminder-status");
-      settingStatus.setAttribute("role", "status");
-      settingStatus.setAttribute("aria-live", "polite");
-
-      async function updateReminder(nextHour) {
-        saveReminder.disabled = true;
-        disableReminder.disabled = true;
-        select.disabled = true;
-        settingStatus.textContent = nextHour === null ? "Выключаю…" : "Сохраняю…";
-        try {
-          const result = await submitPracticeReminder(kind, nextHour, practiceKey);
-          currentHour = reminderHourOrNull(result.reminder_hour);
-          if (kind === "growth") path.growth_reminder_hour = currentHour;
-          else if (p.ritual) p.ritual.reminder_hour = currentHour;
-          if (currentHour !== null) {
-            paused = false;
-            path.nudges_paused_at = "";
-          }
-          path.practice_timezone = cleanText(result.practice_timezone);
-          path.practice_utc_offset_minutes = utcOffsetMinutesOrNull(
-            result.practice_utc_offset_minutes,
-          );
-          refreshReminderBadges.forEach((refresh) => refresh());
-          disableReminder.disabled = currentHour === null;
-          select.disabled = !remindersAvailable;
-          saveReminder.disabled = !remindersAvailable;
-          settingStatus.textContent = currentHour === null
-            ? "Напоминание выключено."
-            : "Буду напоминать в " + String(currentHour).padStart(2, "0") + ":00 по местному времени.";
-          const haptic = tg && tg.HapticFeedback;
-          if (haptic && typeof haptic.notificationOccurred === "function") {
-            haptic.notificationOccurred("success");
-          }
-        } catch (error) {
-          if (error && error.message === "http-409") {
-            settingStatus.textContent = "Практика изменилась. Обновляю актуальный план…";
-            await refreshProfileView();
-            if (select.isConnected) {
-              select.disabled = !remindersAvailable;
-              saveReminder.disabled = !remindersAvailable;
-              disableReminder.disabled = currentHour === null;
-              settingStatus.textContent = "План пока не обновился. Переоткрой Mini App и повтори настройку.";
-            }
-            return;
-          }
-          select.disabled = !remindersAvailable;
-          saveReminder.disabled = !remindersAvailable;
-          disableReminder.disabled = currentHour === null;
-          settingStatus.textContent = "Не удалось изменить время. Проверь связь и повтори.";
-        }
-      }
-
-      saveReminder.addEventListener("click", () => updateReminder(Number(select.value)));
-      disableReminder.addEventListener("click", () => updateReminder(null));
-      settingActions.appendChild(saveReminder);
-      settingActions.appendChild(disableReminder);
-      settingsBody.appendChild(settingActions);
-      settingsBody.appendChild(settingStatus);
-      settings.appendChild(settingsBody);
-      card.appendChild(settings);
-    }
-    return card;
-  }
-
-  function otherHabitsBlock(habits) {
-    if (!habits.length) return null;
-    const details = el("details", "practice-queue");
-    details.open = habitQueueOpen;
-    details.addEventListener("toggle", () => {
-      habitQueueOpen = details.open;
-    });
-    const summary = el("summary", "practice-queue-toggle");
-    summary.appendChild(el("span", null, "Другие привычки"));
-    summary.appendChild(el("span", "practice-queue-count", String(habits.length)));
-    details.appendChild(summary);
-    const intro = el(
-      "p",
-      "practice-queue-intro",
-      "Они остаются в профиле, но кнопки относятся только к одной текущей практике, чтобы отметки и напоминания не смешивались.",
-    );
-    details.appendChild(intro);
-    const list = el("ul", "practice-queue-list");
-    habits.forEach((habit) => {
-      const item = el("li", "practice-queue-item");
-      const copy = el("span", "practice-queue-copy");
-      copy.appendChild(el("strong", null, habit.name));
-      copy.appendChild(
-        el(
-          "small",
-          null,
-          habit.ritual ? "Ритуал: " + habit.ritual : "Ритуал замещения ещё не выбран",
-        ),
-      );
-      item.appendChild(copy);
-      const state = el("span", "practice-queue-state", STATUS_LABELS[habit.status] || "в профиле");
-      state.dataset.status = habit.status || "working";
-      item.appendChild(state);
-      list.appendChild(item);
-    });
-    details.appendChild(list);
-    const switchButton = el("button", "practice-switch-chat", "Выбрать другую в чате");
-    switchButton.type = "button";
-    const switchStatus = el("p", "practice-action-status");
-    switchStatus.setAttribute("role", "status");
-    switchStatus.setAttribute("aria-live", "polite");
-    switchButton.addEventListener("click", async () => {
-      switchButton.disabled = true;
-      switchButton.setAttribute("aria-busy", "true");
-      switchButton.textContent = "Готовлю вопрос…";
-      switchStatus.textContent = "";
-      try {
-        await postChatIntent("habit_practice_switch", newRequestId());
-        switchButton.removeAttribute("aria-busy");
-        switchButton.textContent = "Вопрос уже в чате";
-        switchStatus.textContent = "Открываю разговор без передачи текста привычек из профиля.";
-        window.setTimeout(closeToChat, 350);
-      } catch (_) {
-        switchButton.disabled = false;
-        switchButton.removeAttribute("aria-busy");
-        switchButton.textContent = "Попробовать снова";
-        switchStatus.textContent = "Не удалось открыть выбор. Проверь связь и повтори.";
-      }
-    });
-    details.appendChild(switchButton);
-    details.appendChild(switchStatus);
-    return details;
-  }
-
-  const entries = [];
-
-  function addEntry(key, label, content) {
-    const panel = el("div", "practice-panel");
-    panel.id = "practice-panel-" + key;
-    panel.dataset.practicePanel = key;
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", "practice-tab-" + key);
-    panel.appendChild(content);
-    entries.push({ key, label, panel });
-    cards.appendChild(panel);
-  }
-
-  if (growthVisible) {
-    addEntry("growth", "Полезная", practiceCard({
-      kind: "growth",
-      title: "Полезная привычка",
-      context: "Небольшое действие, которое ты решил попробовать",
-      name: path.growth_name,
-      step: path.growth_step,
-      cue: "",
-      need: "",
-      fallback: "",
-      hour: growthHour,
-      lastDone: path.growth_done_at,
-      configured: Boolean(path.growth_step),
-      practiceKey: null,
-    }));
-  }
-  if (ritualVisible) {
-    const ritualPanel = el("div", "practice-ritual-content");
-    if (ritualHabit) {
-      ritualPanel.appendChild(practiceCard({
-        kind: "ritual",
-        title: "Ритуал замещения",
-        context: "Сейчас в фокусе привычка «" + ritualHabit.name + "»",
-        name: ritualHabit.ritual,
-        step: "",
-        cue: ritualHabit.trigger,
-        need: ritualHabit.serves,
-        fallback: ritualHabit.fallback,
-        hour: ritualHour,
-        lastDone: path.ritual_done_at,
-        configured: true,
-        practiceKey: ritualHabit.practice_key,
-      }));
-    } else {
-      const unresolved = el("div", "practice-selection-warning");
-      unresolved.setAttribute("role", "status");
-      unresolved.appendChild(el("strong", null, "Нужно обновить текущую практику"));
-      unresolved.appendChild(el("p", null, "Несколько привычек готовы к работе, но активная ещё не определена. Действия временно скрыты, чтобы не записать отметку не туда."));
-      const refresh = el("button", "practice-refresh", "Обновить профиль");
-      refresh.type = "button";
-      refresh.addEventListener("click", () => refreshProfileView());
-      unresolved.appendChild(refresh);
-      ritualPanel.appendChild(unresolved);
-    }
-    const queue = otherHabitsBlock(otherHabits);
-    if (queue) ritualPanel.appendChild(queue);
-    addEntry("ritual", "Замещение", ritualPanel);
-  }
-
-  if (entries.length > 1) {
-    const tabs = el("div", "practice-tabs");
-    tabs.setAttribute("role", "tablist");
-    tabs.setAttribute("aria-label", "Выбор практики на сегодня");
-    const buttons = [];
-    const selectPractice = (key, moveFocus) => {
-      activePracticeTab = key;
-      entries.forEach((entry) => {
-        const selected = entry.key === key;
-        const button = buttons.find((candidate) => candidate.dataset.practiceTab === entry.key);
-        button.setAttribute("aria-selected", selected ? "true" : "false");
-        button.tabIndex = selected ? 0 : -1;
-        entry.panel.hidden = !selected;
-        entry.panel.inert = !selected;
-        if (selected && moveFocus) button.focus();
-      });
-    };
-    entries.forEach((entry, index) => {
-      const button = el("button", "practice-tab", entry.label);
-      button.type = "button";
-      button.id = "practice-tab-" + entry.key;
-      button.dataset.practiceTab = entry.key;
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-controls", entry.panel.id);
-      button.addEventListener("click", () => selectPractice(entry.key, false));
-      button.addEventListener("keydown", (event) => {
-        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        event.preventDefault();
-        let next = index;
-        if (event.key === "ArrowLeft") next = (index - 1 + entries.length) % entries.length;
-        if (event.key === "ArrowRight") next = (index + 1) % entries.length;
-        if (event.key === "Home") next = 0;
-        if (event.key === "End") next = entries.length - 1;
-        selectPractice(entries[next].key, true);
-      });
-      buttons.push(button);
-      tabs.appendChild(button);
-    });
-    sec.appendChild(tabs);
-    const growthTime = Date.parse(path.growth_done_at || "") || 0;
-    const ritualTime = Date.parse(path.ritual_done_at || "") || 0;
-    const fallbackTab = ritualHabit && ritualTime >= growthTime ? "ritual" : "growth";
-    const selectedTab = entries.some((entry) => entry.key === activePracticeTab)
-      ? activePracticeTab
-      : fallbackTab;
-    selectPractice(selectedTab, false);
-  } else if (entries.length === 1) {
-    entries[0].panel.removeAttribute("role");
-    entries[0].panel.removeAttribute("aria-labelledby");
-  }
-  sec.appendChild(cards);
-  return sec;
-}
-
-function profileInsightsBlock(p) {
-  const wrap = el("details", "profile-details");
-  wrap.appendChild(el("summary", "profile-details-toggle", "Темы и рабочие гипотезы"));
-  const body = el("div", "profile-details-body");
-  body.appendChild(
-    el(
-      "p",
-      "profile-details-intro",
-      "Это линзы для самонаблюдения, не диагнозы и не окончательные выводы. Ты можешь подтвердить, уточнить или отклонить каждую тему.",
-    ),
-  );
-
-  const core = p.sections.filter((section) => section.group === "core");
-  const enrichment = p.sections.filter((section) => section.group === "enrichment");
-  if (core.length) body.appendChild(groupBlock("Основные темы", core));
-  if (enrichment.length) body.appendChild(groupBlock("Глубинные темы", enrichment));
-  if (p.archetypes.length) {
-    body.appendChild(
-      groupBlock(
-        "Архетипические образы",
-        p.archetypes,
-        "Метафорические образы, которые можно проверить на собственных ассоциациях.",
-      ),
-    );
-  }
-  if (p.habits.length) {
-    const habits = el("section", "group");
-    habits.appendChild(el("h2", "group-title", "Работа с привычкой"));
-    habits.appendChild(el("p", "group-sub", "Триггер, потребность, замена и минимальная версия на трудный день."));
-    p.habits.forEach((habit) => habits.appendChild(habitCard(habit)));
-    body.appendChild(habits);
-  }
-  if (!body.querySelector(".sky, .group")) {
-    body.appendChild(el("p", "empty-note", "Темы появятся после нескольких содержательных разговоров."));
-  }
-  wrap.appendChild(body);
-  return wrap;
-}
 
 // Имя бота приходит с профилем. Держим его отдельно, чтобы deep-link собирался
 // и в тех блоках, которым сам профиль не передаётся.
@@ -2979,7 +2007,6 @@ function deepSessionCard(session, feedback) {
       remove.textContent = "Удаляю…";
       try {
         const updated = await deleteDeepSession(session.id);
-        activeProfileTab = "memory";
         renderedProfileFingerprint = null;
         renderFetchedProfile(updated);
         announceAction("Итог глубинной сессии удалён.");
@@ -3000,45 +2027,6 @@ function deepSessionCard(session, feedback) {
   return card;
 }
 
-function deepSessionsPanel(p) {
-  const panel = el("section", "sessions-panel");
-  const intro = el("header", "panel-header");
-  intro.appendChild(el("span", "section-eyebrow", "Глубинные сессии"));
-  intro.appendChild(el("h2", "panel-title serif", "Разговор, после которого остаётся твой итог"));
-  intro.appendChild(
-    el(
-      "p",
-      "panel-intro",
-      "Здесь нет стенограммы. Только сохранённый итог с явным разделением твоего описания и рабочей гипотезы.",
-    ),
-  );
-  panel.appendChild(intro);
-
-  const sessions = p.deep_sessions || normalizeDeepSessions(null);
-  const active = sessions.recent.filter((session) => ["preparing", "active", "integrating"].includes(session.status));
-  const history = sessions.recent.filter((session) => ["completed", "aborted"].includes(session.status));
-  if (active.length) {
-    const current = el("section", "session-group");
-    current.appendChild(el("h3", "session-group-title", "Сейчас"));
-    active.forEach((session) => current.appendChild(deepSessionCard(session, p.outcome_feedback)));
-    panel.appendChild(current);
-  }
-
-  panel.appendChild(deepSessionPreparation(p.show_upgrade, p.safety_pause));
-
-  const past = el("section", "session-group");
-  past.appendChild(el("h3", "session-group-title", "Последние сессии"));
-  if (history.length) {
-    history.forEach((session) => past.appendChild(deepSessionCard(session, p.outcome_feedback)));
-  } else {
-    const empty = el("div", "session-empty");
-    empty.appendChild(el("strong", null, "Здесь пока тихо"));
-    empty.appendChild(el("p", null, "После первой сессии здесь появится сохранённый итог и, если выберешь, следующий шаг."));
-    past.appendChild(empty);
-  }
-  panel.appendChild(past);
-  return panel;
-}
 
 function memoryPauseBlock(center) {
   const section = el("section", "memory-pause");
@@ -3080,7 +2068,7 @@ function memoryControlsBlock(center) {
     el(
       "p",
       "memory-controls-intro",
-      "Можно забрать копию или удалить все записи прямо здесь. Рабочие гипотезы можно проверить и исправить выше, в «Темах и рабочих гипотезах».",
+      "Можно забрать копию или удалить все записи прямо здесь. Отдельные темы можно снять выше, там же где они написаны.",
     ),
   );
   const status = el("p", "command-status");
@@ -3133,49 +2121,6 @@ function memoryControlsBlock(center) {
   return sec;
 }
 
-function memoryPanel(p) {
-  const center = p.memory_center || { writes_paused: false, groups: [], manual_types: [] };
-  const panel = el("section", "memory-panel");
-  const header = el("header", "panel-header");
-  header.appendChild(el("span", "section-eyebrow", "Память"));
-  header.appendChild(el("h2", "panel-title serif", "Что остаётся между разговорами"));
-  header.appendChild(el("p", "panel-intro", "Здесь видно, что сохранено, откуда это взялось и зачем может пригодиться. Гипотезы о смысле остаются отдельными и не выдаются за факты."));
-  panel.appendChild(header);
-  panel.appendChild(memoryPauseBlock(center));
-  if (center.manual_types.length) panel.appendChild(memoryAddBlock(center.manual_types));
-  let hasItems = false;
-  center.groups.forEach((group) => {
-    const block = memoryGroup(group, center.manual_types);
-    if (block) {
-      hasItems = true;
-      panel.appendChild(block);
-    }
-  });
-  if (!hasItems) {
-    const empty = el("div", "memory-empty");
-    empty.appendChild(el("strong", null, "Память пока пуста"));
-    empty.appendChild(el("p", null, "Можно добавить устойчивый факт самому. Проводник не сохраняет весь разговор, временное настроение или догадки."));
-    panel.appendChild(empty);
-  }
-  panel.appendChild(profileInsightsBlock(p));
-  // Сохранённое в практиках живёт здесь же: выбранная привычка, записи движения
-  // и итоги глубинных сессий — это тоже то, что бот о человеке помнит. Раздела
-  // «Практики» больше нет, но ни одна запись не потеряна.
-  const saved = [
-    optionalBlock("Привычки и сохранённые практики", practiceProgressBlock(p)),
-    optionalBlock("Движение по силам", movementBlock(p), "movement-tool"),
-    optionalBlock("Глубинные сессии и их итоги", deepSessionsPanel(p)),
-  ].filter(Boolean);
-  if (saved.length) {
-    const kept = el("section", "memory-kept");
-    kept.appendChild(el("h3", "memory-group-title serif", "Сохранённое тобой"));
-    kept.appendChild(el("p", "memory-group-description", "Записи практик. Их можно менять или удалять, отмечать ничего не нужно."));
-    saved.forEach((block) => kept.appendChild(block));
-    panel.appendChild(kept);
-  }
-  panel.appendChild(memoryControlsBlock(center));
-  return panel;
-}
 
 function legalLinks() {
   const nav = el("nav", "legal-links");
@@ -3194,44 +2139,6 @@ function legalLinks() {
   return nav;
 }
 
-function morePanel(p) {
-  const panel = el("section", "more-panel");
-  const header = el("header", "panel-header");
-  header.appendChild(el("span", "section-eyebrow", "Доступ и настройки"));
-  header.appendChild(el(
-    "h2",
-    "panel-title serif",
-    p.show_upgrade ? "Подписка" : (p.is_paid ? "Подписка активна" : "Доступ открыт"),
-  ));
-  header.appendChild(el(
-    "p",
-    "panel-intro",
-    p.show_upgrade
-      ? "Условия доступа. Решить можно в удобное время."
-      : p.is_paid
-        ? "Полный доступ работает. Управлять регулярной оплатой можно в настройках Telegram."
-        : "Сейчас полный доступ открыт. Актуальные условия и остаток маршрута видны в чате.",
-  ));
-  panel.appendChild(header);
-  if (p.show_upgrade) panel.appendChild(upgradeSection(p.billing, p.access));
-  else {
-    const active = el("section", "subscription-active");
-    active.appendChild(el("span", "subscription-active-mark", "✓"));
-    active.appendChild(el("strong", null, p.is_paid ? "Полный доступ открыт" : "Доступ действует сейчас"));
-    active.appendChild(el("p", null, "Глубинные сессии, практики и разговоры доступны в чате."));
-    const back = el("button", "subscription-chat", "Вернуться в чат");
-    back.type = "button";
-    back.addEventListener("click", closeToChat);
-    active.appendChild(back);
-    panel.appendChild(active);
-  }
-  if (p.invite_url) panel.appendChild(optionalBlock("Поделиться ботом", shareRow(p.referral, p.invite_url)));
-  panel.appendChild(legalLinks());
-  const foot = el("footer", "footer");
-  foot.appendChild(el("p", null, "MindCoach помогает с самонаблюдением, но не ставит диагнозов и не заменяет специалиста."));
-  panel.appendChild(foot);
-  return panel;
-}
 
 // Movement is an optional entry into the existing single-step loop.
 const MOVEMENT_KINDS = {
@@ -3242,214 +2149,6 @@ const MOVEMENT_KINDS = {
 };
 const MOVEMENT_STATUS = {chosen: "Выбрано", attempted: "Попробовал", completed: "Завершено", declined: "Решил не пробовать"};
 
-function movementBlock(p) {
-  let m = p.movement;
-  if (!m || !m.revision || (!m.enabled && !m.entries.length)) return null;
-  const card = el("section", "movement-card");
-  card.id = "movement";
-  card.append(el("span", "section-eyebrow", "Небольшая пауза для себя"),
-    el("h2", "serif", "Движение по силам"),
-    el("p", "movement-intro", "Выбрать посильное движение и заметить, как тебе после. Без нормы и обязательных отметок."));
-  const feedback = el("p", "movement-feedback");
-  feedback.setAttribute("role", "status");
-  feedback.setAttribute("aria-live", "polite");
-  const button = (label, action, primary = false) => {
-    const b = el("button", primary ? "memory-primary" : "memory-secondary", label);
-    b.type = "button"; b.addEventListener("click", action); return b;
-  };
-  const select = (form, key, label, options, value) => {
-    const wrap = el("label", "movement-field");
-    wrap.appendChild(el("span", "memory-field-label", label));
-    const input = el("select", "memory-input"); input.name = key;
-    for (const [v, title] of options) { const o = el("option", null, title); o.value = v; o.defaultSelected = String(v) === String(value); input.appendChild(o); }
-    input.value = value; wrap.appendChild(input); form.appendChild(wrap); return input;
-  };
-  const energyOptions = [["", "Пропустить"], ["1", "1 · Совсем мало"], ["2", "2 · Мало"], ["3", "3 · Средне"], ["4", "4 · Достаточно"], ["5", "5 · Много"]];
-  const rating = input => input.value === "" ? null : Number(input.value);
-  const dirty = form => {
-    form.classList.add("movement-form");
-    form.addEventListener("input", () => {form.dataset.dirty = "true";});
-    form.addEventListener("change", () => {form.dataset.dirty = "true";});
-  };
-  let pending = null;
-  async function commit(operation, payload) {
-    if (card.dataset.busy === "true") return;
-    if (document.querySelector('.memory-form[data-dirty="true"], .experiment-form[data-dirty="true"]')) {
-      feedback.textContent = "Сначала сохрани или отмени правки текущего шага или памяти. Этот черновик останется здесь."; return;
-    }
-    const signature = JSON.stringify([operation, payload]);
-    if (!pending || pending.signature !== signature) pending = {signature, id: crypto.randomUUID(), revision: m.revision};
-    card.dataset.busy = "true"; card.setAttribute("aria-busy", "true"); experimentMutationEpoch++;
-    const controls = Array.from(card.querySelectorAll("button, input, select"));
-    const wasDisabled = controls.map(n => n.disabled); controls.forEach(n => {n.disabled = true;});
-    feedback.textContent = "Сохраняю…";
-    try {
-      const res = await fetchWithDeadline(freshApiUrl("/api/movement/control"), {
-        method: "POST", headers: apiHeaders(tg && tg.initData || "", true), cache: "no-store",
-        body: JSON.stringify({operation, payload, revision: pending.revision, request_id: pending.id}),
-      });
-      if (!res.ok) throw new Error("http-" + res.status);
-      const body = await res.json();
-      if (!body.movement || !body.movement.revision) throw new Error("invalid-response");
-      p.movement = body.movement; p.change_experiment = body.change_experiment || {};
-      // Reconcile the existing plan/dates too, so the next quiet poll does not remount
-      // an otherwise unchanged movement form while the person is reading it.
-      const refreshed = await fetchProfile(true).catch(() => null);
-      delete card.dataset.busy; card.querySelectorAll(".movement-form").forEach(f => {delete f.dataset.dirty;});
-      renderFetchedProfile(refreshed || p, true);
-      const next = document.getElementById("movement");
-      if (next) {
-        next.querySelector(".movement-feedback").textContent = "Сохранено. Можно изменить решение в любой момент.";
-        const focus = next.querySelector("button"); if (focus) focus.focus({preventScroll: true});
-        next.scrollIntoView({block: "nearest", behavior: "instant"});
-      }
-      announceAction("Сохранено");
-    } catch (error) {
-      feedback.textContent = error.message === "http-401"
-        ? "Сессия завершилась. Скопируй нужные правки и открой мини-апп из чата заново."
-        : error.message === "http-409"
-          ? "Данные уже изменились. Черновик остался здесь. Проверь актуальный шаг перед повторным сохранением."
-          : error.message === "http-400"
-            ? "Не удалось сохранить эти поля. Проверь выбор. Если журнал заполнен, выгрузи данные и удали ненужные записи."
-            : "Не удалось подтвердить сохранение. Черновик остался здесь. Проверь связь и повтори: дубликата не будет.";
-      if (error.message === "http-409") feedback.appendChild(button("Проверить актуальный шаг", async () => {
-        try {
-          const fresh = await fetchProfile(true);
-          if (!fresh || !fresh.movement) return;
-          m = fresh.movement; p.change_experiment = fresh.change_experiment; pending = null;
-          feedback.textContent = "Сейчас: " + (fresh.change_experiment.action || "текущий шаг не выбран") + ". Проверь черновик и сохрани ещё раз, если решение подходит.";
-        } catch (_) { feedback.textContent = "Не удалось загрузить актуальные данные. Черновик сохранён в открытом мини-аппе."; }
-      }));
-    } finally {
-      delete card.dataset.busy; card.removeAttribute("aria-busy"); experimentMutationEpoch++;
-      controls.forEach((n, i) => {n.disabled = wasDisabled[i];});
-    }
-  }
-  const cancel = form => button("Отменить изменения", () => {
-    delete form.dataset.dirty; pending = null; form.closest("details").open = false;
-    form.reset(); refreshProfileView();
-  });
-  function entryEditor(entry) {
-    const details = el("details", "movement-entry");
-    details.appendChild(el("summary", null, `${MOVEMENT_KINDS[entry.kind][0]} · до ${entry.minutes} мин · ${fmtDateOnly(entry.local_date)}`));
-    details.appendChild(el("p", "movement-meta", MOVEMENT_STATUS[entry.status] + (entry.corrected ? " · исправлено" : "") + (entry.paused ? " · шаг на паузе" : "")));
-    if (entry.before !== null || entry.after !== null) details.appendChild(el("p", "movement-pair", `Энергия: ${entry.before === null ? "без отметки" : entry.before + "/5"} → ${entry.after === null ? "без отметки" : entry.after + "/5"}`));
-    details.addEventListener("toggle", () => {
-      if (!details.open || details.dataset.built) return; details.dataset.built = "true";
-      const form = el("form", "movement-form"); dirty(form);
-      if (entry.paused) form.appendChild(el("p", "movement-hint", "Шаг на паузе. Вернуться к нему можно в разделе «Текущий шаг, сроки и пауза»."));
-      const status = select(form, "status", "Что фактически получилось", Object.entries(MOVEMENT_STATUS), entry.status);
-      const after = select(form, "after", "Энергия после, необязательно", energyOptions, entry.after == null ? "" : String(entry.after));
-      const effect = select(form, "effect", "Помогло ли это тебе сейчас, необязательно", [["skip", "Пропустить"], ["helped", "Да, помогло"], ["same", "Ничего не изменилось"], ["worse", "Стало хуже"], ["unsure", "Не уверен"]], entry.effect);
-      const edit = el("details", "movement-more"); edit.appendChild(el("summary", null, "Исправить отметку до"));
-      const before = select(edit, "before", "Энергия до", energyOptions, entry.before == null ? "" : String(entry.before));
-      edit.appendChild(el("p", "movement-hint", "Поздняя отметка «до» сохранится в журнале, но не создаст пару для наблюдений.")); form.appendChild(edit);
-      const notice = el("p", "movement-hint"); form.appendChild(notice);
-      const update = () => {
-        const tried = status.value === "attempted" || status.value === "completed";
-        after.disabled = effect.disabled = !tried;
-        notice.textContent = tried && effect.value === "worse"
-          ? "Можно остановиться и выбрать отдых. При боли или недомогании не продолжай нагрузку; обратись за медицинской помощью по ситуации."
-          : "Пропуск отметки ничего не говорит о самочувствии. Любой исход подходит.";
-      }; status.addEventListener("change", update); effect.addEventListener("change", update); update();
-      const save = el("button", "memory-primary", "Сохранить отметку"); save.type = "submit";
-      form.append(save, cancel(form));
-      form.addEventListener("submit", e => {e.preventDefault(); const tried = ["attempted", "completed"].includes(status.value);
-        commit("report", {id: entry.id, status: status.value, before: rating(before), after: tried ? rating(after) : null, effect: tried ? effect.value : "skip"});
-      });
-      const deletion = el("details", "movement-delete"); deletion.appendChild(el("summary", null, "Удалить запись"));
-      deletion.appendChild(el("p", "movement-hint", "Запись и связанный с ней текущий шаг будут удалены. Сначала можно выгрузить свои данные."));
-      deletion.append(button("Удалить эту запись", () => commit("delete", {id: entry.id})), button("Оставить запись", () => {deletion.open = false;}));
-      form.appendChild(deletion); details.appendChild(form);
-    });
-    return details;
-  }
-  const active = m.entries.find(e => e.linked);
-  if (active) {
-    if (active.paused) card.appendChild(el("p", "movement-hint", "Шаг на паузе. Можно отдыхать; исправление записей остаётся доступным."));
-    const pendingEntry = entryEditor(active); card.appendChild(pendingEntry);
-    card.appendChild(button(active.status === "chosen" && !active.paused ? "Отметить, как прошло" : "Посмотреть или исправить отметку", () => {pendingEntry.open = true;}, true));
-  }
-  if (m.enabled && !m.safety_pause) {
-    const composer = el("details", "movement-composer");
-    composer.appendChild(el("summary", "movement-open", active ? "Выбрать другое движение" : "Подобрать движение"));
-    const form = el("form", "movement-form"); dirty(form);
-    const offerId = crypto.randomUUID(); let offered = false;
-    composer.addEventListener("toggle", () => {if (composer.open && !offered) {offered = true; submitOutcome("movement_offer", "shown", "movement", offerId).catch(() => {});}});
-    const need = select(form, "need", "Чего сейчас хочется", [["switch", "Переключиться"], ["calm", "Успокоиться"], ["energy", "Почувствовать больше энергии"]], "switch");
-    const minutes = select(form, "minutes", "Сколько времени посильно", [["1", "Около минуты"], ["3", "До 3 минут"], ["5", "До 5 минут"], ["10", "До 10 минут"], ["15", "До 15 минут"], ["30", "До 30 минут"]], "3");
-    const more = el("details", "movement-more"); more.appendChild(el("summary", null, "Уточнить под себя, необязательно"));
-    const before = select(more, "before", "Сколько энергии сейчас", energyOptions, "");
-    const healthLabel = el("label", "movement-check"); const health = el("input"); health.type = "checkbox"; health.name = "unwell";
-    healthLabel.append(health, document.createTextNode("Есть боль, недомогание или сомнения, можно ли двигаться")); more.appendChild(healthLabel);
-    form.appendChild(more);
-    const choices = el("fieldset", "movement-options"); choices.appendChild(el("legend", null, "Что тебе подходит"));
-    const radios = {};
-    for (const [kind, [label, description]] of Object.entries(MOVEMENT_KINDS)) {
-      const row = el("label", "movement-option"); const input = el("input"); input.type = "radio"; input.name = "kind"; input.value = kind;
-      radios[kind] = input; const text = el("span"); text.append(el("strong", null, label), el("span", null, description)); row.append(input, text); choices.appendChild(row);
-    }
-    const hint = el("p", "movement-hint"); let manualKind = false;
-    choices.addEventListener("change", () => {manualKind = true; refreshChoice();});
-    const replaceLabel = el("label", "movement-check"); const replace = el("input"); replace.type = "checkbox"; replace.name = "replace";
-    replaceLabel.append(replace, document.createTextNode("Заменить мой текущий шаг этим движением"));
-    function refreshChoice() {
-      const preferred = m.preferences.personalize && m.preferences.preferred !== "any" ? m.preferences.preferred : null;
-      const suggested = health.checked ? "rest" : preferred || (rating(before) !== null && rating(before) <= 2 ? "break" : Number(minutes.value) >= 10 ? "walk" : need.value === "calm" ? "mobility" : "break");
-      if (!manualKind || health.checked) radios[suggested].checked = true;
-      Object.entries(radios).forEach(([k, input]) => {input.disabled = health.checked && k !== "rest";});
-      const selected = Object.keys(radios).find(k => radios[k].checked);
-      replaceLabel.hidden = !p.change_experiment.action || p.change_experiment.status === "completed" || selected === "rest";
-      hint.textContent = health.checked
-        ? "Сейчас можно выбрать отдых. Нагрузку при боли или недомогании не подбираем. Обсуди ограничения с врачом; при сильной боли в груди, обмороке или выраженной одышке нужна срочная помощь. Этот ответ не сохраняется."
-        : "Это вариант для пробы, а не обещание улучшения. Можно сократить время, остановиться или выбрать отдых.";
-    }
-    [need, minutes, before, health].forEach(input => input.addEventListener("change", refreshChoice)); refreshChoice();
-    form.append(choices, hint, replaceLabel);
-    const save = el("button", "memory-primary", "Выбрать этот шаг"); save.type = "submit";
-    form.append(save, button("Свернуть, оставив черновик", () => {form.dataset.dirty = "true"; composer.open = false;}), cancel(form));
-    form.addEventListener("submit", e => {e.preventDefault(); const kind = Object.keys(radios).find(k => radios[k].checked);
-      if (!replaceLabel.hidden && !replace.checked) {feedback.textContent = "У тебя уже есть шаг. Для замены отметь своё решение выше; можно оставить прежний шаг."; replace.focus(); return;}
-      commit("choose", {id: offerId, kind, minutes: Number(minutes.value), need: need.value, before: rating(before), ...practiceClockMetadata(), replace: replace.checked});
-    });
-    composer.appendChild(form); card.appendChild(composer);
-    if (active && !active.paused) card.appendChild(button("Выбрать отдых и паузу", () => commit("choose", {
-      id: offerId, kind: "rest", minutes: 1, need: "switch", before: null, ...practiceClockMetadata(), replace: false,
-    })));
-    else card.appendChild(button("Сейчас без движения", () => {submitOutcome("movement_choice", "declined", "movement", offerId + ":declined").catch(() => {}); composer.open = false; feedback.textContent = "Можно оставить всё как есть. Отдых не обнуляет твой опыт.";}));
-  } else card.appendChild(el("p", "movement-hint", "Подбор движения сейчас на паузе. Записи и управление данными доступны."));
-  const history = el("details", "movement-history"); history.appendChild(el("summary", null, "Мои наблюдения и записи"));
-  if (!m.observations.length) history.appendChild(el("p", "movement-hint", "Для личных наблюдений пока недостаточно сопоставимых отметок. Не нужно заполнять их специально: движение возможно и без дневника."));
-  for (const observation of m.observations) {
-    const row = el("div", "movement-observation");
-    row.append(el("h3", null, `${MOVEMENT_KINDS[observation.kind][0]} · выбор ${observation.duration}`),
-      el("p", "movement-pair", `В ${observation.higher} из ${observation.pairs} случаев энергии после было больше.`),
-      el("p", "movement-hint", `Столько же: ${observation.same}. Меньше: ${observation.lower}. Энергии до: ${observation.baseline}. Это совпадение в твоих отметках, а не доказательство причины.`)); history.appendChild(row);
-  }
-  history.appendChild(el("p", "movement-hint", "Окно 28 дней. Нужны 6 пар на 3 разных днях: одно движение, похожая выбранная длительность и энергия до; между отметками до 2 часов. Пропуски не считаются ни успехом, ни ухудшением."));
-  if (!m.entries.length) history.appendChild(el("p", null, "Записей пока нет."));
-  let shown = 0; const list = el("div"); history.appendChild(list);
-  const loadMore = button("Показать ещё записи", () => appendEntries());
-  function appendEntries() {m.entries.slice(shown, shown + 10).forEach(e => list.appendChild(entryEditor(e))); shown += 10; loadMore.hidden = shown >= m.entries.length;}
-  appendEntries(); history.appendChild(loadMore); card.appendChild(history);
-  const settings = el("details", "movement-settings"); settings.appendChild(el("summary", null, "Предпочтения и мои данные"));
-  const settingsForm = el("form", "movement-form"); dirty(settingsForm);
-  const personalLabel = el("label", "movement-check"); const personal = el("input"); personal.type = "checkbox"; personal.checked = personal.defaultChecked = m.preferences.personalize;
-  personalLabel.append(personal, document.createTextNode("Учитывать мои предпочтения и наблюдения о движении в подборе и ИИ-чате")); settingsForm.appendChild(personalLabel);
-  const preferred = select(settingsForm, "preferred", "Обычно мне удобнее", [["any", "Без предпочтения"], ...Object.entries(MOVEMENT_KINDS).map(([k, v]) => [k, v[0]])], m.preferences.preferred);
-  settingsForm.appendChild(el("p", "movement-hint", "Записи остаются твоими данными. Они не становятся психологическими фактами. Новые напоминания не включаются; срок и пауза настраиваются у текущего шага."));
-  const settingsSave = el("button", "memory-primary", "Сохранить предпочтения"); settingsSave.type = "submit";
-  settingsForm.append(settingsSave, cancel(settingsForm)); settingsForm.addEventListener("submit", e => {e.preventDefault(); commit("preferences", {personalize: personal.checked, preferred: preferred.value});});
-  settings.appendChild(settingsForm);
-  settings.appendChild(button("Выгрузить мои данные", () => {const tab = document.getElementById("tab-memory"); if (tab) tab.click(); announceAction("Экспорт доступен во вкладке памяти, в управлении данными.");}));
-  const clear = el("details", "movement-delete"); clear.append(el("summary", null, "Удалить все записи движения"), el("p", "movement-hint", "Удалятся журнал, предпочтения и связанный текущий шаг. Это нельзя отменить."), button("Удалить всё движение", () => commit("clear", {})), button("Оставить данные", () => {clear.open = false;})); settings.appendChild(clear);
-  const frictionId = crypto.randomUUID();
-  const friction = el("fieldset", "movement-friction"); friction.appendChild(el("legend", null, "Что мешает, если хочется сказать"));
-  for (const [value, label] of [["pressure", "Чувствую давление"], ["complexity", "Слишком сложно"], ["reminders", "Мешают напоминания"], ["none", "Всё подходит"]]) friction.appendChild(button(label, async () => {
-    try {await submitOutcome("movement_friction", value, "movement", frictionId); feedback.textContent = value === "reminders" ? "Замечание записано. В чате: /menu → Мои данные → Не писать мне первым. Там же можно выключить ежедневные напоминания." : "Спасибо, замечание записано."; friction.disabled = true;}
-    catch (_) {feedback.textContent = "Замечание не сохранилось. Можно повторить.";}
-  })); settings.appendChild(friction); card.append(settings, feedback); return card;
-}
 
 // Optional tools retain their saved records and paid access, away from the home screen.
 function optionalBlock(title, node, key) {
@@ -3478,80 +2177,150 @@ function lastTurnLine(p) {
   return "Последний разговор — " + fmtDate(raw) + ".";
 }
 
-function pathPanel(p) {
-  const panel = el("section", "path-panel");
-  const intro = el("section", "conversation-home");
-  intro.append(el("h2", "panel-title serif", "Можно просто поговорить"));
-  const since = lastTurnLine(p);
-  if (since) {
-    const line = el("p", "home-since", since + " Я помню, о чём шла речь.");
-    intro.appendChild(line);
-  } else {
-    intro.appendChild(el("p", "panel-intro", "Расскажи, что сейчас у тебя на уме. Не нужно готовиться, заполнять профиль или выбирать задание."));
+
+
+
+// --- сборка профиля ---------------------------------------------------------
+
+// --- один экран ------------------------------------------------------------
+// Измерено в production 18.09: мини-апп открывали 3 раза за всю жизнь продукта
+// (profile_opened = 3, последний 20.07). Разделы «Практики», «Движение»,
+// «Глубинные сессии», «Эксперименты» и «Сохранённый шаг» рендерили ключи,
+// которых нет ни в одном из шести профилей. Вкладки делили пустоту на три
+// части. Настоящее содержимое — profiles.sections: 29 записей у 6 человек,
+// summary 90-419 символов, и повторяющийся theme, который сервер уже собирает
+// в «нити». Экран теперь один, и показывает ровно это.
+
+// Мотив-тег приходит машинным ключом (strah-nakazaniya). Человеку его нельзя
+// показывать сырым, а придумывать за него название мотива — значит выдать
+// догадку за вывод. Поэтому нить названа тем, что в ней бесспорно: сколькими
+// разными сторонами разговора она всплыла.
+function threadLine(thread) {
+  const labels = (thread.members || [])
+    .map((m) => m.label || m.name)
+    .filter(Boolean);
+  if (labels.length < 2) return null;
+  const line = el("section", "thread");
+  line.appendChild(el("span", "thread-eyebrow", "Кажется, это связано"));
+  // Ярлык раздела сам может содержать «и» («Анима и Анимус»), и тогда
+  // перечисление через «и» читается как сбой. Точка с запятой не спорит с
+  // содержимым ярлыка, каким бы оно ни было.
+  const names = labels.join("; ");
+  line.appendChild(el("p", "thread-body", names + " — всё это всплывало в разговорах рядом друг с другом."));
+  if (thread.need) line.appendChild(el("p", "thread-need", "Похоже, за этим стоит одно: " + thread.need));
+  line.appendChild(el("p", "thread-caveat", "Это догадка, а не вывод. Если связи нет, так и скажи в разговоре."));
+  return line;
+}
+
+// Одна тема — заголовок, текст и, если человек ещё не решил, два тихих выбора.
+// Ни статуса, ни уверенности, ни счётчика наблюдений, ни глифа: девять
+// элементов на запись и были той «колхозностью», которую владелец назвал.
+function understandingItem(item) {
+  const row = el("article", "understanding");
+  if (item.user_confirmed) row.classList.add("understanding--confirmed");
+  row.appendChild(el("h3", "understanding-title", item.label || item.name));
+  row.appendChild(el("p", "understanding-body", item.summary));
+  if (item.user_confirmed) {
+    row.appendChild(el("p", "understanding-mark", "Ты подтвердил, что это про тебя."));
+    return row;
   }
-  const chat = el("button", "today-cta", "Вернуться в чат");
+  row.classList.add("understanding--open");
+  const ask = el("div", "understanding-ask");
+  const status = el("p", "understanding-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const decide = (label, run) => {
+    const b = el("button", "understanding-choice", label);
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      if (row.dataset.busy === "true") return;
+      row.dataset.busy = "true";
+      ask.querySelectorAll("button").forEach((n) => { n.disabled = true; });
+      status.textContent = "Сохраняю…";
+      try {
+        await run(item.key);
+      } catch (_) {
+        status.textContent = "Не получилось сохранить. Попробуй ещё раз.";
+        row.dataset.busy = "false";
+        ask.querySelectorAll("button").forEach((n) => { n.disabled = false; });
+      }
+    });
+    return b;
+  };
+  ask.appendChild(decide("Да, это про меня", confirmSection));
+  ask.appendChild(decide("Не про меня", dismissSection));
+  row.appendChild(ask);
+  row.appendChild(status);
+  return row;
+}
+
+function understandingScreen(p) {
+  const panel = el("section", "screen");
+
+  // Разговор остаётся главным, поэтому он первым и всегда, ещё до понимания.
+  const talk = el("section", "talk");
+  talk.appendChild(el("h2", "talk-title serif", "Можно просто поговорить"));
+  const since = lastTurnLine(p);
+  talk.appendChild(since
+    ? el("p", "talk-since", since + " Я помню, о чём шла речь.")
+    : el("p", "talk-since", "Расскажи, что сейчас у тебя на уме. Не нужно готовиться или заполнять профиль."));
+  const chat = el("button", "talk-cta", "Вернуться в чат");
   chat.type = "button";
   chat.addEventListener("click", closeToChat);
-  intro.appendChild(chat);
-  panel.appendChild(intro);
-  const step = todayBlock(p);
-  if (step) {
-    const saved = optionalBlock("Твой сохранённый шаг", step, "saved-step");
-    saved.open = true;
-    panel.appendChild(saved);
-    const result = stepAttemptBlock(p);
-    if (result) saved.appendChild(result);
-    if (p.movement && p.movement.entries.some(entry => entry.linked)) {
-      const movement = el("button", "command-action", "Открыть записи движения");
-      movement.type = "button";
-      movement.addEventListener("click", () => openMovement());
-      saved.appendChild(movement);
+  talk.appendChild(chat);
+  panel.appendChild(talk);
+
+  const sections = (p.sections || []).filter((s) => s && s.summary);
+  if (sections.length) {
+    const head = el("header", "screen-head");
+    head.appendChild(el("h2", "screen-title serif", "Что я понял о тебе"));
+    head.appendChild(el("p", "screen-intro", "Это то, что осталось у меня между разговорами. Не диагноз и не окончательный вывод: можно согласиться или снять."));
+    panel.appendChild(head);
+
+    // Нить сверху: она объясняет, почему темы ниже стоят рядом. Есть не у всех
+    // (3 из 6 в production), поэтому блок условный, а не обязательный.
+    const thread = (p.threads || []).find((t) => (t.members || []).length >= 2);
+    if (thread) {
+      const line = threadLine(thread);
+      if (line) panel.appendChild(line);
     }
-  }
-  const feedback = optionalBlock("Оставить отзыв о разговоре", conversationOutcomeBlock(p));
-  if (feedback) panel.appendChild(feedback);
-  // Тихая сноска вместо списка записей: объясняет, куда смотреть за памятью,
-  // и не дублирует её содержимое. Ждёт решения — единственное, ради чего
-  // стоит позвать человека в раздел, потому что там нужен его выбор.
-  const note = el("p", "home-note");
-  const pending = pendingMemoryCount(p);
-  if (pending) {
-    note.appendChild(document.createTextNode(
-      pending === 1 ? "Одна запись ждёт твоего решения. " : "Несколько записей ждут твоего решения. ",
-    ));
+
+    // Неподтверждённое выше: только оно ждёт решения человека.
+    const list = el("div", "understanding-list");
+    const pending = sections.filter((s) => !s.user_confirmed);
+    const settled = sections.filter((s) => s.user_confirmed);
+    pending.concat(settled).forEach((s) => list.appendChild(understandingItem(s)));
+    panel.appendChild(list);
   } else {
-    note.appendChild(document.createTextNode("Что я запомнил между разговорами, видно в разделе "));
+    const empty = el("section", "screen-empty");
+    empty.appendChild(el("h2", "screen-title serif", "Пока я мало что о тебе знаю"));
+    empty.appendChild(el("p", "screen-intro", "Понимание появляется из разговоров, а не из анкеты. Напиши, что сейчас происходит, и оно соберётся само."));
+    panel.appendChild(empty);
   }
-  const link = el("button", null, pending ? "Посмотреть" : "«Память»");
-  link.type = "button";
-  link.addEventListener("click", () => {
-    if (typeof switchProfileTab === "function") switchProfileTab("memory", true);
-  });
-  note.appendChild(link);
-  if (!pending) note.appendChild(document.createTextNode("."));
-  panel.appendChild(note);
+
+  panel.appendChild(quietFooter(p));
   return panel;
 }
 
-function pendingMemoryCount(p) {
-  const center = p.memory_center;
-  if (!center || !Array.isArray(center.groups)) return 0;
-  return center.groups.reduce((total, group) => total + (Array.isArray(group.items)
-    ? group.items.filter((item) => item.needs_confirmation && !item.is_guess).length
-    : 0), 0);
+// Подписка, приглашение и права на данные — заход раз в жизнь. Вкладки они не
+// заслуживают, но и прятать их нельзя: удаление и экспорт данных обязаны
+// оставаться достижимыми.
+function quietFooter(p) {
+  const foot = el("footer", "quiet-foot");
+  if (p.show_upgrade) {
+    const access = optionalBlock("Доступ и подписка", upgradeSection(p.billing, p.access));
+    if (access) foot.appendChild(access);
+  }
+  if (p.invite_url) {
+    const share = optionalBlock("Поделиться ботом", shareRow(p.referral, p.invite_url));
+    if (share) foot.appendChild(share);
+  }
+  const data = optionalBlock("Мои данные", memoryControlsBlock(p.memory_center || {}));
+  if (data) foot.appendChild(data);
+  foot.appendChild(legalLinks());
+  foot.appendChild(el("p", "quiet-foot-note", "MindCoach помогает с самонаблюдением, но не ставит диагнозов и не заменяет специалиста."));
+  return foot;
 }
-
-function openMovement() {
-  // Записи движения переехали в «Память» вместе с остальным сохранённым.
-  // Блока может не быть вовсе: тогда открывать нечего и переключать раздел незачем.
-  const details = document.getElementById("movement-tool");
-  if (!details) return;
-  if (typeof switchProfileTab === "function") switchProfileTab("memory", true);
-  details.open = true;
-  details.scrollIntoView({block: "start", behavior: "instant"});
-}
-
-// --- сборка профиля ---------------------------------------------------------
 
 function renderProfile(p) {
   const root = el("div", "profile");
@@ -3572,9 +2341,7 @@ function renderProfile(p) {
   if (updated) top.appendChild(el("div", "datepill", "обновлено " + updated));
   root.appendChild(top);
 
-  root.appendChild(
-    profileTabShell({ path: pathPanel(p), memory: memoryPanel(p), more: morePanel(p) }),
-  );
+  root.appendChild(understandingScreen(p));
   return root;
 }
 function fmtDate(iso) {

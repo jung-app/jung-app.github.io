@@ -1,98 +1,104 @@
+// Что именно стережёт этот тест: правила владельца, а не форму экрана.
+// До 18.09 он был привязан к pathPanel, вкладкам, «движению» и «сохранённому
+// шагу». Эти разделы удалены, потому что соответствующих ключей нет ни в одном
+// профиле в production, и тест, проверяющий их вёрстку, охранял пустоту.
+// Здесь остались только запреты, которые владелец подтверждал многократно:
+//   1. никаких счётчиков, серий и достижений;
+//   2. один и тот же контент не показывается в двух местах;
+//   3. догадка не выдаётся за подтверждённый факт;
+//   4. первый визит получает приглашение, а не пустое место;
+//   5. разговор остаётся главным и доступен всегда;
+//   6. права на данные (экспорт и удаление) достижимы с экрана;
+//   7. незакрытый черновик не теряется при выходе.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const source = await readFile(new URL('../app.js', import.meta.url), 'utf8');
 const extract = name => source.match(new RegExp('function '+name+'\\([^]*?\\n}'))[0];
+
 class Node {
-  constructor(tag, cls, text) { this.tag=tag; this.className=cls; this.text=text; this.children=[]; this.listeners={}; }
+  constructor(tag, cls, text) { this.tag=tag; this.className=cls||''; this.text=text; this.children=[]; this.listeners={}; this.dataset={}; this.classList={add:c=>{this.className+=' '+c;}}; }
   append(...nodes) {this.children.push(...nodes);}
   appendChild(node) {this.children.push(node); return node;}
   addEventListener(name, fn) {this.listeners[name]=fn;}
+  setAttribute(){}
+  querySelectorAll(){return [];}
 }
 const el = (tag,cls,text) => new Node(tag,cls,text);
-let closed=0;
-const sandbox = {el, closeToChat:()=>closed++, document:{createTextNode:t=>({text:String(t)})}, switchProfileTab:()=>{}, todayBlock:p=>p.change_experiment ? el('section','today','saved') : null,
-  stepAttemptBlock:()=>null, conversationOutcomeBlock:()=>null};
-vm.createContext(sandbox);
-vm.runInContext(extract('optionalBlock')+'\n'+extract('lastTurnLine')+'\n'+extract('pendingMemoryCount')+'\n'+extract('pathPanel'), sandbox);
-// Счёт детей — хрупкая мера: главная несёт ещё и тихую сноску про «Память».
-// Проверяем то, что действительно запрещено: задание, выведенное из стадии.
-const savedStepBlocks = home => home.children.filter(n=>n.tag==='details');
-for (const stage of ['portrait_ready','pattern_named','step_chosen','loop_completed']) {
-  const home=sandbox.pathPanel({path:{activation:{stage}}, movement:{entries:[]}});
-  assert.equal(savedStepBlocks(home).length,0,'inferred stage must not create a task');
-  home.children[0].children.find(n=>n.tag==='button').listeners.click();
-}
-assert.equal(closed,4);
-const home=sandbox.pathPanel({change_experiment:{action:'synthetic saved action'}, movement:{entries:[]}});
-const saved=savedStepBlocks(home);
-assert.equal(saved.length,1,'an actual saved step stays accessible');
-assert.equal(saved[0].open,true);
-// Главная НЕ дублирует «Память»: список записей живёт ровно в одном месте.
-// Дублирование один раз уже уехало в production и было замечено владельцем.
-const withMemory = {movement:{entries:[]}, live_sync:{last_turn_at:new Date(Date.now()-86400000).toISOString()},
-  memory_center:{groups:[{class:'semantic', items:[
-    {type_label:'Цель', content:'synthetic remembered goal', needs_confirmation:false, is_guess:false},
-  ]}]}};
-const memoryHome = sandbox.pathPanel(withMemory);
-const homeFlat = [];
-(function walk(n){ if(!n||typeof n!=='object') return; if(n.text) homeFlat.push(String(n.text)); (n.children||[]).forEach(walk); })(memoryHome);
-assert.ok(!homeFlat.some(t=>t.includes('synthetic remembered goal')),
-  'home must not duplicate the memory tab');
-assert.ok(homeFlat.some(t=>/Мы говорили вчера/.test(t)), 'home links back to the last conversation');
-assert.ok(!homeFlat.some(t=>/\d+\s*(из|раз|подряд|%)/.test(t)), 'no counters or streaks on home');
-assert.ok(!homeFlat.some(t=>/достижени|прогресс|серия|уровень/i.test(t)), 'no achievement language on home');
-// Без прошлого разговора остаётся приглашение, а не пустое место.
-const fresh = sandbox.pathPanel({movement:{entries:[]}});
-const freshFlat=[];
-(function walk(n){ if(!n||typeof n!=='object') return; if(n.text) freshFlat.push(String(n.text)); (n.children||[]).forEach(walk); })(fresh);
-assert.ok(freshFlat.some(t=>/Расскажи, что сейчас/.test(t)), 'a first visit still gets an invitation');
-// Сноска зовёт в «Память» только когда там нужен выбор человека, и никогда не
-// превращается в счётчик: «несколько», а не число.
-const pendingHome = sandbox.pathPanel({movement:{entries:[]}, memory_center:{groups:[{class:'semantic', items:[
-  {type_label:'Граница', content:'a', needs_confirmation:true, is_guess:false},
-  {type_label:'Цель', content:'b', needs_confirmation:true, is_guess:false},
-  {type_label:'Предпочтение', content:'c', needs_confirmation:true, is_guess:true},
-]}]}});
-const pendFlat=[];
-(function walk(n){ if(!n||typeof n!=='object') return; if(n.text) pendFlat.push(String(n.text)); (n.children||[]).forEach(walk); })(pendingHome);
-const joined = pendFlat.join(' ');
-assert.ok(/Несколько записей ждут/.test(joined), 'pending memory invites a decision');
-assert.ok(!/\b[23]\b/.test(joined), 'the invitation must not become a count');
-// Догадка не считается ждущей решения: подтверждать её одним нажатием нельзя.
-const guessOnlyHome = sandbox.pathPanel({movement:{entries:[]}, memory_center:{groups:[{class:'semantic', items:[
-  {type_label:'Предпочтение', content:'c', needs_confirmation:true, is_guess:true},
-]}]}});
-const guessFlat=[];
-(function walk(n){ if(!n||typeof n!=='object') return; if(n.text) guessFlat.push(String(n.text)); (n.children||[]).forEach(walk); })(guessOnlyHome);
-assert.ok(!/ждут|ждёт/.test(guessFlat.join(' ')), 'a guess is never presented as awaiting a decision');
+const flatten = root => { const out=[]; (function walk(n){ if(!n||typeof n!=='object') return; if(n.text) out.push(String(n.text)); (n.children||[]).forEach(walk); })(root); return out; };
 
-let selected, opened=false, scrolled=false;
-const movement = vm.runInNewContext('('+extract('openMovement')+')', {
-  switchProfileTab:key=>selected=key,
-  document:{getElementById:id=>id==='movement-tool' ? {
-    set open(value){opened=value;}, scrollIntoView(){scrolled=true;},
-  } : null},
-});
-movement();
-// Записи движения переехали в «Память» вместе с остальным сохранённым.
-assert.equal(selected,'memory'); assert.ok(opened && scrolled);
-// Без сохранённых записей вкладки практик нет: ссылка молчит, а не бросает
-// человека на главную без объяснения.
-let strandedTab = null;
-vm.runInNewContext('('+extract('openMovement')+')', {
-  switchProfileTab:key=>{strandedTab=key;},
-  document:{getElementById:()=>null},
-})();
-assert.equal(strandedTab, null, 'movement link must not switch to a tab that is not rendered');
+let closed=0;
+const sandbox = {
+  el, closeToChat:()=>closed++,
+  document:{createTextNode:t=>({text:String(t)})},
+  confirmSection:async()=>{}, dismissSection:async()=>{},
+  optionalBlock:(title,node)=>node ? el('details',null,title) : null,
+  upgradeSection:()=>el('section','upgrade'),
+  shareRow:()=>el('div','share'),
+  memoryControlsBlock:()=>el('section','memory-controls','Ты управляешь памятью'),
+  legalLinks:()=>el('nav','legal-links'),
+  lastTurnLine:p=>p.live_sync&&p.live_sync.last_turn_at ? 'Мы говорили вчера.' : null,
+};
+vm.createContext(sandbox);
+vm.runInContext([extract('threadLine'),extract('understandingItem'),extract('understandingScreen'),extract('quietFooter')].join('\n'), sandbox);
+
+const facet = (over={}) => ({key:'fears', label:'Страхи', summary:'synthetic understanding line', user_confirmed:false, ...over});
+
+// 5. Разговор доступен всегда и ведёт в чат, даже когда понимания ещё нет.
+for (const p of [{}, {sections:[facet()]}, {sections:[]}]) {
+  const screen = sandbox.understandingScreen(p);
+  const talk = screen.children.find(n=>n.className==='talk');
+  assert.ok(talk, 'conversation stays on the screen in every state');
+  talk.children.find(n=>n.tag==='button').listeners.click();
+}
+assert.equal(closed,3,'the chat button works in every state');
+
+// 4. Первый визит: приглашение, а не пустой экран.
+const freshFlat = flatten(sandbox.understandingScreen({sections:[]}));
+assert.ok(freshFlat.some(t=>/Расскажи, что сейчас/.test(t)), 'a first visit gets an invitation');
+assert.ok(freshFlat.some(t=>/Пока я мало что о тебе знаю/.test(t)), 'an empty screen is honest, not broken');
+
+// 1. Никаких счётчиков, серий, процентов и достижений — ни в одном состоянии.
+const many = {sections:[facet({key:'a',label:'Тень'}),facet({key:'b',label:'Страхи',user_confirmed:true}),facet({key:'c',label:'Паттерны'})],
+  threads:[{theme:'t',members:[{kind:'facet',label:'Тень'},{kind:'facet',label:'Страхи'}]}]};
+const manyFlat = flatten(sandbox.understandingScreen(many));
+const manyJoined = manyFlat.join(' ');
+assert.ok(!/\b\d+\s*(из|раз|подряд|%)/.test(manyJoined), 'no counters or streaks');
+assert.ok(!/достижени|прогресс|серия|уровень|баллов/i.test(manyJoined), 'no achievement language');
+assert.ok(!/\b(2|3)\s+(темы|записи|раздела)/.test(manyJoined), 'the screen never counts what it shows');
+
+// 2. Один контент в одном месте: текст темы не повторяется на экране дважды.
+const summaries = manyFlat.filter(t=>t==='synthetic understanding line');
+assert.equal(summaries.length, 3, 'each understanding appears exactly once');
+
+// 3. Нить помечена как догадка и не выдаётся за вывод.
+const threadFlat = manyFlat.join(' ');
+assert.ok(/догадка, а не вывод/.test(threadFlat), 'a thread is explicitly a guess');
+// Нить из одного элемента не рисуется: связи из одной точки не бывает.
+assert.equal(sandbox.threadLine({members:[{kind:'facet',label:'Тень'}]}), null, 'a single member is not a thread');
+
+// Подтверждённое не спрашивают повторно, неподтверждённое даёт оба выбора.
+const confirmed = sandbox.understandingItem(facet({user_confirmed:true}));
+assert.equal(confirmed.children.filter(n=>n.className==='understanding-ask').length, 0, 'a confirmed understanding is not re-asked');
+const open = sandbox.understandingItem(facet());
+const ask = open.children.find(n=>n.className==='understanding-ask');
+assert.equal(ask.children.length, 2, 'an open understanding offers both answers');
+assert.ok(ask.children.some(b=>/Не про меня/.test(b.text)), 'the person can always disagree');
+
+// 6. Права на данные достижимы с экрана в любом состоянии.
+for (const p of [{sections:[]}, many]) {
+  assert.ok(flatten(sandbox.understandingScreen(p)).some(t=>/Ты управляешь памятью|Мои данные/.test(t)),
+    'export and deletion stay reachable');
+}
+
+// 7. Незакрытый черновик не теряется при выходе.
 let exitCalls=0;
 const guardedClose=vm.runInNewContext('('+extract('closeToChat')+')', {
   hasMemoryDraft:()=>true,
   document:{querySelector:()=>({closest:()=>null}), getElementById:()=>({textContent:'', scrollIntoView(){}})},
   announceAction(){}, tg:{close(){exitCalls++;}},
 });
-guardedClose(); assert.equal(exitCalls,0,'closing must preserve an unsaved or pending form');
-console.log('Calm core behavior passed: no inferred tasks, actual step, legacy movement link, draft exit');
+guardedClose(); assert.equal(exitCalls,0,'closing preserves an unsaved form');
 
 let dirty = false; const closingChanges=[];
 const nativeGuard = vm.runInNewContext('let nativeDraftProtected = null; ('+extract('syncDraftCloseProtection')+')', {
@@ -102,15 +108,4 @@ const nativeGuard = vm.runInNewContext('let nativeDraftProtected = null; ('+extr
 nativeGuard(); dirty=true; nativeGuard(); nativeGuard(); dirty=false; nativeGuard();
 assert.deepEqual(closingChanges,[false,true,false]);
 
-let answered = false; let questions=[];
-const feedback = vm.runInNewContext('('+extract('conversationOutcomeBlock')+')', {
-  changeExperimentView:step=>step?.action ? step : null,
-  hasOutcome:(_,event)=>answered && event==='conversation_insight',
-  el, labelSection(){}, outcomeQuestion:q=>{questions.push(q.event);return el('fieldset');},
-});
-const profile={change_experiment:{},outcome_prompts:{conversation_key:'synthetic'},outcome_feedback:[]};
-feedback(profile); assert.deepEqual(questions,['conversation_insight']);
-answered=true; assert.equal(feedback(profile),null);
-answered=false; questions=[];
-feedback({...profile,change_experiment:{action:'synthetic actual step'}});
-assert.deepEqual(questions,['conversation_insight','next_step_clarity']);
+console.log('Calm core rules passed: no counters, no duplication, a guess stays a guess, data rights reachable, drafts survive');

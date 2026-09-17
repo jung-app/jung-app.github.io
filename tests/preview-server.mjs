@@ -15,6 +15,35 @@ function fixture(paid = false) {
     path: { activation: { stage: "portrait_ready" } },
     live_sync: { last_turn_at: "2026-09-05T12:00:00Z", pending_profile_update: false },
     outcome_prompts: { conversation_key: "synthetic-conversation-01" },
+    // Реальная форма из production 18.09 (Supabase, только метрики — не текст):
+    // 9 видимых разделов у самого полного профиля, summary 139-305 символов,
+    // theme повторяется на четырёх разделах и собирается сервером в одну нить.
+    // Прежняя фикстура НЕ содержала sections/threads вовсе, поэтому две сессии
+    // подряд снимали скриншоты экрана без настоящего содержимого продукта.
+    sections: [
+      { key: "shadow", label: "Тень", group: "core", status: "confirmed_by_user", confidence: "medium", user_confirmed: true, evidence_count: 21, theme: "strah-nakazaniya",
+        summary: "Похоже, ты привык быть тем, на кого можно положиться, и почти не оставляешь себе права быть слабым или несобранным. Всё, что не помещается в образ надёжного человека, ты убираешь подальше и стараешься не показывать даже близким, хотя оно никуда не девается." },
+      { key: "life_context", label: "Жизненный контекст", group: "core", status: "working", confidence: "high", user_confirmed: false, evidence_count: 20, theme: "produktovoe-myshlenie",
+        summary: "Сейчас много сил уходит на продукт, который ты делаешь один, и это занимает почти всё внимание. Отдых откладывается на потом." },
+      { key: "patterns", label: "Паттерны", group: "core", status: "working", confidence: "high", user_confirmed: false, evidence_count: 20, theme: "strah-nakazaniya",
+        summary: "Когда что-то идёт не по плану, ты сначала ищешь, что сделал не так сам, и только потом смотришь на обстоятельства." },
+      { key: "childhood_wounds", label: "Детские раны", group: "core", status: "confirmed_by_user", confidence: "high", user_confirmed: true, evidence_count: 17, theme: "strah-nakazaniya",
+        summary: "В детстве ошибка часто означала, что тебя будут ругать, а не что тебе помогут разобраться. Ты научился предугадывать недовольство заранее и стараться не давать поводов." },
+      { key: "fears", label: "Страхи", group: "core", status: "confirmed_by_user", confidence: "high", user_confirmed: true, evidence_count: 20, theme: "strah-nakazaniya",
+        summary: "Больше всего беспокоит мысль, что если перестать стараться, то люди рядом отвернутся и останешься один." },
+      { key: "anima_animus", label: "Анима и Анимус", group: "enrichment", status: "confirmed_by_user", confidence: "high", user_confirmed: true, evidence_count: 8, theme: "strah-nakazaniya",
+        summary: "В близких отношениях тебе проще заботиться, чем принимать заботу, и просьба о помощи даётся тяжелее всего." },
+    ],
+    threads: [
+      { theme: "strah-nakazaniya", need: null, members: [
+        { kind: "facet", key: "shadow", label: "Тень" },
+        { kind: "facet", key: "childhood_wounds", label: "Детские раны" },
+        { kind: "facet", key: "fears", label: "Страхи" },
+        { kind: "facet", key: "anima_animus", label: "Анима и Анимус" },
+      ] },
+    ],
+    archetypes: [],
+    habits: [],
     // Реальная форма данных из production 18.09: 95-156 символов на запись,
     // подряд одинаковые типы (цель, цель, предпочтение). Синтетика с короткими
     // разнотипными строками скрывала то, что владелец увидел сразу.

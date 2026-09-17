@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260918-quiet-ledger";
+  var assetVersion = "20260918-one-screen";
   var timer;
   var failed = false;
 

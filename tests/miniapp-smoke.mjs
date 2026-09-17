@@ -11,12 +11,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260918-quiet-ledger/);
+assert.match(html, /styles\.css\?v=20260918-one-screen/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260918-quiet-ledger"/);
+assert.match(boot, /assetVersion = "20260918-one-screen"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -53,63 +53,19 @@ assert.equal(utcOffsetMinutesOrNull("180"), 180);
 assert.equal(utcOffsetMinutesOrNull(-720), -720);
 assert.equal(utcOffsetMinutesOrNull(841), null);
 const currentRitualSource = app.match(/function currentRitualHabit\(habits\) \{[\s\S]*?\n\}/)?.[0];
-assert.ok(currentRitualSource, "current ritual selector must stay independently testable");
 const currentRitualHabit = vm.runInNewContext("(" + currentRitualSource + ")", {
   arrayOfObjects: (value) => Array.isArray(value) ? value.filter(Boolean) : [],
   cleanText: (value) => typeof value === "string" ? value.trim() : "",
 });
-const ritualOne = { ritual: "чай", is_current_practice: false };
-const ritualTwo = { ritual: "прогулка", is_current_practice: true };
-assert.equal(currentRitualHabit([ritualOne]), ritualOne);
-assert.equal(currentRitualHabit([ritualOne, ritualTwo]), ritualTwo);
-assert.equal(currentRitualHabit([ritualOne, { ritual: "книга" }]), null);
-assert.match(app, /function normalizeDeepSessions\(value\)/);
-assert.match(app, /p\.deep_sessions = normalizeDeepSessions\(p\.deep_sessions\)/);
-assert.match(app, /DEEP_SESSION_STATUSES/);
-assert.match(app, /exactContract = Array\.isArray\(value\)/);
-assert.match(app, /result\.user_words/);
-assert.match(app, /takeaway: cleanText\(result\.takeaway\)/);
-assert.match(app, /next_step: cleanText\(result\.next_step\)/);
 assert.doesNotMatch(app, /raw_transcript|crisis_reason/);
 
-assert.match(app, /role", "tablist"/);
-assert.match(app, /role", "tabpanel"/);
-assert.match(app, /ArrowLeft/);
-assert.match(app, /BackButton/);
-assert.match(app, /function pathPanel\(p\)/);
-assert.match(app, /function practiceProgressBlock\(p\)/);
-assert.match(app, /Практика сегодня/);
-assert.match(app, /growth_reminder_hour/);
-assert.match(app, /\/api\/practice\/check-in/);
-assert.match(app, /\/api\/practice\/reminder/);
-assert.match(app, /practice_key: practiceKey/);
-assert.match(app, /function currentRitualHabit\(habits\)/);
-assert.match(app, /Другие привычки/);
-assert.match(app, /Выбрать другую в чате/);
-assert.match(app, /habit_practice_switch/);
-assert.match(app, /discuss\.disabled = false/);
-assert.match(app, /dataset\.practiceAction/);
-assert.match(app, /practiceClockMetadata/);
-assert.match(app, /По местному времени устройства/);
-assert.match(app, /practice_fallback_utc_offset_minutes/);
-assert.match(app, /Не отправляется: доступ завершён/);
-assert.match(app, /Отметить попытку/);
-assert.match(app, /growth_practice/);
-assert.match(app, /ritual_practice/);
-assert.match(app, /Напоминание выключено/);
-assert.match(app, /if \(hour === null\).*if \(paused\)/s);
-assert.match(styles, /\.practice-progress/);
-assert.match(styles, /\.practice-done/);
-assert.match(styles, /\.practice-reminder-settings/);
 assert.doesNotMatch(app, /function changePathBlock/);
 assert.match(app, /\/api\/outcomes/);
 assert.match(app, /function outcomeQuestion\(/);
-assert.match(app, /без текста и темы/);
 assert.match(app, /Любой исход подходит/);
 assert.match(app, /deep_helpfulness/);
 assert.match(app, /deep_followup/);
 assert.doesNotMatch(app, /outcome_feedback.*intention|outcome_feedback.*user_words/);
-assert.match(app, /function deepSessionsPanel\(p\)/);
 assert.match(app, /Дословно из твоих сообщений/);
 assert.match(app, /Выдели 20–30 минут/);
 assert.match(app, /не за рулём и не на работе/);
@@ -144,7 +100,6 @@ assert.match(app, /function isTelegramInvoiceUrl\(value\)/);
 assert.match(app, /url\.hostname === "t\.me"/);
 assert.match(app, /p\.safety_pause = Boolean\(p\.safety_pause\)/);
 assert.match(app, /Позвонить 112/);
-assert.match(app, /panel\.inert = !selected/);
 assert.match(app, /tg\.openLink/);
 assert.match(html, /name="referrer" content="no-referrer"/);
 assert.match(app, /@PremiumBot/);
@@ -245,10 +200,33 @@ assert.match(styles, /\.memory-manage-toggle \{/);
 assert.match(styles, /\.memory-record\.is-pending \{/);
 assert.match(styles, /\.memory-record\.is-guess \{/);
 // Раздела «Практики» больше нет, но сохранённое перенесено в «Память».
-assert.ok(!/key: "sessions"/.test(app), 'practices must not be a first-level tab');
-assert.match(app, /memory-kept/);
-assert.match(app, /practiceProgressBlock\(p\)/);
-assert.match(app, /deepSessionsPanel\(p\)/);
+
+// Один экран вместо трёх вкладок. Измерено 18.09: мини-апп открывали 3 раза
+// за всю жизнь продукта, а удалённые разделы рендерили ключи, которых нет ни в
+// одном профиле. Экран строится из profiles.sections — единственного места,
+// где у людей реально что-то есть.
+assert.match(app, /function understandingScreen\(p\)/);
+assert.match(app, /function understandingItem\(item\)/);
+assert.match(app, /function threadLine\(thread\)/);
+assert.match(app, /root\.appendChild\(understandingScreen\(p\)\)/);
+assert.doesNotMatch(app, /function profileTabShell/, 'the tab shell is gone');
+assert.doesNotMatch(app, /PROFILE_TABS/, 'no first-level tabs remain');
+// Права на данные обязаны оставаться достижимыми без вкладки «Доступ».
+assert.match(app, /memoryControlsBlock\(p\.memory_center/);
+assert.match(app, /legalLinks\(\)/);
+// Нить — гипотеза, и подписана как гипотеза.
+assert.match(app, /Это догадка, а не вывод/);
+// Перечисление ярлыков не склеивается через «и»: ярлык сам может его содержать
+// («Анима и Анимус»), и тогда строка читается как сбой.
+assert.match(app, /labels\.join\("; "\)/);
+assert.match(styles, /\.understanding \{/);
+assert.match(styles, /\.thread \{/);
+assert.match(styles, /\.understanding--open \{/);
+// Фикстура стенда обязана нести sections и threads: без них скриншот
+// показывает экран без содержимого продукта и ничего не доказывает.
+const preview = await readFile(new URL("./preview-server.mjs", import.meta.url), "utf8");
+assert.match(preview, /sections: /, 'the stand must render real section shape');
+assert.match(preview, /threads: /, 'the stand must render a thread');
 
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.
