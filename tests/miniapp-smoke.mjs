@@ -182,4 +182,44 @@ assert.match(offer, /365 дней — 5000 Telegram Stars/);
 assert.match(offer, /@PremiumBot/);
 assert.doesNotMatch(landing, /Подписка за 250 Telegram/);
 
+// Deep-link вместо копирования команды: мини-апп не может отправить сообщение
+// от имени человека, поэтому открывает чат ссылкой ?start=<action>.
+const commandActionSource = app.match(/function commandAction\(command, label, statusNode, action, linkLabel\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(commandActionSource, "commandAction must stay independently testable");
+
+function runCommandAction(username) {
+  const opened = [];
+  const listeners = [];
+  const sandbox = {
+    botUsername: username,
+    tg: { openTelegramLink: (url) => opened.push(url) },
+    el: (tag, cls, text) => ({
+      tag,
+      cls,
+      textContent: text,
+      type: "",
+      addEventListener: (event, handler) => listeners.push([event, handler]),
+    }),
+    copyPlainText: async () => true,
+    encodeURIComponent,
+    window: { open: (url) => opened.push(url) },
+  };
+  const fn = vm.runInNewContext("(" + commandActionSource + ")", sandbox);
+  const status = { textContent: "" };
+  const button = fn("/imagine", "Скопировать /imagine", status, "imagine", "Начать сессию в чате");
+  return { button, status, opened, listeners };
+}
+
+const linked = runCommandAction("MindCoachBot");
+assert.equal(linked.button.textContent, "Начать сессию в чате");
+linked.listeners[0][1]();
+assert.deepEqual(linked.opened, ["https://t.me/MindCoachBot?start=imagine"]);
+
+const fallback = runCommandAction(null);
+assert.equal(fallback.button.textContent, "Скопировать /imagine");
+assert.deepEqual(fallback.opened, []);
+
+assert.match(app, /profile\.bot_username === "string"/);
+assert.match(app, /commandAction\("\/imagine", "Скопировать \/imagine", status, "imagine", "Начать сессию в чате"\)/);
+
 console.log("Mini App redesign smoke passed");

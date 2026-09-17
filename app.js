@@ -1140,7 +1140,7 @@ function upgradeSection(billing, access) {
     const status = el("p", "command-status");
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    closed.appendChild(commandAction("/paysupport", "Скопировать /paysupport", status));
+    closed.appendChild(commandAction("/paysupport", "Скопировать /paysupport", status, "paysupport", "Написать по оплате"));
     closed.appendChild(status);
     sec.appendChild(closed);
     return sec;
@@ -2677,7 +2677,28 @@ function profileInsightsBlock(p) {
   return wrap;
 }
 
-function commandAction(command, label, statusNode) {
+// Имя бота приходит с профилем. Держим его отдельно, чтобы deep-link собирался
+// и в тех блоках, которым сам профиль не передаётся.
+let botUsername = null;
+
+// Telegram не позволяет мини-аппу отправить сообщение от имени человека, поэтому
+// раньше здесь предлагалось скопировать команду и вставить её в чат руками. Deep-link
+// `?start=<action>` решает то же самое одним нажатием: Telegram открывает чат, бот
+// получает обычный /start с аргументом и сразу запускает сценарий. Копирование
+// остаётся запасным путём, если имя бота недоступно.
+function commandAction(command, label, statusNode, action, linkLabel) {
+  const target = action || command.replace(/^\//, "");
+  if (botUsername) {
+    const button = el("button", "command-action", linkLabel || "Открыть в чате");
+    button.type = "button";
+    button.addEventListener("click", () => {
+      const link = "https://t.me/" + botUsername + "?start=" + encodeURIComponent(target);
+      statusNode.textContent = "Открываю чат…";
+      if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(link);
+      else window.open(link, "_blank");
+    });
+    return button;
+  }
   const button = el("button", "command-action", label);
   button.type = "button";
   button.addEventListener("click", async () => {
@@ -2749,7 +2770,7 @@ function deepSessionPreparation(showUpgrade, safetyPause) {
     upgrade.dataset.openTab = "more";
     sec.appendChild(upgrade);
   } else {
-    sec.appendChild(commandAction("/imagine", "Скопировать /imagine", status));
+    sec.appendChild(commandAction("/imagine", "Скопировать /imagine", status, "imagine", "Начать сессию в чате"));
     const back = el("button", "session-back", "Вернуться в чат");
     back.type = "button";
     back.addEventListener("click", closeToChat);
@@ -3503,6 +3524,11 @@ function profileRenderFingerprint(profile) {
 }
 
 function renderFetchedProfile(profile, replaceDrafts = false) {
+  // Имя бота нужно кнопкам «Открыть в чате», поэтому обновляем его до рендера
+  // и до раннего выхода по черновику.
+  if (profile && typeof profile.bot_username === "string" && profile.bot_username) {
+    botUsername = profile.bot_username;
+  }
   // A background extraction can finish while the person is correcting memory.
   // Preserve their draft even if the field has lost focus or its tab is hidden.
   if (!replaceDrafts && hasMemoryDraft()) return false;
