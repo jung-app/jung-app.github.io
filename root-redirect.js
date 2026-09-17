@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260918-quiet-ledger";
+      boot.src = "./miniapp-boot.js?v=20260918-one-screen";
       document.body.appendChild(boot);
     });
   }
