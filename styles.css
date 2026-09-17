@@ -2098,13 +2098,51 @@ a {
 }
 
 .memory-origin-toggle,
-.memory-edit-toggle {
+.memory-edit-toggle,
+.memory-manage-toggle {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
   color: var(--link);
   font-size: 12px;
   font-weight: 700;
+}
+
+/* Управление записью: доступно всегда, но не тревожит на каждой карточке. */
+.memory-manage {
+  margin-top: 6px;
+}
+
+.memory-manage-toggle {
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+}
+
+.memory-manage-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.memory-manage[open] .memory-manage-toggle {
+  color: var(--link);
+}
+
+.memory-manage-body {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding-top: 4px;
+}
+
+.memory-group-manage {
+  margin-top: 12px;
+}
+
+.memory-group-clear-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .memory-origin-body {
@@ -2941,3 +2979,37 @@ summary.stars-guide-title:focus-visible {
 .conversation-home { padding: 20px 0 28px; }
 .conversation-home .today-cta { width: 100%; margin-top: 20px; }
 .aura { display: none; }
+
+/*
+ * Тактильность: интерфейс должен отвечать на прикосновение.
+ * Сдержанно и только на нажатие. Полностью снимается прежним правилом
+ * @media (prefers-reduced-motion: reduce) выше, оно применяется ко всем transition.
+ */
+.today-cta,
+.memory-primary,
+.experiment-chat,
+.command-action,
+.share-btn,
+.session-start,
+.session-back,
+.subscription-chat,
+.upgrade-btn {
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.today-cta:active,
+.memory-primary:active,
+.experiment-chat:active,
+.command-action:active,
+.share-btn:active,
+.session-start:active,
+.session-back:active,
+.subscription-chat:active,
+.upgrade-btn:active {
+  transform: scale(0.985);
+  filter: brightness(0.96);
+}
+
+.profile-tab {
+  transition: color 140ms ease, box-shadow 140ms ease;
+}

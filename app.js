@@ -1954,7 +1954,14 @@ function memoryRecord(item, types) {
     });
     actions.appendChild(confirm);
   }
-  if (item.editable) actions.appendChild(memoryEditForm(item, types));
+  // Право на данные сохранено полностью, но правка и удаление больше не кричат
+  // с каждой карточки: вкладка памяти должна вызывать доверие, а не тревогу.
+  // Отклонение гипотезы остаётся на виду, потому что это осмысленный выбор,
+  // а не разрушительное действие.
+  const manage = el("details", "memory-manage");
+  manage.appendChild(el("summary", "memory-manage-toggle", "Изменить или удалить"));
+  const manageBody = el("div", "memory-manage-body");
+  if (item.editable) manageBody.appendChild(memoryEditForm(item, types));
   const remove = el("button", "memory-danger-quiet", item.needs_confirmation ? "Отклонить" : "Удалить");
   remove.type = "button";
   remove.addEventListener("click", async () => {
@@ -1978,8 +1985,21 @@ function memoryRecord(item, types) {
       status.textContent = "Не удалось удалить. Проверь связь.";
     }
   });
-  actions.appendChild(remove);
-  card.append(actions, status);
+  if (item.needs_confirmation) {
+    // «Отклонить» — половина явного выбора «оставить/отклонить», держим рядом с ним.
+    actions.appendChild(remove);
+    if (item.editable) {
+      manage.appendChild(manageBody);
+      card.append(actions, manage, status);
+    } else {
+      card.append(actions, status);
+    }
+    return card;
+  }
+  manageBody.appendChild(remove);
+  manage.appendChild(manageBody);
+  if (actions.childElementCount) card.appendChild(actions);
+  card.append(manage, status);
   return card;
 }
 
@@ -2013,7 +2033,18 @@ function memoryGroup(group, types) {
   const list = el("div", "memory-record-list");
   group.items.forEach((item) => list.appendChild(memoryRecord(item, types)));
   section.appendChild(list);
-  section.appendChild(clear);
+  // Массовое удаление остаётся доступным, но не висит красной кнопкой над списком.
+  const clearWrap = el("details", "memory-manage memory-group-manage");
+  clearWrap.appendChild(el("summary", "memory-manage-toggle", "Удалить весь раздел"));
+  const clearBody = el("div", "memory-manage-body");
+  clearBody.appendChild(el(
+    "p",
+    "memory-group-clear-hint",
+    "Удалятся все записи раздела «" + group.label + "». Остальные разделы останутся.",
+  ));
+  clearBody.appendChild(clear);
+  clearWrap.appendChild(clearBody);
+  section.appendChild(clearWrap);
   return section;
 }
 

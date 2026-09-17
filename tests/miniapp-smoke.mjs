@@ -222,4 +222,11 @@ assert.deepEqual(fallback.opened, []);
 assert.match(app, /profile\.bot_username === "string"/);
 assert.match(app, /commandAction\("\/imagine", "Скопировать \/imagine", status, "imagine", "Начать сессию в чате"\)/);
 
+// Память: правка/удаление больше не кричат с каждой карточки, но остаются доступны.
+// Отклонение неподтверждённой гипотезы остаётся на виду — это выбор, не разрушение.
+assert.match(app, /memory-manage-toggle", "Изменить или удалить"/);
+assert.match(app, /memory-manage-toggle", "Удалить весь раздел"/);
+assert.match(styles, /\.memory-manage \{/);
+assert.match(styles, /\.memory-manage-toggle \{/);
+
 console.log("Mini App redesign smoke passed");
