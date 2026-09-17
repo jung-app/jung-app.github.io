@@ -3432,3 +3432,71 @@ summary.stars-guide-title:focus-visible {
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
+
+/* Лента наблюдений: свёрнута, пока человек сам не откроет. Внутри может быть
+ * 143 записи — это его накопленное, и обрезать его молча нельзя. */
+.evidence {
+  margin-top: 2px;
+}
+
+.evidence-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.evidence-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.evidence-toggle::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 8px;
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.evidence[open] > .evidence-toggle::before {
+  transform: rotate(90deg);
+}
+
+.evidence-toggle:hover {
+  color: var(--text);
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0 10px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+
+.evidence-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.evidence-when {
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.evidence-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--text) 88%, transparent);
+  overflow-wrap: anywhere;
+}

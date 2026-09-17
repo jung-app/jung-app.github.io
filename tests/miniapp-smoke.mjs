@@ -11,12 +11,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260918-one-screen/);
+assert.match(html, /styles\.css\?v=20260918-ledger-open/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260918-one-screen"/);
+assert.match(boot, /assetVersion = "20260918-ledger-open"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -227,6 +227,17 @@ assert.match(styles, /\.understanding--open \{/);
 const preview = await readFile(new URL("./preview-server.mjs", import.meta.url), "utf8");
 assert.match(preview, /sections: /, 'the stand must render real section shape');
 assert.match(preview, /threads: /, 'the stand must render a thread');
+
+// Наблюдения — то, что человек накопил. Владелец 18.09 открыл экран и сказал,
+// что «потерялось очень много личных моментов»: показывалось ~2 КБ summary при
+// 31 КБ наблюдений. Лента свёрнута, но полная, и порядок задаёт фронт.
+assert.match(app, /function evidenceBlock\(item\)/);
+assert.match(app, /Из чего это сложилось/);
+assert.match(app, /localeCompare\(String\(a\.observed_at/, 'the front end sorts, newest first');
+assert.doesNotMatch(app, /evidence\.slice\(0,\s*\d+\)/, 'the ledger is never silently truncated');
+assert.match(styles, /\.evidence-list \{/);
+// Фикстура обязана нести наблюдения, иначе скриншот снова ничего не доказывает.
+assert.match(preview, /observation: /, 'the stand must carry real observations');
 
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.

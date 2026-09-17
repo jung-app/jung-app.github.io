@@ -19,7 +19,7 @@ const extract = name => source.match(new RegExp('function '+name+'\\([^]*?\\n}')
 class Node {
   constructor(tag, cls, text) { this.tag=tag; this.className=cls||''; this.text=text; this.children=[]; this.listeners={}; this.dataset={}; this.classList={add:c=>{this.className+=' '+c;}}; }
   append(...nodes) {this.children.push(...nodes);}
-  appendChild(node) {this.children.push(node); return node;}
+  appendChild(node) {if(node) this.children.push(node); return node;}
   addEventListener(name, fn) {this.listeners[name]=fn;}
   setAttribute(){}
   querySelectorAll(){return [];}
@@ -38,9 +38,10 @@ const sandbox = {
   memoryControlsBlock:()=>el('section','memory-controls','Ты управляешь памятью'),
   legalLinks:()=>el('nav','legal-links'),
   lastTurnLine:p=>p.live_sync&&p.live_sync.last_turn_at ? 'Мы говорили вчера.' : null,
+  pluralRu:(n,one,few,many)=>n===1?one:(n<5?few:many), fmtDate:()=>'5 сен',
 };
 vm.createContext(sandbox);
-vm.runInContext([extract('threadLine'),extract('understandingItem'),extract('understandingScreen'),extract('quietFooter')].join('\n'), sandbox);
+vm.runInContext([extract('threadLine'),extract('evidenceBlock'),extract('understandingItem'),extract('understandingScreen'),extract('quietFooter')].join('\n'), sandbox);
 
 const facet = (over={}) => ({key:'fears', label:'Страхи', summary:'synthetic understanding line', user_confirmed:false, ...over});
 
@@ -84,6 +85,19 @@ const open = sandbox.understandingItem(facet());
 const ask = open.children.find(n=>n.className==='understanding-ask');
 assert.equal(ask.children.length, 2, 'an open understanding offers both answers');
 assert.ok(ask.children.some(b=>/Не про меня/.test(b.text)), 'the person can always disagree');
+
+// Лента наблюдений: свёрнута, полная, и это не счётчик достижений.
+const withEvidence = facet({evidence:[
+  {observation:'наблюдение одно', observed_at:'2026-09-01T10:00:00.000Z'},
+  {observation:'наблюдение два', observed_at:'2026-09-09T10:00:00.000Z'},
+  {observation:'наблюдение три', observed_at:'2026-09-05T10:00:00.000Z'},
+]});
+const evItem = sandbox.understandingItem(withEvidence);
+const ledger = evItem.children.find(n=>n.tag==='details');
+assert.ok(ledger, 'observations are reachable');
+const evRows = flatten(ledger).filter(t=>/^наблюдение /.test(t));
+assert.equal(evRows.length, 3, 'every observation survives to the screen');
+assert.deepEqual(evRows, ['наблюдение два','наблюдение три','наблюдение одно'], 'newest first');
 
 // 6. Права на данные достижимы с экрана в любом состоянии.
 for (const p of [{sections:[]}, many]) {

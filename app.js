@@ -2220,6 +2220,8 @@ function understandingItem(item) {
   if (item.user_confirmed) row.classList.add("understanding--confirmed");
   row.appendChild(el("h3", "understanding-title", item.label || item.name));
   row.appendChild(el("p", "understanding-body", item.summary));
+  const ledger = evidenceBlock(item);
+  if (ledger) row.appendChild(ledger);
   if (item.user_confirmed) {
     row.appendChild(el("p", "understanding-mark", "Ты подтвердил, что это про тебя."));
     return row;
@@ -2252,6 +2254,39 @@ function understandingItem(item) {
   row.appendChild(ask);
   row.appendChild(status);
   return row;
+}
+
+// Лента наблюдений под темой. Владелец 18.09: «потерялось очень много моих
+// личных моментов… лучше бы они раскрывались полным списком, если бы я нажимал.
+// Потому что это будет бесконечная лента. Пусть она будет, если человек её
+// развернёт специально». Свёрнута по умолчанию, внутри — всё целиком, без
+// ограничения сверху: это его записи, и молча их урезать значит повторить
+// ту же потерю. 143 наблюдения у самого полного профиля.
+function evidenceBlock(item) {
+  const rows = (Array.isArray(item.evidence) ? item.evidence.filter((e) => e && e.observation) : [])
+    // Порядок задаёт фронт, а не бэкенд: иначе стенд показывает одну
+    // последовательность, а телефон другую, и проверка ничего не доказывает.
+    // Свежее сверху — ленту читают как разговор.
+    .slice()
+    .sort((a, b) => String(b.observed_at || "").localeCompare(String(a.observed_at || "")));
+  if (!rows.length) return null;
+  const wrap = el("details", "evidence");
+  const count = rows.length;
+  wrap.appendChild(el(
+    "summary",
+    "evidence-toggle",
+    "Из чего это сложилось: " + count + " " + pluralRu(count, "наблюдение", "наблюдения", "наблюдений"),
+  ));
+  const list = el("div", "evidence-list");
+  rows.forEach((row) => {
+    const entry = el("div", "evidence-row");
+    const when = fmtDate(row.observed_at);
+    if (when) entry.appendChild(el("span", "evidence-when", when));
+    entry.appendChild(el("p", "evidence-text", row.observation));
+    list.appendChild(entry);
+  });
+  wrap.appendChild(list);
+  return wrap;
 }
 
 function understandingScreen(p) {
