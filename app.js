@@ -1918,54 +1918,30 @@ function memoryEditForm(item, types) {
 }
 
 function memoryRecord(item, types) {
+  // Запись читается как строка текста, а не как коробка. Левая линия несёт
+  // статус (сплошная — подтверждено, пунктир — ждёт решения, точки — догадка),
+  // поэтому подпись не нужна глазу, чтобы понять, чему можно доверять.
+  // Тип и дата — тихая метаинформация: при реальных данных типы повторяются
+  // («цель, цель, предпочтение»), и яркие плашки превращались в шум.
   const card = el("article", "memory-record");
-  const head = el("div", "memory-record-head");
-  head.appendChild(el("span", "memory-kind", item.type_label));
-  // Догадка Проводника никогда не выглядит как сказанное человеком.
-  if (item.is_guess) head.appendChild(el("span", "memory-guess", "догадка"));
-  else if (item.needs_confirmation) head.appendChild(el("span", "memory-pending", "ждёт решения"));
-  card.appendChild(head);
+  if (item.is_guess) card.classList.add("is-guess");
+  else if (item.needs_confirmation) card.classList.add("is-pending");
+
+  const meta = el("div", "memory-meta");
+  meta.appendChild(el("span", "memory-meta-type", item.type_label));
+  const recorded = fmtDate(item.recorded_on);
+  if (recorded) {
+    meta.appendChild(el("span", "memory-meta-dot", "·"));
+    meta.appendChild(el("span", "memory-meta-date", recorded));
+  }
+  if (item.is_guess) meta.appendChild(el("span", "memory-meta-state is-guess", "догадка"));
+  else if (item.needs_confirmation) meta.appendChild(el("span", "memory-meta-state", "ждёт решения"));
+  card.appendChild(meta);
   card.appendChild(el("p", "memory-record-text", item.content));
 
-  const provenance = el("details", "memory-origin");
-  provenance.appendChild(el("summary", "memory-origin-toggle", "Почему это здесь"));
-  const body = el("div", "memory-origin-body");
-  body.appendChild(el("p", null, item.source));
-  body.appendChild(el("p", null, item.why));
-  const dates = [item.recorded_on ? "Записано: " + fmtDate(item.recorded_on) : ""];
-  if (item.expires_on) dates.push("Удалится автоматически: " + fmtDate(item.expires_on));
-  body.appendChild(el("p", "memory-origin-date", dates.filter(Boolean).join(" · ")));
-  provenance.appendChild(body);
-  card.appendChild(provenance);
-
-  const actions = el("div", "memory-record-actions");
   const status = el("p", "memory-action-status");
   status.setAttribute("role", "status");
-  if (item.needs_confirmation) {
-    const confirm = el("button", "memory-primary", "Оставить");
-    confirm.type = "button";
-    confirm.addEventListener("click", async () => {
-      confirm.disabled = true;
-      try {
-        renderMemoryUpdate(
-          await controlMemory("confirm", { key: item.key }),
-          "Запись подтверждена.",
-        );
-      } catch (_) {
-        confirm.disabled = false;
-        status.textContent = "Не удалось подтвердить. Проверь связь.";
-      }
-    });
-    actions.appendChild(confirm);
-  }
-  // Право на данные сохранено полностью, но правка и удаление больше не кричат
-  // с каждой карточки: вкладка памяти должна вызывать доверие, а не тревогу.
-  // Отклонение гипотезы остаётся на виду, потому что это осмысленный выбор,
-  // а не разрушительное действие.
-  const manage = el("details", "memory-manage");
-  manage.appendChild(el("summary", "memory-manage-toggle", "Изменить или удалить"));
-  const manageBody = el("div", "memory-manage-body");
-  if (item.editable) manageBody.appendChild(memoryEditForm(item, types));
+
   const remove = el("button", "memory-danger-quiet", item.needs_confirmation ? "Отклонить" : "Удалить");
   remove.type = "button";
   remove.addEventListener("click", async () => {
@@ -1989,21 +1965,43 @@ function memoryRecord(item, types) {
       status.textContent = "Не удалось удалить. Проверь связь.";
     }
   });
-  if (item.needs_confirmation) {
-    // «Отклонить» — половина явного выбора «оставить/отклонить», держим рядом с ним.
-    actions.appendChild(remove);
-    if (item.editable) {
-      manage.appendChild(manageBody);
-      card.append(actions, manage, status);
-    } else {
-      card.append(actions, status);
-    }
+
+  // Решение о записи — единственное, что стоит на виду: это осмысленный выбор,
+  // а не разрушительное действие. Догадку подтвердить одним нажатием нельзя.
+  if (item.needs_confirmation && !item.is_guess) {
+    const actions = el("div", "memory-record-actions");
+    const confirm = el("button", "memory-primary", "Оставить");
+    confirm.type = "button";
+    confirm.addEventListener("click", async () => {
+      confirm.disabled = true;
+      try {
+        renderMemoryUpdate(await controlMemory("confirm", { key: item.key }), "Запись подтверждена.");
+      } catch (_) {
+        confirm.disabled = false;
+        status.textContent = "Не удалось подтвердить. Проверь связь.";
+      }
+    });
+    actions.append(confirm, remove);
+    card.appendChild(actions);
+    card.appendChild(status);
     return card;
   }
-  manageBody.appendChild(remove);
-  manage.appendChild(manageBody);
-  if (actions.childElementCount) card.appendChild(actions);
-  card.append(manage, status);
+
+  // Всё остальное живёт под одним раскрытием: провенанс и права на данные
+  // никуда не делись, но не занимают три строки под каждой записью.
+  const more = el("details", "memory-more");
+  more.appendChild(el("summary", "memory-more-toggle", "откуда это"));
+  const body = el("div", "memory-more-body");
+  body.appendChild(el("p", "memory-more-line", item.source));
+  body.appendChild(el("p", "memory-more-line", item.why));
+  const dates = [];
+  if (item.recorded_on) dates.push("Записано: " + fmtDate(item.recorded_on));
+  if (item.expires_on) dates.push("Удалится автоматически: " + fmtDate(item.expires_on));
+  if (dates.length) body.appendChild(el("p", "memory-more-date", dates.join(" · ")));
+  if (item.editable) body.appendChild(memoryEditForm(item, types));
+  body.appendChild(remove);
+  more.appendChild(body);
+  card.append(more, status);
   return card;
 }
 
@@ -2100,9 +2098,14 @@ function memoryAddBlock(types) {
 
 // Conversation first. Internal tab keys preserve existing links and refresh state.
 
+// «Практики» больше нет как раздела первого уровня. Измерено 18.09: 0 записей
+// движения, 0 глубинных сессий, 0 экспериментов, 1 профиль с привычками, а
+// каждая практика запускалась ровно один раз за всё время. Раздел с формами,
+// оценками сил и статусами существовал ради данных, которых не существует.
+// Сохранённое никуда не делось: привычки и прошлые практики живут в «Памяти»,
+// потому что выбранная человеком привычка — это тоже то, что бот о нём помнит.
 const PROFILE_TABS = [
   { key: "path", label: "Главная" },
-  { key: "sessions", label: "Практики" },
   { key: "memory", label: "Память" },
   { key: "more", label: "Доступ" },
 ];
@@ -2976,12 +2979,12 @@ function deepSessionCard(session, feedback) {
       remove.textContent = "Удаляю…";
       try {
         const updated = await deleteDeepSession(session.id);
-        activeProfileTab = "sessions";
+        activeProfileTab = "memory";
         renderedProfileFingerprint = null;
         renderFetchedProfile(updated);
         announceAction("Итог глубинной сессии удалён.");
         queueMicrotask(() => {
-          const tab = document.getElementById("tab-sessions");
+          const tab = document.getElementById("tab-memory");
           if (tab) tab.focus();
         });
       } catch (_) {
@@ -3155,6 +3158,21 @@ function memoryPanel(p) {
     panel.appendChild(empty);
   }
   panel.appendChild(profileInsightsBlock(p));
+  // Сохранённое в практиках живёт здесь же: выбранная привычка, записи движения
+  // и итоги глубинных сессий — это тоже то, что бот о человеке помнит. Раздела
+  // «Практики» больше нет, но ни одна запись не потеряна.
+  const saved = [
+    optionalBlock("Привычки и сохранённые практики", practiceProgressBlock(p)),
+    optionalBlock("Движение по силам", movementBlock(p), "movement-tool"),
+    optionalBlock("Глубинные сессии и их итоги", deepSessionsPanel(p)),
+  ].filter(Boolean);
+  if (saved.length) {
+    const kept = el("section", "memory-kept");
+    kept.appendChild(el("h3", "memory-group-title serif", "Сохранённое тобой"));
+    kept.appendChild(el("p", "memory-group-description", "Записи практик. Их можно менять или удалять, отмечать ничего не нужно."));
+    saved.forEach((block) => kept.appendChild(block));
+    panel.appendChild(kept);
+  }
   panel.appendChild(memoryControlsBlock(center));
   return panel;
 }
@@ -3442,79 +3460,40 @@ function optionalBlock(title, node, key) {
   return details;
 }
 
-function practicesPanel(p) {
-  const blocks = [
-    optionalBlock("Привычки и сохранённые практики", practiceProgressBlock(p)),
-    optionalBlock("Движение по силам", movementBlock(p), "movement-tool"),
-    optionalBlock("Глубинные сессии и их итоги", deepSessionsPanel(p)),
-  ].filter(Boolean);
-  // Нет сохранённых записей — нет и вкладки. Пустой раздел не должен занимать
-  // первый уровень и намекать, что здесь чего-то не хватает.
-  if (!blocks.length) return null;
-  const panel = el("section", "practices-panel");
-  panel.append(el("h2", "panel-title serif", "Сохранённое тобой"),
-    el("p", "panel-intro", "Всё здесь по желанию. Для поддержки достаточно обычного разговора."));
-  blocks.forEach(block => panel.appendChild(block));
-  const hint = el("p", "panel-intro", "Другие форматы можно открыть в чате: /menu → Практики. Можно остановиться в любой момент.");
-  panel.appendChild(hint);
-  return panel;
-}
-
-// Главная показывает то, ради чего сюда возвращаются: что осталось между
-// разговорами. Раньше здесь были только заголовок и кнопка «в чат», то есть
-// экран уводил с себя, ничего не показав. Это НЕ счётчик активности и не
-// достижение: ни цифр, ни серий, ни прогресса, только сами слова памяти.
-function memoryGlanceBlock(p) {
-  const center = p.memory_center;
-  if (!center || !Array.isArray(center.groups)) return null;
-  const items = [];
-  // Порядок разделов = порядок важности для узнавания себя.
-  ["semantic", "working", "episodic"].forEach((cls) => {
-    const group = center.groups.find((g) => g.class === cls);
-    if (!group || !Array.isArray(group.items)) return;
-    group.items.forEach((item) => items.push(item));
-  });
-  if (!items.length) return null;
-  // Сначала то, что человек подтвердил: догадки не должны представлять его себе.
-  const ordered = items
-    .slice()
-    .sort((a, b) => (a.is_guess ? 1 : 0) - (b.is_guess ? 1 : 0)
-      || (a.needs_confirmation ? 1 : 0) - (b.needs_confirmation ? 1 : 0));
-  const shown = ordered.slice(0, 3);
-
-  const section = el("section", "memory-glance");
-  section.append(el("h3", "memory-glance-title serif", "Что я помню о тебе"));
-  const list = el("ul", "memory-glance-list");
-  shown.forEach((item) => {
-    const row = el("li", "memory-glance-item");
-    row.appendChild(el("span", "memory-glance-kind", item.type_label));
-    row.appendChild(el("span", "memory-glance-text", item.content));
-    if (item.is_guess) row.appendChild(el("span", "memory-glance-flag", "догадка"));
-    else if (item.needs_confirmation) row.appendChild(el("span", "memory-glance-flag", "ждёт решения"));
-    list.appendChild(row);
-  });
-  section.appendChild(list);
-  const open = el("button", "memory-glance-link", "Посмотреть и поправить");
-  open.type = "button";
-  open.addEventListener("click", () => {
-    if (typeof switchProfileTab === "function") switchProfileTab("memory", true);
-  });
-  section.appendChild(open);
-  return section;
+// Главная — вход в разговор, а не витрина памяти. Раньше здесь висел список
+// записей, который дословно повторял вкладку «Память»: один и тот же контент
+// в двух местах, причём на реальных данных (95-156 символов, подряд
+// одинаковые типы) он читался как стена текста с повторяющимися плашками.
+// Память живёт в своём разделе целиком; здесь — тёплый вход и одна живая
+// строка связи с прошлым разговором.
+function lastTurnLine(p) {
+  const raw = p.live_sync && p.live_sync.last_turn_at;
+  if (!raw) return null;
+  const then = new Date(raw);
+  if (isNaN(then)) return null;
+  const days = Math.floor((Date.now() - then.getTime()) / 86400000);
+  if (days <= 0) return "Мы говорили сегодня.";
+  if (days === 1) return "Мы говорили вчера.";
+  if (days < 7) return "Мы говорили " + days + (days < 5 ? " дня" : " дней") + " назад.";
+  return "Последний разговор — " + fmtDate(raw) + ".";
 }
 
 function pathPanel(p) {
   const panel = el("section", "path-panel");
   const intro = el("section", "conversation-home");
-  intro.append(el("h2", "panel-title serif", "Можно просто поговорить"),
-    el("p", "panel-intro", "Расскажи, что сейчас у тебя на уме. Не нужно готовиться, заполнять профиль или выбирать задание."));
+  intro.append(el("h2", "panel-title serif", "Можно просто поговорить"));
+  const since = lastTurnLine(p);
+  if (since) {
+    const line = el("p", "home-since", since + " Я помню, о чём шла речь.");
+    intro.appendChild(line);
+  } else {
+    intro.appendChild(el("p", "panel-intro", "Расскажи, что сейчас у тебя на уме. Не нужно готовиться, заполнять профиль или выбирать задание."));
+  }
   const chat = el("button", "today-cta", "Вернуться в чат");
   chat.type = "button";
   chat.addEventListener("click", closeToChat);
   intro.appendChild(chat);
   panel.appendChild(intro);
-  const glance = memoryGlanceBlock(p);
-  if (glance) panel.appendChild(glance);
   const step = todayBlock(p);
   if (step) {
     const saved = optionalBlock("Твой сохранённый шаг", step, "saved-step");
@@ -3531,15 +3510,43 @@ function pathPanel(p) {
   }
   const feedback = optionalBlock("Оставить отзыв о разговоре", conversationOutcomeBlock(p));
   if (feedback) panel.appendChild(feedback);
+  // Тихая сноска вместо списка записей: объясняет, куда смотреть за памятью,
+  // и не дублирует её содержимое. Ждёт решения — единственное, ради чего
+  // стоит позвать человека в раздел, потому что там нужен его выбор.
+  const note = el("p", "home-note");
+  const pending = pendingMemoryCount(p);
+  if (pending) {
+    note.appendChild(document.createTextNode(
+      pending === 1 ? "Одна запись ждёт твоего решения. " : "Несколько записей ждут твоего решения. ",
+    ));
+  } else {
+    note.appendChild(document.createTextNode("Что я запомнил между разговорами, видно в разделе "));
+  }
+  const link = el("button", null, pending ? "Посмотреть" : "«Память»");
+  link.type = "button";
+  link.addEventListener("click", () => {
+    if (typeof switchProfileTab === "function") switchProfileTab("memory", true);
+  });
+  note.appendChild(link);
+  if (!pending) note.appendChild(document.createTextNode("."));
+  panel.appendChild(note);
   return panel;
 }
 
+function pendingMemoryCount(p) {
+  const center = p.memory_center;
+  if (!center || !Array.isArray(center.groups)) return 0;
+  return center.groups.reduce((total, group) => total + (Array.isArray(group.items)
+    ? group.items.filter((item) => item.needs_confirmation && !item.is_guess).length
+    : 0), 0);
+}
+
 function openMovement() {
-  // Вкладки может не быть, если сохранённых записей нет. Тогда и открывать нечего,
-  // а переключение на несуществующий раздел вернуло бы человека на главную молча.
+  // Записи движения переехали в «Память» вместе с остальным сохранённым.
+  // Блока может не быть вовсе: тогда открывать нечего и переключать раздел незачем.
   const details = document.getElementById("movement-tool");
   if (!details) return;
-  if (typeof switchProfileTab === "function") switchProfileTab("sessions", true);
+  if (typeof switchProfileTab === "function") switchProfileTab("memory", true);
   details.open = true;
   details.scrollIntoView({block: "start", behavior: "instant"});
 }
@@ -3565,14 +3572,9 @@ function renderProfile(p) {
   if (updated) top.appendChild(el("div", "datepill", "обновлено " + updated));
   root.appendChild(top);
 
-  // Вкладка практик показывается только тем, у кого там что-то есть. Измерено
-  // 17.09: каждая практика запускалась ровно один раз и не повторялась ни разу,
-  // а пустая вкладка первого уровня просит заполнить себя. Ничего не удаляется:
-  // у кого есть сохранённые записи, тот видит их ровно как раньше.
-  const panels = { path: pathPanel(p), memory: memoryPanel(p), more: morePanel(p) };
-  const practices = practicesPanel(p);
-  if (practices) panels.sessions = practices;
-  root.appendChild(profileTabShell(panels));
+  root.appendChild(
+    profileTabShell({ path: pathPanel(p), memory: memoryPanel(p), more: morePanel(p) }),
+  );
   return root;
 }
 function fmtDate(iso) {

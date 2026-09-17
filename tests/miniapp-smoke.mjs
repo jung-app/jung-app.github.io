@@ -11,12 +11,12 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260917-living-memory/);
+assert.match(html, /styles\.css\?v=20260918-quiet-ledger/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260917-living-memory"/);
+assert.match(boot, /assetVersion = "20260918-quiet-ledger"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);
@@ -126,7 +126,11 @@ assert.match(app, /\/api\/memory\/export/);
 assert.match(app, /delete_all/);
 assert.match(app, /delete_class/);
 assert.match(app, /Новые записи на паузе/);
-assert.match(app, /Почему это здесь/);
+// Провенанс остаётся у каждой записи. Подпись раскрытия менялась, поэтому
+// проверяем саму возможность, а не её формулировку.
+assert.match(app, /memory-more-toggle/);
+assert.match(app, /memory-more-line", item\.source/);
+assert.match(app, /memory-more-line", item\.why/);
 assert.match(app, /Добавить важное самому/);
 
 assert.match(app, /payments_available === true/);
@@ -232,10 +236,19 @@ assert.match(app, /commandAction\("\/imagine", "Скопировать \/imagine
 
 // Память: правка/удаление больше не кричат с каждой карточки, но остаются доступны.
 // Отклонение неподтверждённой гипотезы остаётся на виду — это выбор, не разрушение.
-assert.match(app, /memory-manage-toggle", "Изменить или удалить"/);
+assert.match(app, /memoryEditForm\(item, types\)/);
+assert.match(app, /memory-danger-quiet", item\.needs_confirmation \? "Отклонить" : "Удалить"/);
 assert.match(app, /memory-manage-toggle", "Удалить весь раздел"/);
 assert.match(styles, /\.memory-manage \{/);
 assert.match(styles, /\.memory-manage-toggle \{/);
+// Статус записи читается линией слева, а не только подписью.
+assert.match(styles, /\.memory-record\.is-pending \{/);
+assert.match(styles, /\.memory-record\.is-guess \{/);
+// Раздела «Практики» больше нет, но сохранённое перенесено в «Память».
+assert.ok(!/key: "sessions"/.test(app), 'practices must not be a first-level tab');
+assert.match(app, /memory-kept/);
+assert.match(app, /practiceProgressBlock\(p\)/);
+assert.match(app, /deepSessionsPanel\(p\)/);
 
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.

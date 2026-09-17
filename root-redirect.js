@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260917-living-memory";
+      boot.src = "./miniapp-boot.js?v=20260918-quiet-ledger";
       document.body.appendChild(boot);
     });
   }
