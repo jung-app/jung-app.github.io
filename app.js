@@ -432,6 +432,7 @@ async function dismissSection(key) {
     headers: apiHeaders(initData, true),
     body: JSON.stringify({ key }),
   });
+  if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
   await res.json();
   return fetchProfile(true);
@@ -447,6 +448,7 @@ async function confirmSection(key) {
     cache: "no-store",
     body: JSON.stringify({ key }),
   });
+  if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
   await res.json();
   return fetchProfile(true);
@@ -1597,9 +1599,12 @@ function memoryRecord(item, types) {
       confirm.disabled = true;
       try {
         renderMemoryUpdate(await controlMemory("confirm", { key: item.key }), "Запись подтверждена.");
-      } catch (_) {
+      } catch (error) {
         confirm.disabled = false;
-        status.textContent = "Не удалось подтвердить. Проверь связь.";
+        status.textContent =
+          error && error.message === "unauthorized"
+            ? "Сессия устарела. Открой профиль заново из чата."
+            : "Не удалось подтвердить. Проверь связь.";
       }
     });
     actions.append(confirm, remove);
@@ -2241,8 +2246,16 @@ function understandingItem(item) {
       status.textContent = "Сохраняю…";
       try {
         await run(item.key);
-      } catch (_) {
-        status.textContent = "Не получилось сохранить. Попробуй ещё раз.";
+      } catch (error) {
+        // Причину нельзя прятать за «проверь связь»: истёкший initData (Telegram
+        // не обновляет его у открытой мини-аппы) выглядел как сбой сети, и человек
+        // жал кнопку снова, получая тот же отказ. Сессию чинит переоткрытие из чата,
+        // а не повтор запроса.
+        const reason = error && error.message;
+        status.textContent =
+          reason === "unauthorized" || reason === "no-init-data"
+            ? "Сессия устарела. Открой профиль заново из чата, и подтверждение сохранится."
+            : "Не получилось сохранить. Попробуй ещё раз.";
         row.dataset.busy = "false";
         ask.querySelectorAll("button").forEach((n) => { n.disabled = false; });
       }
