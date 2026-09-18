@@ -11,12 +11,15 @@ const offer = await readFile(new URL("../offer.html", import.meta.url), "utf8");
 
 assert.match(html, /role="status"[^>]*aria-live="polite"/);
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /styles\.css\?v=20260918-ledger-open/);
+// styles.css обязан быть версионирован, но КАКАЯ это версия проверяется ниже
+// сверкой всей цепочки. Литерал здесь ронял тест на каждом релизе и толкал
+// правку теста вместо проверки, поэтому фиксируем форму, а не значение.
+assert.match(html, /styles\.css\?v=[\w.-]+/);
 assert.match(boot, /config\.onerror = showFailure/);
 assert.match(boot, /app\.onerror = showFailure/);
 assert.match(boot, /today\.onerror = showFailure/);
 assert.match(boot, /setTimeout\(showFailure, 15000\)/);
-assert.match(boot, /assetVersion = "20260918-ledger-open"/);
+assert.match(boot, /assetVersion = "[\w.-]+"/);
 assert.doesNotMatch(boot, /app\.src = ".\/app\.js\?v=" \+ configVersion/);
 
 assert.match(app, /new AbortController\(\)/);

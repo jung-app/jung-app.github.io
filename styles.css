@@ -3500,3 +3500,217 @@ summary.stars-guide-title:focus-visible {
   color: color-mix(in srgb, var(--text) 88%, transparent);
   overflow-wrap: anywhere;
 }
+
+/* ============================================================================
+ * ОБЛИК 2026. Слой поверх рабочей раскладки, не трогающий её структуру.
+ *
+ * Почему палитра своя, а не телеграмная. Раньше --bg/--surface/--text брались
+ * из --tg-theme-*, и продукт носил кожу мессенджера: в светлой теме стоковый
+ * бежево-белый, карточки без поверхности. За подписку человек должен видеть
+ * своё место, а не системный список. Тему клиента продолжаем уважать: светлую
+ * отдаём светлой, тёмную тёмной, но оттенки наши.
+ *
+ * Читаемость проверена численно (contrast.mjs), не на глаз.
+ * ========================================================================= */
+
+:root {
+  /* Тёплый песочный, а не белый: долгое чтение о себе не должно слепить. */
+  --bg: #f2efe7;
+  --surface: #fbf9f4;
+  --surface-alt: #ece8dd;
+  --text: #1d2b24;
+  --muted: #5a6b62;
+  --line: #ded8ca;
+  --line-strong: #c3bcaa;
+  --action: #15604a;
+  --on-action: #ffffff;
+  --link: #15604a;
+  --accent: #a8521f;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+
+  /* Глубина двумя слоями: близкая тень за контур, дальняя за отрыв от фона. */
+  --shadow: 0 1px 2px rgba(29, 43, 36, 0.05), 0 8px 22px -10px rgba(29, 43, 36, 0.14);
+  --shadow-lift: 0 1px 2px rgba(29, 43, 36, 0.06), 0 16px 36px -14px rgba(29, 43, 36, 0.2);
+  --radius: 20px;
+  --radius-sm: 14px;
+}
+
+:root[data-telegram-theme="dark"] {
+  color-scheme: dark;
+  /* Не чёрный: у чернильно-зелёного меньше контрастного удара ночью. */
+  --bg: #0e1613;
+  --surface: #16211c;
+  --surface-alt: #1c2a23;
+  --text: #ecf2ed;
+  --muted: #9daea4;
+  --line: #2b3a33;
+  --line-strong: #42544a;
+  --action: #4ba882;
+  --on-action: #06130e;
+  --link: #7fd0a6;
+  --accent: #e8905c;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px -12px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.45), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* Фон с мягким светом сверху: плоская заливка читается дёшево. */
+body {
+  background:
+    radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--action) 7%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  letter-spacing: -0.005em;
+}
+
+/* Заголовки набираем Lora: засечки дают продукту голос, а не интерфейсный шум. */
+.brand-name {
+  font-size: 20px;
+  letter-spacing: -0.015em;
+}
+
+.talk-title,
+.screen-title {
+  letter-spacing: -0.018em;
+}
+
+/* Приглашение к разговору. Главное действие экрана, поэтому единственный
+ * элемент с подъёмом и акцентной линией. */
+.talk {
+  position: relative;
+  gap: 11px;
+  padding: 22px;
+  border-color: color-mix(in srgb, var(--action) 18%, var(--line));
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--action) 5%, var(--surface)), var(--surface) 62%);
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+}
+
+.talk::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--action), var(--accent));
+  content: "";
+}
+
+.talk-title {
+  font-size: 1.42rem;
+}
+
+.talk-cta {
+  padding: 12px 24px;
+  box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--action) 55%, transparent);
+  letter-spacing: -0.005em;
+}
+
+/* Нить-догадка. Акцент остаётся тихим: это гипотеза, а не вывод. */
+.thread {
+  padding: 19px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 11%, var(--surface)), var(--surface) 78%);
+}
+
+/* Карточки понимания: из строк списка в отдельные поверхности.
+ * Это ядро ценности продукта, оно не должно выглядеть служебным перечнем. */
+.understanding-list {
+  gap: 12px;
+}
+
+.understanding {
+  gap: 9px;
+  padding: 19px;
+  border: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.understanding-list > .understanding:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+/* Подтверждённое человеком помечаем краем, а не цветным фоном: спокойнее
+ * и не спорит с текстом. */
+.understanding--confirmed {
+  border-left: 3px solid color-mix(in srgb, var(--action) 62%, transparent);
+}
+
+.understanding--open {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.understanding-title {
+  font-size: 1.1rem;
+  letter-spacing: -0.012em;
+}
+
+.understanding-body {
+  font-size: 1rem;
+  line-height: 1.62;
+  color: color-mix(in srgb, var(--text) 92%, transparent);
+}
+
+.understanding-choice {
+  border-color: var(--line-strong);
+  background: var(--surface-alt);
+  font-weight: 550;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+/* Подвал: служебное уводим назад, чтобы не спорило с содержанием. */
+.quiet-foot {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.optional-tool {
+  border-top-color: var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .understanding-choice {
+    transition: none;
+  }
+}
+
+/* Пустой экран. Для человека из рекламы это первое, что он видит, и раньше
+ * это был текст, висящий в пустоте. Даём ту же карточку, что и остальному
+ * содержанию: продукт выглядит собранным с первой секунды, а не недозагруженным.
+ * Кольцо-«орб» остаётся единственной декорацией, и оно уже уважает
+ * prefers-reduced-motion правилом выше. */
+.state {
+  gap: 16px;
+  padding: 32px 24px;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--action) 5%, var(--surface)), var(--surface) 58%);
+  box-shadow: var(--shadow-lift);
+  min-height: calc(var(--tg-viewport-stable-height, 100svh) - 120px);
+}
+
+.state-title {
+  font-size: 27px;
+  letter-spacing: -0.018em;
+}
+
+.state-sub {
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.state-action {
+  box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--action) 55%, transparent);
+}
+
+.state-action--quiet {
+  box-shadow: none;
+}

@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260918-ledger-open";
+      boot.src = "./miniapp-boot.js?v=20260918-own-skin";
       document.body.appendChild(boot);
     });
   }

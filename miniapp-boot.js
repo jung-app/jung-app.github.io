@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260918-ledger-open";
+  var assetVersion = "20260918-own-skin";
   var timer;
   var failed = false;
 
