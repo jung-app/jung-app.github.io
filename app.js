@@ -175,10 +175,14 @@ function freshApiUrl(path) {
 }
 
 const NETWORK_TIMEOUT_MS = 10000;
+// Экспорт собирает архив из всей истории и памяти на сервере, потом Telegram ещё
+// доставляет файл. Десяти секунд ему мало: обрыв по таймауту читался бы как отказ,
+// хотя архив в этот момент уже уходил в чат.
+const EXPORT_TIMEOUT_MS = 45000;
 
-async function fetchWithDeadline(url, options) {
+async function fetchWithDeadline(url, options, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs || NETWORK_TIMEOUT_MS);
   try {
     return await fetch(url, { ...(options || {}), signal: controller.signal });
   } catch (error) {
@@ -328,6 +332,9 @@ function normalizeProfile(raw) {
     practice_key: practiceKeyOrNull(habit.practice_key),
     is_current_practice: habit.is_current_practice === true,
   })).filter((habit) => habit.name);
+  // Сколько привычек скрыто как связанные с веществами. Без этой строки поле молча
+  // терялось бы в allow-list, как однажды потерялся is_guess.
+  p.habits_withheld = Math.max(0, Number(p.habits_withheld) || 0);
   p.memories = arrayOfObjects(p.memories);
   const memoryCenter = objectOrEmpty(p.memory_center);
   p.memory_center = {
@@ -471,24 +478,24 @@ async function controlMemory(action, payload) {
   return fetchProfile(true);
 }
 
-async function downloadMemoryExport() {
+// Архив памяти уходит ФАЙЛОМ В ЧАТ, а не скачиванием. 19.09.2026 владелец нажал
+// «скачать» с телефона, и не произошло ничего: прежний код создавал blob и кликал
+// по <a download>, а встроенный браузер Telegram не даёт файловой системы, поэтому
+// клик молча проваливался. ZIP, который некуда положить и нечем открыть, правом на
+// свои данные не является. Файл в переписке открывается одним тапом на любом
+// телефоне и никуда не пропадает.
+async function sendMemoryExportToChat() {
   const initData = tg && tg.initData ? tg.initData : "";
   if (!initData) throw new Error("no-init-data");
-  const res = await fetchWithDeadline(freshApiUrl("/api/memory/export"), {
-    headers: apiHeaders(initData, false),
+  const res = await fetchWithDeadline(freshApiUrl("/api/memory/export-to-chat"), {
+    method: "POST",
+    headers: apiHeaders(initData, true),
     cache: "no-store",
-  });
+    body: "{}",
+  }, EXPORT_TIMEOUT_MS);
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const link = el("a");
-  link.href = url;
-  link.download = "jung-bot-my-data.zip";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  await res.json();
 }
 
 async function deleteDeepSession(sessionId) {
@@ -2068,27 +2075,36 @@ function memoryControlsBlock(center) {
     el(
       "p",
       "memory-controls-intro",
-      "Можно забрать копию или удалить все записи прямо здесь. Отдельные темы можно снять выше, там же где они написаны.",
+      "Можно забрать всё, что я помню, файлом в чат или удалить все записи прямо здесь. Отдельные темы можно снять выше, там же где они написаны.",
     ),
   );
   const status = el("p", "command-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const actions = el("div", "memory-global-actions");
-  const exportButton = el("button", "memory-secondary", "Скачать мою копию");
+  // «Скачать» обещало то, чего встроенный браузер Telegram не умеет. Кнопка говорит,
+  // что произойдёт на самом деле: файл придёт в чат.
+  const exportButton = el("button", "memory-secondary", "Прислать архив в чат");
   exportButton.type = "button";
   exportButton.addEventListener("click", async () => {
     exportButton.disabled = true;
-    exportButton.textContent = "Готовлю файл…";
+    exportButton.textContent = "Собираю архив…";
+    status.textContent = "";
     try {
-      await downloadMemoryExport();
+      await sendMemoryExportToChat();
       exportButton.disabled = false;
-      exportButton.textContent = "Скачать ещё раз";
-      status.textContent = "Копия подготовлена. Проверь загрузки устройства.";
-    } catch (_) {
+      exportButton.textContent = "Прислать ещё раз";
+      status.textContent = "Готово: архив отправлен файлом в наш чат.";
+    } catch (error) {
       exportButton.disabled = false;
-      exportButton.textContent = "Повторить скачивание";
-      status.textContent = "Не удалось подготовить копию. Проверь связь.";
+      exportButton.textContent = "Попробовать ещё раз";
+      const reason = error && error.message;
+      // Истёкший initData выглядел как сбой связи, и человек жал кнопку снова,
+      // получая тот же отказ. Сессию чинит переоткрытие из чата, а не повтор.
+      status.textContent =
+        reason === "unauthorized" || reason === "no-init-data"
+          ? "Сессия устарела. Открой профиль заново из чата, и я пришлю архив."
+          : "Не получилось отправить архив. Попробуй ещё раз.";
     }
   });
   actions.appendChild(exportButton);
@@ -2329,6 +2345,24 @@ function habitItem(habit) {
   return row;
 }
 
+// Человек вправе знать, что записи о нём есть, даже когда показать их здесь нельзя.
+// 19.09.2026 у владельца было четыре привычки, все отсечены фильтром веществ, и экран
+// молчал: выглядело как пустота или поломка. Зависимость остаётся территорией живого
+// специалиста, но молчать про собственные данные человека это отдельный дефект.
+function withheldNote(p) {
+  const n = p.habits_withheld || 0;
+  if (n < 1) return null;
+  const note = el("section", "withheld");
+  note.appendChild(el(
+    "p",
+    "withheld-text",
+    n === 1
+      ? "Одну привычку я здесь не показываю: она связана с веществами, а это тема для живого специалиста, не для карточки в приложении. Записана она по-прежнему, и в чате мы можем о ней говорить."
+      : "Несколько привычек (" + n + ") я здесь не показываю: они связаны с веществами, а это тема для живого специалиста, не для карточки в приложении. Записаны они по-прежнему, и в чате мы можем о них говорить.",
+  ));
+  return note;
+}
+
 function understandingScreen(p) {
   const panel = el("section", "screen");
 
@@ -2349,7 +2383,9 @@ function understandingScreen(p) {
   // Привычки приходят отдельным массивом (бэкенд уже отсёк зависимости), но живут
   // на том же экране: для человека это одна и та же речь о нём, а не второй раздел.
   const habits = (p.habits || []).filter((h) => h && h.name);
-  if (sections.length || habits.length) {
+  // Скрытые привычки тоже открывают экран: иначе человек с одними только скрытыми
+  // записями видит «пока я мало что о тебе знаю», что прямо неправда.
+  if (sections.length || habits.length || (p.habits_withheld || 0) > 0) {
     const head = el("header", "screen-head");
     head.appendChild(el("h2", "screen-title serif", "Что я понял о тебе"));
     head.appendChild(el("p", "screen-intro", "Это то, что осталось у меня между разговорами. Не диагноз и не окончательный вывод: можно согласиться или снять."));
@@ -2372,6 +2408,8 @@ function understandingScreen(p) {
     // а не как его оглавление.
     habits.forEach((h) => list.appendChild(habitItem(h)));
     panel.appendChild(list);
+    const withheld = withheldNote(p);
+    if (withheld) panel.appendChild(withheld);
   } else {
     const empty = el("section", "screen-empty");
     empty.appendChild(el("h2", "screen-title serif", "Пока я мало что о тебе знаю"));

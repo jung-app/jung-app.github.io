@@ -267,6 +267,16 @@ for (const [name, text] of [["app.js", app], ["landing.html", landing]]) {
 }
 assert.doesNotMatch(app, /Дополнительные практики/, 'the practices were removed on 18.09');
 
+// Экспорт уходит файлом в чат: скачивание blob в Telegram WebView молча проваливалось.
+assert.match(app, /\/api\/memory\/export-to-chat/, 'export must go through the chat');
+assert.doesNotMatch(app, /link\.download/, 'the broken download path is gone');
+assert.doesNotMatch(app, /Проверь загрузки устройства/, 'it never landed in downloads');
+assert.match(app, /Прислать архив в чат/, 'the button must say what actually happens');
+// Скрытые привычки объявлены, а не замолчаны, и поле переживает allow-list.
+assert.match(app, /habits_withheld/, 'withheld habits must survive normalizeProfile');
+assert.match(app, /function withheldNote\(p\)/, 'the screen must explain the silence');
+assert.match(preview, /habits_withheld: /, 'the stand must cover the withheld case');
+
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.
 // Если поднять версию только в конце цепочки, телефон возьмёт из кэша старый
