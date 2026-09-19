@@ -332,9 +332,6 @@ function normalizeProfile(raw) {
     practice_key: practiceKeyOrNull(habit.practice_key),
     is_current_practice: habit.is_current_practice === true,
   })).filter((habit) => habit.name);
-  // Сколько привычек скрыто как связанные с веществами. Без этой строки поле молча
-  // терялось бы в allow-list, как однажды потерялся is_guess.
-  p.habits_withheld = Math.max(0, Number(p.habits_withheld) || 0);
   p.memories = arrayOfObjects(p.memories);
   const memoryCenter = objectOrEmpty(p.memory_center);
   p.memory_center = {
@@ -471,6 +468,23 @@ async function controlMemory(action, payload) {
     headers: apiHeaders(initData, true),
     cache: "no-store",
     body: JSON.stringify({ action, ...(payload || {}) }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("http-" + res.status);
+  await res.json();
+  return fetchProfile(true);
+}
+
+// Снять привычку («это не про меня»). До 19.09.2026 единственным способом забыть
+// привычку был полный сброс памяти — несоразмерная цена, которую никто не платит.
+async function dismissHabit(name) {
+  const initData = tg && tg.initData ? tg.initData : "";
+  if (!initData) throw new Error("no-init-data");
+  const res = await fetchWithDeadline(freshApiUrl("/api/profile/habit/dismiss"), {
+    method: "POST",
+    headers: apiHeaders(initData, true),
+    cache: "no-store",
+    body: JSON.stringify({ name: name }),
   });
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("http-" + res.status);
@@ -2075,7 +2089,7 @@ function memoryControlsBlock(center) {
     el(
       "p",
       "memory-controls-intro",
-      "Можно забрать всё, что я помню, файлом в чат или удалить все записи прямо здесь. Отдельные темы можно снять выше, там же где они написаны.",
+      "Можно забрать всё, что я помню, одним файлом в чат или удалить все записи прямо здесь. Отдельные темы и привычки снимаются выше, там же где они написаны.",
     ),
   );
   const status = el("p", "command-status");
@@ -2084,17 +2098,17 @@ function memoryControlsBlock(center) {
   const actions = el("div", "memory-global-actions");
   // «Скачать» обещало то, чего встроенный браузер Telegram не умеет. Кнопка говорит,
   // что произойдёт на самом деле: файл придёт в чат.
-  const exportButton = el("button", "memory-secondary", "Прислать архив в чат");
+  const exportButton = el("button", "memory-secondary", "Прислать мою память в чат");
   exportButton.type = "button";
   exportButton.addEventListener("click", async () => {
     exportButton.disabled = true;
-    exportButton.textContent = "Собираю архив…";
+    exportButton.textContent = "Собираю…";
     status.textContent = "";
     try {
       await sendMemoryExportToChat();
       exportButton.disabled = false;
       exportButton.textContent = "Прислать ещё раз";
-      status.textContent = "Готово: архив отправлен файлом в наш чат.";
+      status.textContent = "Готово: файл в нашем чате, открывается одним тапом.";
     } catch (error) {
       exportButton.disabled = false;
       exportButton.textContent = "Попробовать ещё раз";
@@ -2104,7 +2118,7 @@ function memoryControlsBlock(center) {
       status.textContent =
         reason === "unauthorized" || reason === "no-init-data"
           ? "Сессия устарела. Открой профиль заново из чата, и я пришлю архив."
-          : "Не получилось отправить архив. Попробуй ещё раз.";
+          : "Не получилось отправить. Попробуй ещё раз.";
     }
   });
   actions.appendChild(exportButton);
@@ -2340,27 +2354,43 @@ function habitItem(habit) {
     "understanding-mark",
     habit.user_confirmed
       ? "Ты подтвердил, что это про тебя."
-      : "Это моё наблюдение. Если мимо, так и скажи в разговоре.",
+      : "Это моё наблюдение о тебе.",
   ));
+  // Снять привычку можно здесь. Раньше единственным способом её забыть был полный
+  // сброс памяти: несоразмерная цена, поэтому ею не пользовались.
+  const status = el("p", "understanding-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const drop = el("button", "understanding-choice", "Забыть эту привычку");
+  drop.type = "button";
+  drop.addEventListener("click", async () => {
+    if (row.dataset.busy === "true") return;
+    const ok = await confirmAction(
+      "Забыть привычку «" + habit.name + "»? Она уйдёт с этого экрана и из моих выводов. " +
+        "В копии твоих данных запись останется.",
+    );
+    if (!ok) return;
+    row.dataset.busy = "true";
+    drop.disabled = true;
+    status.textContent = "Убираю…";
+    try {
+      await dismissHabit(habit.name);
+      announceAction("Привычка забыта.");
+    } catch (error) {
+      row.dataset.busy = "false";
+      drop.disabled = false;
+      const reason = error && error.message;
+      status.textContent =
+        reason === "unauthorized" || reason === "no-init-data"
+          ? "Сессия устарела. Открой профиль заново из чата."
+          : "Не получилось убрать. Попробуй ещё раз.";
+    }
+  });
+  const actions = el("div", "understanding-ask");
+  actions.appendChild(drop);
+  row.appendChild(actions);
+  row.appendChild(status);
   return row;
-}
-
-// Человек вправе знать, что записи о нём есть, даже когда показать их здесь нельзя.
-// 19.09.2026 у владельца было четыре привычки, все отсечены фильтром веществ, и экран
-// молчал: выглядело как пустота или поломка. Зависимость остаётся территорией живого
-// специалиста, но молчать про собственные данные человека это отдельный дефект.
-function withheldNote(p) {
-  const n = p.habits_withheld || 0;
-  if (n < 1) return null;
-  const note = el("section", "withheld");
-  note.appendChild(el(
-    "p",
-    "withheld-text",
-    n === 1
-      ? "Одну привычку я здесь не показываю: она связана с веществами, а это тема для живого специалиста, не для карточки в приложении. Записана она по-прежнему, и в чате мы можем о ней говорить."
-      : "Несколько привычек (" + n + ") я здесь не показываю: они связаны с веществами, а это тема для живого специалиста, не для карточки в приложении. Записаны они по-прежнему, и в чате мы можем о них говорить.",
-  ));
-  return note;
 }
 
 function understandingScreen(p) {
@@ -2383,9 +2413,7 @@ function understandingScreen(p) {
   // Привычки приходят отдельным массивом (бэкенд уже отсёк зависимости), но живут
   // на том же экране: для человека это одна и та же речь о нём, а не второй раздел.
   const habits = (p.habits || []).filter((h) => h && h.name);
-  // Скрытые привычки тоже открывают экран: иначе человек с одними только скрытыми
-  // записями видит «пока я мало что о тебе знаю», что прямо неправда.
-  if (sections.length || habits.length || (p.habits_withheld || 0) > 0) {
+  if (sections.length || habits.length) {
     const head = el("header", "screen-head");
     head.appendChild(el("h2", "screen-title serif", "Что я понял о тебе"));
     head.appendChild(el("p", "screen-intro", "Это то, что осталось у меня между разговорами. Не диагноз и не окончательный вывод: можно согласиться или снять."));
@@ -2408,8 +2436,6 @@ function understandingScreen(p) {
     // а не как его оглавление.
     habits.forEach((h) => list.appendChild(habitItem(h)));
     panel.appendChild(list);
-    const withheld = withheldNote(p);
-    if (withheld) panel.appendChild(withheld);
   } else {
     const empty = el("section", "screen-empty");
     empty.appendChild(el("h2", "screen-title serif", "Пока я мало что о тебе знаю"));

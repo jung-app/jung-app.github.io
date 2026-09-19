@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260919-export-to-chat";
+  var assetVersion = "20260919-readable-memory";
   var timer;
   var failed = false;
 

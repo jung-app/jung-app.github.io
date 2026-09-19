@@ -41,7 +41,7 @@ const sandbox = {
   pluralRu:(n,one,few,many)=>n===1?one:(n<5?few:many), fmtDate:()=>'5 сен',
 };
 vm.createContext(sandbox);
-vm.runInContext([extract('threadLine'),extract('evidenceBlock'),extract('understandingItem'),extract('habitItem'),extract('withheldNote'),extract('understandingScreen'),extract('quietFooter')].join('\n'), sandbox);
+vm.runInContext([extract('threadLine'),extract('evidenceBlock'),extract('understandingItem'),extract('habitItem'),extract('understandingScreen'),extract('quietFooter')].join('\n'), sandbox);
 
 const facet = (over={}) => ({key:'fears', label:'Страхи', summary:'synthetic understanding line', user_confirmed:false, ...over});
 

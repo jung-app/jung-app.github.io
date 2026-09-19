@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260919-export-to-chat";
+      boot.src = "./miniapp-boot.js?v=20260919-readable-memory";
       document.body.appendChild(boot);
     });
   }

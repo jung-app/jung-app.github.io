@@ -271,11 +271,14 @@ assert.doesNotMatch(app, /Дополнительные практики/, 'the p
 assert.match(app, /\/api\/memory\/export-to-chat/, 'export must go through the chat');
 assert.doesNotMatch(app, /link\.download/, 'the broken download path is gone');
 assert.doesNotMatch(app, /Проверь загрузки устройства/, 'it never landed in downloads');
-assert.match(app, /Прислать архив в чат/, 'the button must say what actually happens');
-// Скрытые привычки объявлены, а не замолчаны, и поле переживает allow-list.
-assert.match(app, /habits_withheld/, 'withheld habits must survive normalizeProfile');
-assert.match(app, /function withheldNote\(p\)/, 'the screen must explain the silence');
-assert.match(preview, /habits_withheld: /, 'the stand must cover the withheld case');
+assert.match(app, /Прислать мою память в чат/, 'the button must say what actually happens');
+// Привычки показываются ВСЕ и снимаются по одной. 19.09.2026 владелец: прятать
+// записи и отсылать к специалисту нельзя, а забыть привычку должно быть можно без
+// удаления всей памяти.
+assert.doesNotMatch(app, /habits_withheld|withheldNote/, 'nothing about the person is hidden');
+assert.match(app, /\/api\/profile\/habit\/dismiss/, 'a habit must be removable on its own');
+assert.match(app, /Забыть эту привычку/, 'the card must offer to forget it');
+assert.match(app, /confirmAction\(/, 'forgetting asks first');
 
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.
