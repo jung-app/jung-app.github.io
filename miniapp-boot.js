@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260918-own-skin";
+  var assetVersion = "20260919-habits-in-view";
   var timer;
   var failed = false;
 

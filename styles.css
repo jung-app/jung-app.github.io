@@ -1514,27 +1514,29 @@ a {
   color: var(--action);
 }
 
+/* Поле внутри карточки привычки: «чему служит», «когда накрывает», «что вместо».
+   Фон surface-alt, а не surface: карточка .understanding сама на surface, и поле
+   на том же цвете было бы невидимым прямоугольником. Акцентную рамку не ставим —
+   --accent зарезервирован за нитью-догадкой и теряет смысл, если им красить всё. */
 .habit-field {
   margin-top: 10px;
-  padding: 11px;
-  border-radius: 11px;
-  background: var(--surface);
-}
-
-.habit-field--ritual {
-  border-left: 3px solid var(--accent);
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
 }
 
 .habit-field-label {
   color: var(--muted);
   font-size: 11px;
   font-weight: 750;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .habit-field-text {
-  margin: 3px 0 0;
-  font-size: 14px;
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .empty-note {

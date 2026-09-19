@@ -613,17 +613,9 @@ function stat(value, label) {
 
 
 
-// Поле карточки привычки: подписанный блок «чему служит» / «ритуал замещения».
-function habitField(label, text, extraClass) {
-  const box = el("div", "habit-field" + (extraClass ? " " + extraClass : ""));
-  box.appendChild(el("div", "habit-field-label", label));
-  box.appendChild(el("p", "habit-field-text", text));
-  return box;
-}
-
-// Карточка привычки: {триггер, потребность, замена, минимальная версия, прогресс}.
-// Прогресс — луна-уверенность + опора наблюдений, НЕ стрики (бот — спутник, не надзиратель).
-
+// Привычка рисуется в habitItem рядом с остальными темами. Прежние habitField и
+// карточка-трекер с прогрессом удалены: счётчик выполнений превращал срыв в провал,
+// а привычка здесь — наблюдение о человеке, а не норматив.
 
 // Блок «что изменилось с прошлого визита». d приходит в payload.dynamics с бэкенда:
 // первый визит → тёплое приветствие; есть изменения → дельта глубины + новые грани;
@@ -2302,6 +2294,38 @@ function evidenceBlock(item) {
   return wrap;
 }
 
+// Привычка — не строка трекера, а наблюдение о человеке, поэтому она живёт среди
+// остальных тем, а не на своём экране. Трекер здесь уже пробовали: /habit запускали
+// дважды, завершили ноль раз. Показываем то, чего нет в трекерах — чему привычка
+// служит и какая замена обсуждалась. Кнопок «сделал» нет намеренно: срыв здесь
+// материал для разговора, а не провал, и счётчик превратил бы его в провал.
+function habitItem(habit) {
+  const row = el("article", "understanding");
+  row.classList.add(habit.user_confirmed ? "understanding--confirmed" : "understanding--open");
+  row.appendChild(el("h3", "understanding-title", habit.name));
+  if (habit.summary) row.appendChild(el("p", "understanding-body", habit.summary));
+  // Порядок повторяет ход разговора: когда накрывает → чему служит → чем заменяли.
+  [
+    ["Когда накрывает", habit.trigger],
+    ["Чему служит", habit.serves],
+    ["Что пробовали вместо", habit.ritual],
+  ].forEach(([label, text]) => {
+    if (!text) return;
+    const field = el("div", "habit-field");
+    field.appendChild(el("div", "habit-field-label", label));
+    field.appendChild(el("p", "habit-field-text", text));
+    row.appendChild(field);
+  });
+  row.appendChild(el(
+    "p",
+    "understanding-mark",
+    habit.user_confirmed
+      ? "Ты подтвердил, что это про тебя."
+      : "Это моё наблюдение. Если мимо, так и скажи в разговоре.",
+  ));
+  return row;
+}
+
 function understandingScreen(p) {
   const panel = el("section", "screen");
 
@@ -2319,7 +2343,10 @@ function understandingScreen(p) {
   panel.appendChild(talk);
 
   const sections = (p.sections || []).filter((s) => s && s.summary);
-  if (sections.length) {
+  // Привычки приходят отдельным массивом (бэкенд уже отсёк зависимости), но живут
+  // на том же экране: для человека это одна и та же речь о нём, а не второй раздел.
+  const habits = (p.habits || []).filter((h) => h && h.name);
+  if (sections.length || habits.length) {
     const head = el("header", "screen-head");
     head.appendChild(el("h2", "screen-title serif", "Что я понял о тебе"));
     head.appendChild(el("p", "screen-intro", "Это то, что осталось у меня между разговорами. Не диагноз и не окончательный вывод: можно согласиться или снять."));
@@ -2338,6 +2365,9 @@ function understandingScreen(p) {
     const pending = sections.filter((s) => !s.user_confirmed);
     const settled = sections.filter((s) => s.user_confirmed);
     pending.concat(settled).forEach((s) => list.appendChild(understandingItem(s)));
+    // Привычки после тем: они конкретнее и читаются как продолжение разговора,
+    // а не как его оглавление.
+    habits.forEach((h) => list.appendChild(habitItem(h)));
     panel.appendChild(list);
   } else {
     const empty = el("section", "screen-empty");

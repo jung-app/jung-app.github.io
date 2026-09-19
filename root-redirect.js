@@ -33,7 +33,7 @@
   function loadMiniApp() {
     afterDomReady(function () {
       var boot = document.createElement("script");
-      boot.src = "./miniapp-boot.js?v=20260918-own-skin";
+      boot.src = "./miniapp-boot.js?v=20260919-habits-in-view";
       document.body.appendChild(boot);
     });
   }

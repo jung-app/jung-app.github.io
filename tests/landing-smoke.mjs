@@ -57,7 +57,13 @@ assert.match(html, /<meta\s+[\s\S]*?name="description"/);
 assert.match(html, /id="main"/);
 assert.match(html, /class="skip-link"/);
 assert.match(html, /<script type="application\/ld\+json">/);
-assert.match(html, /до 30 сообщений в день/);
+// Дневной лимит на лендинге обязан совпадать с продуктом. 18.09 он стал 20, а
+// лендинг ещё сутки продавал 30: платное обещание разошлось с тем, что человек
+// получит. Число здесь одно и то же место правки на обеих сторонах.
+assert.match(html, /до 20 сообщений в день/);
+assert.doesNotMatch(html, /до 30 сообщений в день/, 'the daily limit is 20 since 18.09');
+// Лендинг не обещает того, чего в продукте нет: трекер привычек снят 18.09.
+assert.doesNotMatch(html, /напоминание и видимый прогресс/, 'no habit tracker is shipped');
 assert.match(html, /не скидка и не депозит/);
 assert.match(indexHtml, /rel="canonical" href="https:\/\/mindcoachbot\.ru\/"/);
 assert.doesNotMatch(

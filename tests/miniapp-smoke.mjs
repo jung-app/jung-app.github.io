@@ -55,11 +55,23 @@ assert.equal(utcOffsetMinutesOrNull(false), null);
 assert.equal(utcOffsetMinutesOrNull("180"), 180);
 assert.equal(utcOffsetMinutesOrNull(-720), -720);
 assert.equal(utcOffsetMinutesOrNull(841), null);
-const currentRitualSource = app.match(/function currentRitualHabit\(habits\) \{[\s\S]*?\n\}/)?.[0];
-const currentRitualHabit = vm.runInNewContext("(" + currentRitualSource + ")", {
-  arrayOfObjects: (value) => Array.isArray(value) ? value.filter(Boolean) : [],
-  cleanText: (value) => typeof value === "string" ? value.trim() : "",
-});
+// Привычка рисуется среди тем экрана, а не на своём. Этот блок раньше извлекал
+// currentRitualHabit, которой в app.js давно нет: регэксп возвращал undefined,
+// vm исполняла "(undefined)" и тест молча не проверял НИЧЕГО. Проверяем то, что
+// действительно должно быть правдой.
+assert.match(app, /function habitItem\(habit\)/, 'habits must render');
+assert.match(app, /habitItem\(h\)/, 'habitItem must actually be called');
+assert.doesNotMatch(app, /function habitField\(/, 'the dead habit-card helper is gone');
+// Ни счётчика выполнений, ни стриков на экране: срыв здесь материал для разговора,
+// а не провал. Счётчики ещё живут в normalizeProfile(p.path) — это данные человека,
+// их не выбрасываем; проверяем, что карточка привычки их не рисует.
+assert.doesNotMatch(
+  app.match(/function habitItem\(habit\)[\s\S]*?\n\}/)?.[0] ?? "",
+  /done_count|streak|стрик/i,
+  'the habit card never counts or shames',
+);
+// Человек с привычками, но без разделов, обязан видеть их, а не пустой экран.
+assert.match(app, /sections\.length \|\| habits\.length/, 'habits alone must open the screen');
 assert.doesNotMatch(app, /raw_transcript|crisis_reason/);
 
 assert.doesNotMatch(app, /function changePathBlock/);
@@ -241,6 +253,8 @@ assert.doesNotMatch(app, /evidence\.slice\(0,\s*\d+\)/, 'the ledger is never sil
 assert.match(styles, /\.evidence-list \{/);
 // Фикстура обязана нести наблюдения, иначе скриншот снова ничего не доказывает.
 assert.match(preview, /observation: /, 'the stand must carry real observations');
+// Фикстура обязана нести привычку: с habits: [] скриншот снова ничего не докажет.
+assert.match(preview, /serves: /, 'the stand must carry a habit with its need');
 
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.
