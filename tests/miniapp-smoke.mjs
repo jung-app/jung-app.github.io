@@ -120,7 +120,8 @@ assert.match(html, /name="referrer" content="no-referrer"/);
 assert.match(app, /@PremiumBot/);
 assert.match(app, /Пополни баланс минимум на/);
 assert.match(app, /Проверь рублёвую цену/);
-assert.match(app, /до 30 сообщений в день/);
+// Лимит проверяется ниже вместе с лендингом и каноном из payments.py: держать
+// его здесь отдельным числом уже один раз позволило трём местам разойтись.
 assert.doesNotMatch(app, /Разговоры без дневного лимита/);
 assert.match(app, /не скидка и не депозит MindCoach/);
 assert.match(app, /Я не увижу, о чём ты пишешь/);
@@ -255,6 +256,16 @@ assert.match(styles, /\.evidence-list \{/);
 assert.match(preview, /observation: /, 'the stand must carry real observations');
 // Фикстура обязана нести привычку: с habits: [] скриншот снова ничего не докажет.
 assert.match(preview, /serves: /, 'the stand must carry a habit with its need');
+
+// Обещание подписки живёт в трёх местах (payments.py, landing.html, здесь) и 19.09
+// разошлось во всех трёх: 30 сообщений при живом лимите 20 и практики, снятые 18.09.
+// Число и обещания проверяются здесь, чтобы расхождение падало, а не продавалось.
+for (const [name, text] of [["app.js", app], ["landing.html", landing]]) {
+  assert.match(text, /до 20 сообщений в день/, name + ' must state the real daily limit');
+  assert.doesNotMatch(text, /до 30 сообщений/, name + ' still promises the old limit');
+  assert.match(text, /[Пп]исьмо недели/, name + ' must lead with the weekly letter');
+}
+assert.doesNotMatch(app, /Дополнительные практики/, 'the practices were removed on 18.09');
 
 // Вся цепочка загрузки должна нести ОДНУ версию.
 // index.html -> root-redirect.js?v=X -> miniapp-boot.js?v=X -> app.js?v=assetVersion.

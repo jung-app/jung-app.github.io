@@ -2,7 +2,7 @@
   "use strict";
 
   var configVersion = Date.now();
-  var assetVersion = "20260919-habits-in-view";
+  var assetVersion = "20260919-honest-offer";
   var timer;
   var failed = false;
 
